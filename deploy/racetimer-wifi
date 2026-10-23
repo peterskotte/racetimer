@@ -1,0 +1,197 @@
+#!/usr/bin/python3 -I
+"""RaceTimer WiFi-hjælper – kører som root via sudo og styrer KUN forbindelserne rt-wifi-1..5.
+
+Installeres som /usr/local/sbin/racetimer-wifi (ejet af root). RaceTimer-servicen må kalde
+den med sudo uden kode (se /etc/sudoers.d/racetimer-wifi). Alle input valideres her.
+
+  racetimer-wifi status          → JSON: aktuel forbindelse, gemte RaceTimer-netværk, synlige netværk
+  racetimer-wifi apply < json    → gem op til 5 netværk i prioriteret rækkefølge
+                                   {"networks": [{"ssid": "...", "security": "psk"|"eap"|"open",
+                                                  "password": null|"...", "identity": "...", "hidden": false}, ...]}
+                                   psk = WPA2 med én kode · eap = WPA2-Enterprise med brugernavn+kode (eduroam o.l.)
+                                   password null = behold den gemte kode for det SSID
+  racetimer-wifi connect N       → forbind til rt-wifi-N nu
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+MAX = 5
+PREFIX = "rt-wifi-"
+NMCLI = os.environ.get("RACETIMER_NMCLI", "nmcli")  # kun til test
+
+
+def nm(*args, check=True, timeout=30):
+    env = dict(os.environ, LC_ALL="C")  # engelske fejltekster, så de kan genkendes nedenfor
+    r = subprocess.run([NMCLI, *args], capture_output=True, text=True, timeout=timeout, env=env)
+    if check and r.returncode != 0:
+        raise RuntimeError(friendly((r.stderr or r.stdout).strip() or f"nmcli fejlede ({r.returncode})"))
+    return r.stdout
+
+
+def friendly(msg):
+    """Oversæt NetworkManagers fejl til noget, man kan handle på."""
+    if "Secrets were required" in msg or "802-1x" in msg and "secret" in msg.lower():
+        return ("Netværket afviste forbindelsen – koden er sandsynligvis forkert. Kræver netværket brugernavn "
+                "og kode (fx eduroam), så vælg sikkerhed “Brugernavn + kode”.")
+    if "No network with SSID" in msg:
+        return "Netværket er ikke inden for rækkevidde lige nu."
+    if "Timeout" in msg or "timed out" in msg:
+        return "Pi'en kunne ikke nå at forbinde (timeout) – er netværket inden for rækkevidde?"
+    lines = [l for l in msg.splitlines() if not l.lower().startswith(("warning", "advarsel"))]
+    return " ".join(lines)[:300] or msg[:300]
+
+
+def fields(line):
+    """nmcli -t adskiller felter med ':' og escaper ':' i værdier som '\\:'."""
+    out, cur, esc = [], "", False
+    for ch in line:
+        if esc:
+            cur += ch
+            esc = False
+        elif ch == "\\":
+            esc = True
+        elif ch == ":":
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    out.append(cur)
+    return out
+
+
+def wifi_iface():
+    for line in nm("-t", "-f", "DEVICE,TYPE", "device").splitlines():
+        dev, typ = fields(line)[:2]
+        if typ == "wifi":
+            return dev
+    return "wlan0"
+
+
+def saved():
+    res = []
+    for line in nm("-t", "-f", "NAME,TYPE", "connection", "show").splitlines():
+        name, typ = fields(line)[:2]
+        if not name.startswith(PREFIX) or "wireless" not in typ:
+            continue
+        g = nm("-t", "-g", "802-11-wireless.ssid,802-11-wireless.hidden,802-11-wireless-security.key-mgmt,"
+               "connection.autoconnect-priority,802-1x.identity", "connection", "show", name).splitlines()
+        g += [""] * (5 - len(g))
+        sec = "open" if g[2] in ("", "--", "none") else "eap" if g[2] == "wpa-eap" else "psk"
+        res.append({"slot": int(name[len(PREFIX):] or 0), "ssid": g[0], "hidden": g[1] == "yes",
+                    "secured": sec != "open", "security": sec, "identity": g[4] if sec == "eap" else "",
+                    "priority": int(g[3] or 0)})
+    return sorted(res, key=lambda n: n["slot"])
+
+
+def status():
+    cur = None
+    for line in nm("-t", "-f", "ACTIVE,SSID,SIGNAL", "device", "wifi", check=False).splitlines():
+        f = fields(line)
+        if len(f) >= 3 and f[0] == "yes":
+            cur = {"ssid": f[1], "signal": int(f[2] or 0)}
+    ip = nm("-t", "-g", "IP4.ADDRESS", "device", "show", wifi_iface(), check=False).split("|")[0].strip()
+    if cur is not None:
+        cur["ip"] = ip.split("/")[0] if ip else None
+    visible = {}
+    for line in nm("-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list", check=False).splitlines():
+        f = fields(line)
+        if len(f) >= 3 and f[0] and int(f[1] or 0) > visible.get(f[0], {}).get("signal", -1):
+            visible[f[0]] = {"ssid": f[0], "signal": int(f[1] or 0), "security": f[2]}
+    others = [fields(l)[0] for l in nm("-t", "-f", "NAME,TYPE", "connection", "show").splitlines()
+              if "wireless" in fields(l)[1] and not fields(l)[0].startswith(PREFIX)]
+    return {"current": cur, "saved": saved(), "others": others,
+            "visible": sorted(visible.values(), key=lambda v: -v["signal"])}
+
+
+def valid_ssid(s):
+    return isinstance(s, str) and 1 <= len(s.encode()) <= 32 and "\n" not in s
+
+
+def valid_psk(p):
+    return isinstance(p, str) and (8 <= len(p) <= 63 or re.fullmatch(r"[0-9a-fA-F]{64}", p))
+
+
+def apply(data):
+    nets = data.get("networks")
+    if not isinstance(nets, list) or len(nets) > MAX:
+        raise ValueError(f"Højst {MAX} netværk")
+    existing = {n["slot"]: n for n in saved()}
+    # gemte koder pr. SSID, så netværk kan flyttes rundt i rækkefølgen uden at skrive koden igen
+    known = {}
+    for slot, n in existing.items():
+        if n["security"] == "open":
+            known[n["ssid"]] = ("open", "", "")
+            continue
+        field = "802-1x.password" if n["security"] == "eap" else "802-11-wireless-security.psk"
+        secret = nm("-s", "-t", "-g", field, "connection", "show", f"{PREFIX}{slot}").strip()
+        if not secret:  # gør aldrig et beskyttet netværk åbent ved en fejl
+            raise RuntimeError(f"Kunne ikke læse den gemte kode for {n['ssid']} – skriv koden igen")
+        known[n["ssid"]] = (n["security"], secret, n["identity"])
+    iface = wifi_iface()
+    for i, net in enumerate(nets, 1):
+        ssid, pw, hidden = net.get("ssid"), net.get("password"), bool(net.get("hidden"))
+        sec = net.get("security") or ("open" if pw == "" else "psk")
+        identity = (net.get("identity") or "").strip()
+        if not valid_ssid(ssid):
+            raise ValueError(f"Netværk {i}: ugyldigt navn (SSID)")
+        if sec not in ("psk", "eap", "open"):
+            raise ValueError(f"Netværk {i} ({ssid}): ukendt sikkerhedstype")
+        if sec != "open" and pw is None:
+            k = known.get(ssid)
+            if not k or k[0] != sec:
+                raise ValueError(f"Netværk {i} ({ssid}): skriv koden")
+            pw = k[1]
+            identity = identity or k[2]
+        if sec == "psk" and not valid_psk(pw):
+            raise ValueError(f"Netværk {i} ({ssid}): koden skal være 8–63 tegn")
+        if sec == "eap" and (not identity or not pw):
+            raise ValueError(f"Netværk {i} ({ssid}): skriv både brugernavn og kode")
+        old = existing.get(i)
+        name = f"{PREFIX}{i}"
+        if not old:
+            nm("connection", "add", "type", "wifi", "con-name", name, "ifname", iface, "ssid", ssid)
+        settings = ["802-11-wireless.ssid", ssid, "802-11-wireless.hidden", "yes" if hidden else "no",
+                    "connection.autoconnect", "yes", "connection.autoconnect-priority", str(100 - i * 10),
+                    "connection.autoconnect-retries", "0"]  # 0 = bliv ved med at prøve
+        if old and old["security"] == "eap" and sec != "eap":
+            nm("connection", "modify", name, "remove", "802-1x")
+        if old and old["security"] == "psk" and sec == "eap":  # fjern den gamle WPA2-kode helt
+            nm("connection", "modify", name, "remove", "802-11-wireless-security")
+        if sec == "open":  # åbent netværk = ingen sikkerhedsindstilling
+            if old and old["security"] != "open":
+                nm("connection", "modify", name, "remove", "802-11-wireless-security")
+        elif sec == "psk":
+            settings += ["802-11-wireless-security.key-mgmt", "wpa-psk", "802-11-wireless-security.psk", pw]
+        else:  # WPA2-Enterprise som eduroam: PEAP + MSCHAPv2 (det mest udbredte)
+            settings += ["802-11-wireless-security.key-mgmt", "wpa-eap", "802-1x.eap", "peap",
+                         "802-1x.phase2-auth", "mschapv2", "802-1x.identity", identity, "802-1x.password", pw]
+        nm("connection", "modify", name, *settings)
+    for slot in existing:
+        if slot > len(nets):
+            nm("connection", "delete", f"{PREFIX}{slot}", check=False)
+    return {"ok": True, "saved": saved()}
+
+
+def main():
+    try:
+        cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+        if cmd == "status":
+            out = status()
+        elif cmd == "apply":
+            out = apply(json.load(sys.stdin))
+        elif cmd == "connect" and len(sys.argv) == 3 and sys.argv[2] in [str(i) for i in range(1, MAX + 1)]:
+            nm("connection", "up", f"{PREFIX}{sys.argv[2]}", timeout=45)
+            out = {"ok": True}
+        else:
+            raise ValueError("Brug: racetimer-wifi status | apply | connect N")
+        print(json.dumps(out, ensure_ascii=False))
+    except (ValueError, RuntimeError, subprocess.TimeoutExpired) as e:
+        print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,19 @@
+[Unit]
+Description=RaceTimer (RFID tidtagning)
+After=network.target time-sync.target
+
+[Service]
+# Egen systembruger, så login-brugeren kan omdøbes i Raspberry Pi Imager uden at noget går i stykker
+User=racetimer-svc
+Group=racetimer-svc
+SupplementaryGroups=input dialout
+WorkingDirectory=/opt/racetimer
+# Data (database, læselog, logo/splash) ligger adskilt fra programmet – overlever opdateringer
+Environment=RACETIMER_DATA=/var/lib/racetimer
+StateDirectory=racetimer
+ExecStart=/opt/racetimer/.venv/bin/uvicorn racetimer.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

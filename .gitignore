@@ -1,0 +1,23 @@
+# lokale data og afhængigheder
+.venv/
+.deps/
+data/
+data-mirror/
+__pycache__/
+*.pyc
+.DS_Store
+
+# klubbens private branding, nøgler og egen opsætning – kommer ALDRIG med i det offentlige repo
+branding-local/
+
+# image-bygning
+image/pi-gen/
+image/out/
+image/build.log
+
+# Claude Code / editor
+.claude/
+
+# privat signeringsnøgle til opdateringer – må ALDRIG i repoet (læg den i GitHub Secrets + en sikker backup)
+signing/
+dist/

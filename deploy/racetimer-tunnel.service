@@ -1,0 +1,16 @@
+[Unit]
+Description=RaceTimer fjernadgang (Cloudflare quick tunnel – ingen konto, adressen skifter ved genstart)
+After=network-online.target racetimer.service
+Wants=network-online.target
+
+[Service]
+# Tunnelen åbnes UD fra Pi'en – ingen åbne porte i routeren. Adressen kan læses på 127.0.0.1:20241/quicktunnel.
+DynamicUser=yes
+RuntimeDirectory=racetimer-tunnel
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 --logfile /run/racetimer-tunnel/cloudflared.log --url http://localhost:8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

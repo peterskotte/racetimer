@@ -1,0 +1,19 @@
+[Unit]
+Description=RaceTimer (RFID tidtagning)
+After=network.target time-sync.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__DIR__
+# Data (database, læselog, logo/splash) ligger adskilt fra programmet – overlever opdateringer
+Environment=RACETIMER_DATA=/var/lib/racetimer
+StateDirectory=racetimer
+# Læsere kan også vælges i admin → Rediger aktivt løb → Læsere. Miljøvariabler overstyrer:
+# Environment=RACETIMER_PRIMARY=/dev/input/by-id/usb-XXXX-event-kbd
+# Environment=RACETIMER_BACKUP=/dev/input/by-id/usb-YYYY-event-kbd
+ExecStart=__DIR__/.venv/bin/uvicorn racetimer.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

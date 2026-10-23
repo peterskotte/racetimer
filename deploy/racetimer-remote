@@ -1,0 +1,183 @@
+#!/usr/bin/python3 -I
+"""RaceTimer: privat fjernadgang – Tailscale og Raspberry Pi Connect.
+
+Kører som root via sudo (se /etc/sudoers.d/racetimer-wifi) og tillader KUN disse kommandoer:
+
+  racetimer-remote status                 → JSON med tilstand for begge
+  racetimer-remote tailscale up|down|logout
+  racetimer-remote connect signin|on|off|signout
+
+"up" og "signin" returnerer et login-link, som brugeren åbner og godkender. Selve
+login-processen kører videre i baggrunden, til linket er godkendt.
+"""
+import json
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+TAILSCALE = os.environ.get("RACETIMER_TAILSCALE", "tailscale")      # kun til test
+RPICONNECT = os.environ.get("RACETIMER_RPICONNECT", "rpi-connect")  # kun til test
+HOSTNAME = "racetimer"
+
+
+def run(cmd, timeout=20, env=None):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    return r.returncode, (r.stdout or "") + (r.stderr or "")
+
+
+def link_from_background(cmd, pattern, env=None, wait=20):
+    """Start en login-kommando i baggrunden og returnér det link, den skriver ud.
+
+    Output går til en fil (ikke en pipe), så processen lever videre, efter denne hjælper er afsluttet,
+    og login gøres færdigt, når brugeren godkender linket."""
+    import tempfile
+    log = tempfile.NamedTemporaryFile(prefix="racetimer-login-", suffix=".log", delete=False)
+    p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True, env=env,
+                         start_new_session=True)
+    end = time.time() + wait
+    while time.time() < end:
+        time.sleep(0.3)
+        with open(log.name, errors="ignore") as f:
+            m = re.search(pattern, f.read())
+        if m:
+            return m.group(0)
+        if p.poll() is not None:
+            break
+    return None
+
+
+# ---------------------------------------------------------------- Tailscale
+
+def ts_installed():
+    return bool(shutil.which(TAILSCALE))
+
+
+def ts_status():
+    if not ts_installed():
+        return {"installed": False}
+    code, out = run([TAILSCALE, "status", "--json"])
+    try:
+        st = json.loads(out[out.index("{"):])
+    except ValueError:
+        return {"installed": True, "state": "Stopped"}
+    me = st.get("Self") or {}
+    return {"installed": True, "state": st.get("BackendState"), "auth_url": st.get("AuthURL") or None,
+            "dns": (me.get("DNSName") or "").rstrip(".") or None, "ip": (me.get("TailscaleIPs") or [None])[0],
+            "tailnet": (st.get("CurrentTailnet") or {}).get("Name")}
+
+
+def ts(action):
+    if not ts_installed():
+        raise RuntimeError("Tailscale er ikke installeret – kør opdateringen af Pi'en")
+    if action == "up":
+        st = ts_status()
+        if st.get("state") == "Running":
+            run([TAILSCALE, "up", f"--hostname={HOSTNAME}", "--accept-dns=false"])
+            return ts_status()
+        url = link_from_background([TAILSCALE, "up", f"--hostname={HOSTNAME}", "--accept-dns=false"],
+                                   r"https://login\.tailscale\.com/\S+")
+        st = ts_status()
+        st["auth_url"] = url or st.get("auth_url")
+        return st
+    if action in ("down", "logout"):
+        run([TAILSCALE, action])
+        return ts_status()
+    raise ValueError("Ukendt Tailscale-handling")
+
+
+# ---------------------------------------------------------------- Raspberry Pi Connect
+
+def desktop_user():
+    """Brugeren der er logget ind på skrivebordet (rpi-connect kører som brugerens egen tjeneste)."""
+    try:
+        return pwd.getpwuid(1000)
+    except KeyError:
+        return None
+
+
+def as_user(cmd):
+    u = desktop_user()
+    if not u or os.environ.get("RACETIMER_RPICONNECT"):
+        return cmd, None
+    env = {"HOME": u.pw_dir, "USER": u.pw_name, "XDG_RUNTIME_DIR": f"/run/user/{u.pw_uid}",
+           "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+           "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{u.pw_uid}/bus"}
+    # runuser ligger i /usr/sbin – brug fuld sti, så den findes uanset PATH
+    runuser = shutil.which("runuser", path="/usr/sbin:/sbin:/usr/bin:/bin") or "/usr/sbin/runuser"
+    return [runuser, "-u", u.pw_name, "--"] + cmd, env
+
+
+def rc_installed():
+    return bool(shutil.which(RPICONNECT))
+
+
+def rc_status():
+    if not rc_installed():
+        return {"installed": False}
+    cmd, env = as_user([RPICONNECT, "status"])
+    code, out = run(cmd, env=env)
+    low = out.lower()
+    return {"installed": True, "running": code == 0 and "not running" not in low,
+            "signed_in": bool(re.search(r"signed in:\s*yes", low)),
+            "screen": "screen sharing: allowed" in low, "shell": "remote shell: allowed" in low,
+            "raw": out.strip()[:400]}
+
+
+def rc(action):
+    if not rc_installed():
+        raise RuntimeError("Raspberry Pi Connect er ikke installeret – kør opdateringen af Pi'en")
+    u = desktop_user()
+    if action in ("on", "signin") and u and not os.environ.get("RACETIMER_RPICONNECT"):
+        run(["loginctl", "enable-linger", u.pw_name])  # kør også når ingen er logget ind
+    if action == "signin":
+        cmd, env = as_user([RPICONNECT, "on"])
+        run(cmd, env=env)
+        st = rc_status()
+        if st.get("signed_in"):  # allerede logget ind – den var bare slået fra
+            return st
+        cmd, env = as_user([RPICONNECT, "signin"])
+        url = link_from_background(cmd, r"https://connect\.raspberrypi\.com/\S+", env=env)
+        st = rc_status()
+        st["signin_url"] = url
+        return st
+    if action in ("on", "off", "signout"):
+        cmd, env = as_user([RPICONNECT, action])
+        code, out = run(cmd, env=env, timeout=30)
+        if code != 0 and action != "signout":
+            raise RuntimeError(out.strip()[:300] or f"rpi-connect {action} fejlede")
+        return rc_status()
+    raise ValueError("Ukendt Connect-handling")
+
+
+def safe(fn):
+    """Én tjeneste med fejl må ikke skjule status for den anden."""
+    try:
+        return fn()
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        return {"installed": True, "error": str(e)}
+
+
+def main():
+    try:
+        a = sys.argv[1:]
+        if a == ["status"]:
+            out = {"tailscale": safe(ts_status), "connect": safe(rc_status)}
+        elif len(a) == 2 and a[0] == "tailscale" and a[1] in ("up", "down", "logout"):
+            out = {"tailscale": ts(a[1])}
+        elif len(a) == 2 and a[0] == "connect" and a[1] in ("signin", "on", "off", "signout"):
+            out = {"connect": rc(a[1])}
+        else:
+            raise ValueError("Brug: racetimer-remote status | tailscale up|down|logout | connect signin|on|off|signout")
+        out["ok"] = True
+        print(json.dumps(out, ensure_ascii=False))
+    except (ValueError, RuntimeError, subprocess.SubprocessError, OSError) as e:
+        print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

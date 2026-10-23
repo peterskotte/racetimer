@@ -1,0 +1,6 @@
+python3-venv
+python3-pip
+python3-evdev
+python3-serial
+curl
+util-linux

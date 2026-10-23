@@ -1,0 +1,1286 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RaceTimer – Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  main { padding: 20px clamp(16px, 3vw, 32px) 60px; max-width: 1200px; margin: 0 auto; }
+  nav.tabs { display: flex; gap: 4px; background: var(--nav); padding: 0 clamp(16px, 3vw, 32px); overflow-x: auto; }
+  nav.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--muted); padding: 12px 14px; white-space: nowrap; }
+  nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  section.tab { display: none; }
+  section.tab.on { display: block; }
+  h2 { font-size: 20px; margin: 28px 0 12px; }
+  h2:first-child { margin-top: 4px; }
+  .card.pad { padding: 18px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  input, select, textarea { font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 11px; min-width: 0; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 10px 12px; background: var(--card-head); white-space: nowrap; }
+  td { padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+  td input { width: 100%; padding: 6px 8px; }
+  td input[type=checkbox], td input[type=radio] { width: auto; padding: 0; }
+  #wifiRows .btns { flex-wrap: nowrap; }
+  #wifiRows td.chk label { flex-direction: row; align-items: center; gap: 6px; font-weight: 500; color: var(--text); white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--card-head); color: var(--muted); }
+  .pill.running { background: var(--green); color: #06170c; }
+  .pill.finished { background: var(--blue); color: #06121f; }
+  .warnbox { background: #3a2f0f; border: 1px solid var(--gold); color: var(--gold); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+  .okbox { background: #0f2a18; border: 1px solid var(--green); border-radius: 10px; padding: 12px 16px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btns button { font-size: 13px; padding: 6px 10px; }
+  tr.ignored td { text-decoration: line-through; color: var(--dim); }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 10px 18px; border-radius: 10px; font-weight: 600; display: none; z-index: 20; max-width: 90vw; }
+  #toast.err { background: var(--red); color: #fff; }
+  #login { max-width: 360px; margin: 12vh auto; }
+  .scan { font-weight: 700; color: var(--gold); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  dialog#timeDlg { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 22px; width: min(440px, 92vw); }
+  dialog#timeDlg::backdrop { background: rgba(0,0,0,.6); }
+  dialog#timeDlg h3 { margin: 0 0 4px; font-size: 20px; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg label { flex-direction: row; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; color: var(--text); font-weight: 500; }
+  .seg label:has(input:checked) { border-color: var(--accent); background: var(--card-head); }
+  .seg input { accent-color: var(--accent); margin: 0; }
+  .splashes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .splashes label { position: relative; flex-direction: column; gap: 8px; color: var(--text); font-weight: 500; cursor: pointer; border: 2px solid var(--line);
+                    border-radius: 12px; padding: 8px; background: var(--bg); }
+  .splashes label:has(input:checked) { border-color: var(--accent); }
+  .splashes .thumb { aspect-ratio: 16 / 9; border-radius: 8px; background: #0b120e center / cover no-repeat; display: grid; place-items: center;
+                     color: var(--brand-cream); font-weight: 800; font-style: italic; text-align: center; padding: 6px; }
+  .splashes input { position: absolute; opacity: 0; }
+  .logoPrev { background: var(--brand-cream); border-radius: 10px; padding: 12px 16px; display: inline-block; border-bottom: 3px solid var(--brand-orange); }
+  #wizard { max-width: 760px; margin: 28px auto; padding: 0 16px 60px; }
+  .wsteps { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+  .wsteps span { flex: 1; min-width: 90px; font-size: 12px; font-weight: 600; color: var(--muted); border-top: 4px solid var(--line); padding-top: 6px; }
+  .wsteps span.on { color: var(--text); border-color: var(--accent); }
+  .wsteps span.done { border-color: var(--green); }
+  #wizard h2 { margin-top: 0; }
+  .wnav { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 class="logo" id="brandLogo"></h1><span class="muted" style="font-weight:600">Admin</span>
+  <div class="spacer"></div>
+  <a class="btn" href="/" target="_blank">Resultatskærm ↗</a>
+  <button id="logout" hidden>Log ud</button>
+</header>
+
+<div id="login" class="card pad" hidden>
+  <h2>Log ind</h2>
+  <form id="loginForm" class="grid" style="grid-template-columns:1fr">
+    <label>Brugernavn<input name="username" autocomplete="username" required></label>
+    <label>Kode<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary">Log ind</button>
+    <p class="muted small" id="firstLoginHint" hidden style="margin:0">Første gang: log ind med <b>admin</b> / <b>admin</b> – derefter guider opsætningen dig igennem resten.</p>
+  </form>
+</div>
+
+<div id="wizard" hidden>
+  <div class="wsteps" id="wsteps"></div>
+  <div class="card pad" id="wbody"></div>
+  <div class="wnav"><button id="wBack">← Tilbage</button><div style="display:flex;gap:8px"><button id="wSkip">Spring over</button><button class="primary" id="wNext">Næste →</button></div></div>
+</div>
+
+<div id="app" hidden>
+<nav class="tabs" id="tabs">
+  <button data-tab="active" class="on">Rediger aktivt løb</button>
+  <button data-tab="new">Tilføj nyt løb</button>
+  <button data-tab="people">Deltagerregistrering</button>
+  <button data-tab="users">Brugerstyring</button>
+  <button data-tab="look">Udseende</button>
+  <button data-tab="sync">Synkronisering</button>
+  <button data-tab="wifi">WiFi</button>
+  <button data-tab="remote">Fjernadgang</button>
+  <button data-tab="update">Opdatering</button>
+</nav>
+<main>
+  <div id="pwWarn" class="warnbox" hidden>Standardkoden <b>admin / admin</b> er stadig aktiv. Skift den under <b>Brugerstyring</b>.</div>
+
+  <!-- ===================== AKTIVT LØB -->
+  <section class="tab on" id="tab-active">
+    <div class="row" style="margin-bottom:14px">
+      <label style="flex:1;min-width:240px">Løb<select id="raceSel"></select></label>
+      <button id="activateBtn">Vis på skærmen</button>
+      <button id="splashBtn" title="Fjern det aktive løb fra resultatskærmen og vis splash-billedet">Vis splash</button>
+      <button class="danger" id="deleteRaceBtn">Slet løb</button>
+    </div>
+    <div id="raceHead" class="card pad"></div>
+
+    <h2>Indstillinger</h2>
+    <div class="card pad"><form id="editForm"></form></div>
+
+    <div id="flagBox"></div>
+    <h2>Stilling og deltagerstatus</h2>
+    <div class="card"><div class="tablewrap" id="standings"></div></div>
+
+    <div class="two">
+      <div>
+        <h2>Seneste læsninger</h2>
+        <div class="card"><div class="tablewrap" id="reads" style="max-height:420px;overflow:auto"></div></div>
+      </div>
+      <div>
+        <h2>Læsere</h2>
+        <div class="card pad" id="readerBox"></div>
+        <h2>Test uden hardware</h2>
+        <div class="card pad">
+          <form id="simForm" class="row">
+            <label style="flex:1">Chip-ID<input name="chip" placeholder="fx 04A1B2C3" required></label>
+            <label>Læser<select name="reader"><option value="primary">Primær</option><option value="backup">Backup</option></select></label>
+            <button>Simulér læsning</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== NYT LØB -->
+  <section class="tab" id="tab-new">
+    <h2>Tilføj nyt løb</h2>
+    <div class="card pad">
+      <form id="newForm">
+        <div class="grid">
+          <label>Navn<input name="name" required placeholder="fx Rold Skov Backyard 2026"></label>
+          <label>Løbstype<select name="type" id="newType"></select></label>
+          <label>Planlagt start<input name="scheduled_start" type="datetime-local"></label>
+        </div>
+        <p class="muted small" id="newTypeHelp"></p>
+        <div id="newConfig"></div>
+        <div class="row" style="margin-top:16px">
+          <label style="flex-direction:row;align-items:center"><input type="checkbox" name="activate" checked> Gør til aktivt løb</label>
+          <div style="flex:1"></div>
+          <button class="primary">Opret løb</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== DELTAGERE -->
+  <section class="tab" id="tab-people">
+    <p class="muted">Deltagere tilføjes til løbet: <b id="peopleRace"></b> (vælg et andet under “Rediger aktivt løb”).</p>
+    <div class="two">
+      <div>
+        <h2>Tilføj manuelt</h2>
+        <div class="card pad">
+          <form id="addForm" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">
+            <label>Startnr<input name="bib" inputmode="numeric"></label>
+            <label style="grid-column:span 2">Navn<input name="name" required></label>
+            <label>Køn<select name="sex"><option>Mand</option><option>Kvinde</option><option value="">–</option></select></label>
+            <label>Klub<input name="club"></label>
+            <label>Chip<input name="chip" id="addChip" placeholder="Scan eller skriv"></label>
+            <label class="dogf" hidden>Hunde<select name="dogs" id="addDogs"><option value="">Vælg</option><option value="1">1 hund</option><option value="2">2 hunde</option></select></label>
+            <label class="dogf" hidden>Hund 1<input name="dog1" placeholder="Navn"></label>
+            <label class="dogf" hidden id="addDog2">Hund 2<input name="dog2" placeholder="Navn"></label>
+            <button type="button" id="addScan">📡 Scan chip</button>
+            <button class="primary">Tilføj</button>
+          </form>
+        </div>
+      </div>
+      <div>
+        <h2>Importér fra Excel</h2>
+        <div class="card pad">
+          <p class="muted small" style="margin-top:0">Kolonner: <b>Startnr, Navn, Køn, Klub, Chip</b> – ved canicross også <b>Hunde, Hund 1, Hund 2</b> (.xlsx eller .csv). Eksisterende startnumre opdateres.
+            Chip kan stå tom og scannes bagefter.</p>
+          <form id="importForm" class="row">
+            <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required style="flex:1">
+            <button class="primary">Importér</button>
+          </form>
+          <p><a href="/api/import-template.xlsx" class="small">⬇ Hent Excel-skabelon</a></p>
+          <div id="importResult"></div>
+        </div>
+      </div>
+    </div>
+    <h2>Deltagerliste <span class="muted small" id="peopleCount"></span></h2>
+    <p class="muted small">Tryk “Scan” og hold armbåndet mod læseren for at tildele chip. Ændringer gemmes når du forlader feltet.</p>
+    <div class="card"><div class="tablewrap" id="people"></div></div>
+  </section>
+
+  <!-- ===================== SYNKRONISERING -->
+  <section class="tab" id="tab-sync">
+    <h2>Send resultater til webserver</h2>
+    <p class="muted" style="margin-top:0">Alt kører på Pi'en – også uden internet. Her bestemmer du, hvor resultaterne sendes hen,
+      og hvornår: med faste intervaller, manuelt med “Send nu”, og/eller automatisk når løbet afsluttes. Chip-ID'er sendes aldrig.</p>
+    <div id="dests"></div>
+    <h2 id="destFormTitle">Tilføj destination</h2>
+    <div class="card pad">
+      <form id="destForm">
+        <input type="hidden" name="id">
+        <div class="grid">
+          <label>Navn<input name="name" placeholder="fx Klubbens hjemmeside" required></label>
+          <label>Type<select name="type">
+            <option value="mirror">RaceTimer-spejlserver (samme skærm online)</option>
+            <option value="webhook">Egen hjemmeside (JSON)</option>
+            <option value="ftp">FTP-upload til webhotel (færdig side)</option></select></label>
+          <label style="grid-column:1/-1">Adresse<input name="url" placeholder="https://resultater.example.dk" required></label>
+          <label class="ftpOnly">Brugernavn (FTP)<input name="username" autocomplete="off"></label>
+          <label><span class="keyLabel">Nøgle</span><input name="key" type="password" autocomplete="off"></label>
+          <label>Send automatisk<select name="interval_sec">
+            <option value="0">Kun manuelt</option><option value="10">Hvert 10. sek.</option><option value="30">Hvert 30. sek.</option>
+            <option value="60" selected>Hvert minut</option><option value="300">Hvert 5. minut</option>
+            <option value="900">Hvert 15. minut</option><option value="3600">Hver time</option></select></label>
+        </div>
+        <div class="row" style="margin-top:14px;gap:22px">
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="on_finish" checked> Send endelige resultater, når løbet afsluttes</label>
+          <label class="hookOnly" style="flex-direction:row;align-items:center;gap:8px" title="Hjemmesiden viderestiller …/racetimer/admin til Pi'ens fjernadgang"><input type="checkbox" name="announce_admin"> Meld admin-adressen (fjernadgang)</label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="enabled" checked> Aktiv</label>
+          <div style="flex:1"></div>
+          <button type="button" id="destCancel" hidden>Annullér</button>
+          <button class="primary" id="destSave">Tilføj</button>
+        </div>
+        <p class="muted small" id="destTypeHelp"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== WIFI -->
+  <section class="tab" id="tab-wifi">
+    <h2>WiFi</h2>
+    <p class="muted" style="margin-top:0">Skriv op til 5 netværk ind – fx klubhuset, hjemme og din mobils hotspot. Pi'en forbinder
+      automatisk til det første netværk i listen, der er inden for rækkevidde, og bliver ved med at prøve – også efter genstart.
+      Tidtagningen kører altid, også uden WiFi.</p>
+    <div class="card pad" id="wifiNow" style="margin-bottom:16px">Henter…</div>
+    <div class="card"><div class="tablewrap"><table>
+      <thead><tr><th style="width:44px">#</th><th>Netværk (SSID)</th><th style="width:170px">Sikkerhed</th><th>Login</th><th style="width:90px"></th><th style="width:230px"></th></tr></thead>
+      <tbody id="wifiRows"></tbody></table></div></div>
+    <datalist id="wifiVisible"></datalist>
+    <div class="row" style="margin-top:14px;justify-content:space-between">
+      <span class="muted small">Tom kode = behold den gemte kode. Rækkefølgen er prioriteten (1 vælges først). Eduroam o.l. = “Brugernavn + kode”.</span>
+      <button class="primary" id="wifiSave">Gem WiFi-netværk</button>
+    </div>
+    <h2>Netværk inden for rækkevidde</h2>
+    <div class="card"><div class="tablewrap" id="wifiScan"></div></div>
+  </section>
+
+  <!-- ===================== FJERNADGANG -->
+  <section class="tab" id="tab-remote">
+    <h2>Fjernadgang</h2>
+    <p class="muted" style="margin-top:0">Kom til Pi'en, når du ikke er på stævnets netværk. Alle tre løsninger åbner forbindelsen
+      <i>ud</i> fra Pi'en – der skal ikke åbnes porte i routeren, og det virker også på mobil-hotspot.</p>
+    <h2 style="font-size:17px">🔒 Tailscale – privat (anbefalet)</h2>
+    <div class="card pad" id="tsBox" style="margin-bottom:8px">Henter…</div>
+    <h2 style="font-size:17px">🖥️ Raspberry Pi Connect – skærm og terminal</h2>
+    <div class="card pad" id="rcBox" style="margin-bottom:8px">Henter…</div>
+    <h2 style="font-size:17px">🌍 Offentligt link via Cloudflare</h2>
+    <div class="card pad" id="remoteBox" style="margin-bottom:8px">Henter…</div>
+  </section>
+
+  <!-- ===================== UDSEENDE -->
+  <section class="tab" id="tab-look">
+    <h2>Navn og logo</h2>
+    <div class="card pad">
+      <form id="nameForm" class="row">
+        <label style="flex:1;min-width:220px">Klubbens / løbets navn (vises i toppen og som titel)<input name="name" maxlength="60" required></label>
+        <button class="primary">Gem navn</button>
+      </form>
+      <div class="row" style="margin-top:16px;align-items:center;gap:16px">
+        <div class="logoPrev" id="logoPrev"></div>
+        <form id="logoForm" class="row"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload logo</button></form>
+        <button class="danger" id="logoDel" hidden>Fjern logo</button>
+      </div>
+      <p class="muted small" style="margin-bottom:0">Logoet vises på en lys bjælke – brug gerne PNG med gennemsigtig baggrund. Uden logo vises navnet som tekst.</p>
+    </div>
+    <h2>Splash-skærm <span class="muted small">(vises når der ikke er et aktivt løb)</span></h2>
+    <div class="card pad">
+      <div class="splashes" id="splashes"></div>
+      <form id="splashForm" class="row" style="margin-top:14px"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload eget billede</button></form>
+      <p class="muted small" style="margin-bottom:0">Eget billede: liggende format, fx 1920×1080. Det vises med det samme på skærmen.</p>
+    </div>
+  </section>
+
+  <!-- ===================== OPDATERING -->
+  <section class="tab" id="tab-update">
+    <h2>Opdatering</h2>
+    <div class="card pad" id="updBox">Henter…</div>
+    <h2 id="updLogTitle" hidden>Seneste opdatering</h2>
+    <div class="card pad" id="updLog" hidden></div>
+    <h2 id="updBackTitle" hidden>Tidligere versioner</h2>
+    <div class="card pad" id="updBack" hidden></div>
+  </section>
+
+  <!-- ===================== BRUGERE -->
+  <section class="tab" id="tab-users">
+    <h2>Administratorer</h2>
+    <div class="card"><div class="tablewrap" id="users"></div></div>
+    <h2>Ny administrator</h2>
+    <div class="card pad">
+      <form id="userForm" class="row">
+        <label>Brugernavn<input name="username" required autocomplete="off"></label>
+        <label>Kode (min. 6 tegn)<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
+        <button class="primary">Opret</button>
+      </form>
+    </div>
+  </section>
+</main>
+</div>
+<dialog id="timeDlg">
+  <form id="timeForm" method="dialog" class="grid" style="grid-template-columns:1fr;gap:14px">
+    <div><h3>Manuel tid</h3><div class="muted small" id="timeWho"></div></div>
+    <div><div class="muted small" style="font-weight:600;margin-bottom:6px">Type</div><div class="seg" id="timeKinds"></div></div>
+    <div>
+      <div class="seg" style="margin-bottom:8px">
+        <label><input type="radio" name="mode" value="clock" checked> Klokkeslæt</label>
+        <label><input type="radio" name="mode" value="elapsed"> Løbstid</label>
+      </div>
+      <label id="clockField">Tidspunkt (med sekunder)<input type="datetime-local" name="clock" step="1"></label>
+      <label id="elapsedField" hidden>Løbstid fra start (t:mm:ss eller mm:ss)<input name="elapsed" placeholder="1:23:45" inputmode="numeric" autocomplete="off"></label>
+    </div>
+    <p class="muted small" id="timeHelp" style="margin:0"></p>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" id="timeCancel">Annullér</button>
+      <button class="primary" id="timeSave" value="save">Gem tid</button>
+    </div>
+  </form>
+</dialog>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hms = s => { if (s == null) return "–"; s = Math.floor(s); const p = n => String(n).padStart(2, "0"); return `${Math.floor(s/3600)}:${p(Math.floor(s%3600/60))}:${p(s%60)}`; };
+const clock = ts => ts ? new Date(ts * 1000).toLocaleString("da-DK", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "–";
+const toLocalInput = (ts, sec) => { if (!ts) return ""; const d = new Date(ts * 1000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, sec ? 19 : 16); };
+const fromLocalInput = v => v ? new Date(v).getTime() / 1000 : null;
+
+let TYPES = {}, races = [], curId = null, cur = null, me = null;
+
+function toast(msg, err) {
+  const t = $("toast"); t.textContent = msg; t.className = err ? "err" : ""; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 3500);
+}
+
+async function api(path, opts = {}) {
+  const o = {method: opts.method || (opts.body ? "POST" : "GET"), headers: {}};
+  if (opts.body instanceof FormData) o.body = opts.body;
+  else if (opts.body !== undefined) { o.body = JSON.stringify(opts.body); o.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, o);
+  if (r.status === 401 && path !== "/api/login") { showLogin(); throw new Error("Log ind"); }
+  const data = r.headers.get("content-type")?.includes("json") ? await r.json() : null;
+  if (!r.ok) { const m = data?.detail || r.statusText; toast(typeof m === "string" ? m : "Fejl", true); throw new Error(m); }
+  return data;
+}
+
+// ------------------------------------------------ login
+function showLogin() {
+  $("login").hidden = false; $("app").hidden = true; $("wizard").hidden = true; $("logout").hidden = true;
+  fetch("/api/setup").then(r => r.json()).then(s => $("firstLoginHint").hidden = s.done).catch(() => {});
+}
+$("loginForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  try { await api("/api/login", {body: f}); boot(); } catch (_) {}
+};
+$("logout").onclick = async () => { await api("/api/logout", {body: {}}); showLogin(); };
+
+async function boot() {
+  try { me = await api("/api/me"); } catch (_) { return; }
+  $("login").hidden = true; $("logout").hidden = false;
+  const setup = await (await fetch("/api/setup")).json();
+  if (!setup.done) { $("app").hidden = true; return startWizard(); }
+  $("wizard").hidden = true; $("app").hidden = false;
+  $("pwWarn").hidden = !me.default_password;
+  TYPES = await api("/api/types");
+  fillNewTypes();
+  await loadRaces();
+  loadUsers();
+}
+
+// ------------------------------------------------ faner
+$("tabs").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "people") loadPeople();
+  if (b.dataset.tab === "look") loadLook();
+  if (b.dataset.tab === "sync") loadDests();
+  if (b.dataset.tab === "wifi") loadWifi();
+  if (b.dataset.tab === "remote") loadRemoteTab();
+  if (b.dataset.tab === "update") loadUpdate(true);
+};
+
+// ------------------------------------------------ konfig-felter (fælles for nyt/rediger)
+const CFG_LABELS = {
+  loop_km: "Omgangslængde (km)", interval_min: "Starter hvert (min)", warnings_min: "Advarsler før start (min, komma)",
+  min_lap_min: "Min. omgangstid (min)", checkin_min: "Indtjekning: min. før start (0 = fra)", start_window_min: "Afgangsvindue (min efter start)",
+  goal_window_min: "Målvindue åbner (min efter start)", canicross: "🐕 Canicross (løber med 1–2 hunde)", distance_km: "Distance (km)", min_time_min: "Min. løbstid (min)",
+  record_km: "Rekord at slå (km)", record_label: "Titel på fælles distance", duration_h: "Varighed (timer)",
+  start_mode: "Startform", interval_sec: "Startinterval (sek)", waves: "Startbølger",
+  end_mode: "Løbet slutter", max_yards: "Cutoff: antal omgange", total_h: "Samlet tid (timer)",
+};
+const HELP = {
+  backyard: "Officielle regler: 6,7056 km hver hele time, advarsel 3-2-1 min. Sidste løber skal gennemføre én omgang mere end alle andre. Parametre er låst.",
+  backyard_custom: "Som backyard, men alle parametre kan justeres (fx 1 time/5 km, eller 30 min til træning). Vælg om løbet slutter med sidste mand tilbage (fælles start hver interval), efter et fast antal omgange (cutoff) eller efter en samlet tid, fx 3 timer. De to sidste løbes i træk uden fælles starter.",
+  p2p: "Fælles start (start-knap = startskud). Første chip-læsning efter minimumstiden er måltid.",
+  record: "Hver deltager tæller omgange; alles distance lægges sammen til en fælles total.",
+  timed: "Flest omgange inden for tidsgrænsen. Ved lige mange omgange vinder den, der nåede sidste omgang først.",
+  timetrial: "Intervalstart (fast interval i startnummer-orden), bølgestart (startnummer-intervaller) eller chipstart (første læsning = start).",
+};
+const MIN_LAP_HELP = "Læsninger tættere end dette på forrige omgang/start ignoreres (beskytter mod dobbeltlæsninger og læsninger i startboksen).";
+
+function cfgFields(type, cfg, locked) {
+  const dis = locked ? "disabled" : "";
+  let h = `<div class="grid" style="margin-top:12px">`;
+  for (const [k, v] of Object.entries(cfg)) {
+    if (k === "waves") continue;
+    const lab = CFG_LABELS[k] || k, title = k.startsWith("min_") ? `title="${MIN_LAP_HELP}"` : "";
+    if (k === "end_mode")
+      h += `<label>${lab}<select name="cfg.${k}" ${dis}>${[["last_man", "Sidste mand tilbage (officiel)"], ["yards", "Efter fast antal omgange (cutoff)"], ["duration", "Efter samlet tid"]]
+        .map(([val, t]) => `<option value="${val}" ${v === val ? "selected" : ""}>${t}</option>`).join("")}</select></label>`;
+    else if (k === "start_mode")
+      h += `<label>${lab}<select name="cfg.${k}" ${dis}>${[["interval", "Enkeltstart (interval)"], ["waves", "Bølgestart"], ["chip", "Chipstart (læsning ved start)"]]
+        .map(([val, t]) => `<option value="${val}" ${v === val ? "selected" : ""}>${t}</option>`).join("")}</select></label>`;
+    else if (k === "duration_h")
+      h += `<label>${lab}<input name="cfg.${k}" type="number" step="any" min="0.1" value="${v}" list="durs" ${dis}><datalist id="durs"><option>6</option><option>12</option><option>24</option><option>48</option></datalist></label>`;
+    else if (Array.isArray(v)) h += `<label>${lab}<input name="cfg.${k}" data-kind="list" value="${v.join(", ")}" ${dis}></label>`;
+    else if (typeof v === "boolean") h += `<label style="flex-direction:row;align-items:center;gap:8px;align-self:end;padding-bottom:10px;color:var(--text)"><input type="checkbox" name="cfg.${k}" data-kind="bool" ${v ? "checked" : ""} ${dis}> ${lab}</label>`;
+    else if (typeof v === "number") h += `<label ${title}>${lab}<input name="cfg.${k}" type="number" step="any" value="${v}" ${dis}></label>`;
+    else h += `<label>${lab}<input name="cfg.${k}" value="${esc(v)}" ${dis}></label>`;
+  }
+  h += `</div>`;
+  if (cfg.waves) {
+    h += `<div style="margin-top:14px" class="muted small">Startbølger (bruges når startform = bølgestart)</div>
+      <table class="waves" style="margin-top:6px"><thead><tr><th>Navn</th><th>Fra nr.</th><th>Til nr.</th><th>Start + sek</th><th></th></tr></thead><tbody>` +
+      cfg.waves.map(waveRow).join("") + `</tbody></table><button type="button" class="addWave" style="margin-top:8px">+ Bølge</button>`;
+  }
+  return h;
+}
+const waveRow = w => `<tr><td><input data-w="name" value="${esc(w.name)}"></td><td><input data-w="from_bib" type="number" value="${w.from_bib}"></td>
+  <td><input data-w="to_bib" type="number" value="${w.to_bib}"></td><td><input data-w="offset_sec" type="number" value="${w.offset_sec}"></td>
+  <td><button type="button" class="danger delWave">✕</button></td></tr>`;
+
+function wireEndMode(form) {
+  const sel = form.querySelector("[name='cfg.end_mode']");
+  if (!sel) return;
+  const f = n => form.querySelector(`[name='cfg.${n}']`);
+  const show = (n, on) => { const l = f(n)?.closest("label"); if (l) l.style.display = on ? "" : "none"; };
+  const upd = () => {
+    const m = sel.value;
+    show("max_yards", m === "yards");
+    show("total_h", m === "duration");
+    // uden fælles starter giver interval og 3-2-1-advarsler ingen mening
+    show("interval_min", m === "last_man");
+    show("warnings_min", m === "last_man");
+    show("start_window_min", m === "last_man");
+    show("goal_window_min", m === "last_man");
+    show("min_lap_min", m !== "last_man");
+    let hint = form.querySelector(".endHint");
+    if (!hint) { hint = document.createElement("p"); hint.className = "muted small endHint"; sel.closest(".grid").after(hint); }
+    const n = Math.max(1, parseInt(f("max_yards").value) || 1), h = parseFloat(f("total_h").value) || 0;
+    hint.textContent = sel.disabled ? "" : {
+      last_man: "Fælles start hver interval. Løbet fortsætter, til kun én løber gennemfører en omgang mere end alle andre.",
+      duration: `Omgange løbes i træk fra start – ingen fælles starter. Flest omgange inden for ${String(h).replace(".", ",")} timer vinder; ved lige mange omgange vinder den, der nåede sin sidste omgang først.`,
+      yards: `Omgange løbes i træk fra start – ingen fælles starter. Man er færdig efter ${n} omgange; hurtigste samlede tid vinder. Læsninger efter sidste omgang tæller ikke.`,
+    }[m];
+  };
+  ["end_mode", "max_yards", "total_h"].forEach(n => f(n)?.addEventListener("input", upd));
+  upd();
+}
+
+function wireWaves(form) {
+  form.querySelector(".addWave")?.addEventListener("click", () => {
+    const rows = form.querySelectorAll("table.waves tbody tr"), n = rows.length;
+    form.querySelector("table.waves tbody").insertAdjacentHTML("beforeend", waveRow({name: `Bølge ${n + 1}`, from_bib: n * 20 + 1, to_bib: (n + 1) * 20, offset_sec: n * 120}));
+  });
+  form.addEventListener("click", e => { if (e.target.classList.contains("delWave")) e.target.closest("tr").remove(); });
+}
+
+function readCfg(form) {
+  const cfg = {};
+  form.querySelectorAll("[name^='cfg.']").forEach(el => {
+    const k = el.name.slice(4);
+    if (el.dataset.kind === "list") cfg[k] = el.value.split(",").map(x => parseFloat(x)).filter(x => !isNaN(x));
+    else if (el.dataset.kind === "bool") cfg[k] = el.checked;
+    else if (el.type === "number") cfg[k] = parseFloat(el.value);
+    else cfg[k] = el.value;
+  });
+  const wt = form.querySelector("table.waves");
+  if (wt) cfg.waves = [...wt.querySelectorAll("tbody tr")].map(tr => {
+    const w = {}; tr.querySelectorAll("[data-w]").forEach(i => w[i.dataset.w] = i.type === "number" ? parseFloat(i.value) || 0 : i.value); return w;
+  });
+  return cfg;
+}
+
+// ------------------------------------------------ nyt løb
+function fillNewTypes() {
+  $("newType").innerHTML = Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join("");
+  $("newType").onchange = renderNewCfg; renderNewCfg();
+}
+function renderNewCfg() {
+  const t = $("newType").value;
+  $("newTypeHelp").textContent = HELP[t] || "";
+  $("newConfig").innerHTML = cfgFields(t, TYPES[t].config, TYPES[t].locked);
+  wireWaves($("newForm")); wireEndMode($("newForm"));
+}
+$("newForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const r = await api("/api/races", {body: {name: fd.get("name"), type: fd.get("type"), config: readCfg(f),
+    scheduled_start: fromLocalInput(fd.get("scheduled_start")), activate: !!fd.get("activate")}});
+  toast("Løbet er oprettet"); f.reset(); renderNewCfg();
+  curId = r.id; await loadRaces();
+  document.querySelector('#tabs [data-tab="people"]').click();
+};
+
+// ------------------------------------------------ aktivt løb
+async function loadRaces() {
+  races = await api("/api/races");
+  if (!races.find(r => r.id === curId)) curId = (races.find(r => r.is_active) || races[0])?.id ?? null;
+  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${esc(r.name)} – ${esc(TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
+    : `<option>Ingen løb – opret et under “Tilføj nyt løb”</option>`;
+  await loadRace(true);
+}
+$("raceSel").onchange = () => { curId = +$("raceSel").value; loadRace(true); };
+$("activateBtn").onclick = async () => { if (!curId) return; await api(`/api/races/${curId}/activate`, {body: {}}); toast("Vises nu på resultatskærmen"); loadRaces(); };
+$("splashBtn").onclick = async () => { await api("/api/races/deactivate", {body: {}}); toast("Resultatskærmen viser nu splash"); loadRaces(); };
+$("deleteRaceBtn").onclick = async () => {
+  if (!curId || !confirm("Slet løbet inkl. deltagere? Rå læsninger bevares i reads.log.")) return;
+  await api(`/api/races/${curId}`, {method: "DELETE"}); curId = null; loadRaces();
+};
+
+async function loadRace(full) {
+  if (!curId) { $("raceHead").innerHTML = `<span class="muted">Intet løb valgt.</span>`; $("editForm").innerHTML = ""; $("standings").innerHTML = ""; $("reads").innerHTML = ""; return; }
+  cur = await api(`/api/races/${curId}`);
+  const r = cur.race, i = cur.info;
+  $("peopleRace").textContent = r.name;
+  const status = {planned: "Planlagt", running: "Kører", finished: "Afsluttet"}[r.status];
+  let extra = "";
+  if (i.type?.startsWith("backyard") && i.phase === "running") extra = ` · Yard ${i.yard} · næste start ${clock(i.next_start)} · ${i.runners_left} tilbage`;
+  if (i.winner) extra = ` · 🏆 Vinder: ${esc(i.winner)}`;
+  if (i.no_winner) extra = " · Ingen vinder";
+  if (i.checkin) extra += ` · ${i.checkin.count}/${i.checkin.total} tjekket ind`;
+  if (i.solo) extra += i.solo.state === "running" ? ` · ${esc(i.solo.name)} løber solo-runden` : ` · ${esc(i.solo.name)} skal løbe solo-runden ved næste start`;
+  if (i.continuous && i.phase === "running") extra = i.end_mode === "duration"
+    ? ` · ${hms(i.remaining)} tilbage · ${i.on_course} på ruten` : ` · ${i.finishers} færdige · ${i.on_course} på ruten`;
+  if (i.continuous && i.phase === "ended") extra = i.leader ? ` · 🏁 Vinder: ${esc(i.leader)}` : " · Slut";
+  $("raceHead").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center">
+    <div><div style="font-size:20px;font-weight:700">${esc(r.name)} ${r.is_active ? '<span class="pill">PÅ SKÆRMEN</span>' : ""}</div>
+      <div class="muted small" style="margin-top:4px"><span class="pill ${r.status}">${status}</span> ${esc(TYPES[r.type].label)}
+      · Start: ${clock(r.started_at || r.scheduled_start)}${r.finished_at ? " · Slut: " + clock(r.finished_at) : ""}${extra}</div></div>
+    <div class="btns">
+      ${r.status === "planned" ? `<button class="go" data-act="start">▶ Start nu</button><input type="datetime-local" id="startAt" value="${toLocalInput(r.scheduled_start)}"><button data-act="startAt">Start kl.</button>` : ""}
+      ${r.status === "running" ? `<button class="danger" data-act="finish">■ Afslut løb</button>` : ""}
+      ${r.status === "finished" ? `<button data-act="resume">Genoptag</button>` : ""}
+      ${r.status !== "planned" ? `<button class="danger" data-act="reset">Nulstil</button>` : ""}
+      <a class="btn" href="/api/races/${r.id}/results.csv">⬇ Resultater (CSV)</a>
+    </div></div>`;
+  $("raceHead").querySelectorAll("[data-act]").forEach(b => b.onclick = () => raceAction(b.dataset.act));
+
+  if (full) {
+    const locked = TYPES[r.type].locked;
+    $("editForm").innerHTML = `<div class="grid"><label>Navn<input name="name" value="${esc(r.name)}"></label>
+      <label>Planlagt start<input name="scheduled_start" type="datetime-local" value="${toLocalInput(r.scheduled_start)}"></label></div>
+      ${locked ? `<p class="muted small">Officielle backyard-parametre er låst. Vælg “Backyard Ultra (custom)” for at justere.</p>` : ""}
+      ${cfgFields(r.type, r.effective_config, locked)}
+      <div style="margin-top:14px"><button class="primary">Gem indstillinger</button></div>`;
+    wireWaves($("editForm")); wireEndMode($("editForm"));
+    loadReaders();
+  }
+  renderStandings(); loadReads();
+}
+$("editForm").onsubmit = async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  await api(`/api/races/${curId}`, {method: "PUT", body: {name: fd.get("name"), scheduled_start: fromLocalInput(fd.get("scheduled_start")), config: readCfg(e.target)}});
+  toast("Gemt"); loadRaces();
+};
+
+async function raceAction(act) {
+  const ask = {reset: "Nulstil løbet? Starttid og status fjernes, og alle læsninger markeres som ignoreret (kan gendannes).", finish: "Afslut løbet nu?"};
+  if (ask[act] && !confirm(ask[act])) return;
+  if (act === "start") await api(`/api/races/${curId}/start`, {body: {}});
+  else if (act === "startAt") {
+    const at = fromLocalInput($("startAt").value);
+    if (!at) return toast("Vælg et tidspunkt", true);
+    await api(`/api/races/${curId}/start`, {body: {at}});
+  } else await api(`/api/races/${curId}/${act}`, {body: {}});
+  loadRaces();
+}
+
+function renderFlags() {
+  // Backyard: læsninger i flagzonen (fx 3–25 min) tæller ikke, før en official har godkendt dem
+  const flags = cur.info.flags || [], byId = Object.fromEntries(cur.rows.map(r => [r.id, r]));
+  if (!flags.length) { $("flagBox").innerHTML = ""; return; }
+  const z = `${cur.info.start_window_min}–${cur.info.goal_window_min} min`;
+  $("flagBox").innerHTML = `<h2>⚑ Til vurdering <span class="muted small">(${flags.length} læsning${flags.length > 1 ? "er" : ""} i flagzonen ${z})</span></h2>
+    <div class="card" style="border-color:var(--gold)"><div class="tablewrap"><table><thead><tr><th>Yard</th><th>Min. inde i runden</th><th>Løber</th><th>Klokken</th><th></th></tr></thead><tbody>` +
+    flags.map(f => { const r = byId[f.participant_id] || {}; return `<tr><td>${f.yard}</td><td class="num">${f.minute.toFixed(1).replace(".", ",")}</td>
+      <td>${r.bib ?? ""} ${esc(r.name)}</td><td class="num">${clock(f.ts)}</td>
+      <td><div class="btns"><button class="go" data-ok="${f.read_id}" title="Tæl læsningen som gennemført runde">Godkend som runde</button>
+      <button class="danger" data-no="${f.read_id}" title="Ignorér læsningen (kan gendannes i loggen)">Afvis</button></div></td></tr>`; }).join("") +
+    `</tbody></table></div></div><p class="muted small">Typisk en sen start eller en løber, der har vendt om. Afgør dem – flaggede læsninger tæller ikke som runde, før de er godkendt.</p>`;
+  $("flagBox").querySelectorAll("button[data-ok]").forEach(b => b.onclick = async () => { await api(`/api/reads/${b.dataset.ok}/approve`, {body: {}}); toast("Godkendt som runde"); loadRace(false); });
+  $("flagBox").querySelectorAll("button[data-no]").forEach(b => b.onclick = async () => { await api(`/api/reads/${b.dataset.no}/toggle`, {body: {}}); toast("Afvist"); loadRace(false); });
+}
+
+function renderStandings() {
+  renderFlags();
+  const rows = cur.rows, type = cur.race.type, tt = ["p2p", "timetrial"].includes(type);
+  const by = type.startsWith("backyard") && !cur.info.continuous && cur.info.phase === "running";
+  if (!rows.length) { $("standings").innerHTML = `<p class="muted" style="padding:16px">Ingen deltagere endnu – tilføj under “Deltagerregistrering”.</p>`; return; }
+  $("standings").innerHTML = `<table><thead><tr><th>#</th><th>Nr</th><th>Navn</th><th>Status</th>${by ? `<th title="Læsning i afgangsvinduet i denne runde">Afgang</th>` : ""}<th>${tt ? "Tid" : "Omgange"}</th><th>${tt ? "Start" : "Sidste omg."}</th><th>Handling</th></tr></thead><tbody>` +
+    rows.map(r => `<tr class="st-${r.status}"><td>${r.place ?? "–"}</td><td>${r.bib ?? ""}</td><td>${esc(r.name)}</td>
+      <td style="white-space:nowrap"><i class="dot"></i>${esc(r.status_label)}${r.flags ? ` <span class="pill" style="background:var(--gold);color:#1b1e23">⚑ ${r.flags}</span>` : ""}</td>
+      ${by ? `<td>${r.started_current ? "✓" : ["active", "resting"].includes(r.status) ? '<span class="muted">–</span>' : ""}</td>` : ""}
+      <td class="num">${tt ? hms(r.total_time) : r.laps}</td><td class="num">${tt ? clock(r.start_ts) : hms(r.last_lap)}</td>
+      <td><div class="btns">
+        ${cur.info.checkin && ["nocheckin", "waiting"].includes(r.status) ? `<button class="go" data-pid="${r.id}" data-a="checkin" title="Tjek løberen ind manuelt (fx glemt at scanne)">✓ Tjek ind</button>` : ""}
+        <button data-pid="${r.id}" data-a="lap" title="Registrér passage nu (klokken lige nu)">+ Nu</button>
+        <button data-pid="${r.id}" data-a="time" title="Indtast mellemtid eller sluttid manuelt">⏱ Tid</button>
+        <button data-pid="${r.id}" data-a="RTC">RTC</button><button data-pid="${r.id}" data-a="DNS">DNS</button>
+        <button data-pid="${r.id}" data-a="DSQ">DSQ</button><button data-pid="${r.id}" data-a="clear" title="Fjern manuel status">↺</button>
+      </div></td></tr>`).join("") + `</tbody></table>`;
+  $("standings").querySelectorAll("button[data-a]").forEach(b => b.onclick = async () => {
+    const pid = +b.dataset.pid, a = b.dataset.a;
+    if (a === "time") return openTimeDialog(rows.find(r => r.id === pid));
+    if (a === "checkin") {
+      const r = await api(`/api/races/${curId}/reads`, {body: {participant_id: pid, kind: "checkin"}});
+      toast(`${r.name} er tjekket ind`); return loadRace(false);
+    }
+    if (a === "lap") {
+      const r = await api(`/api/races/${curId}/reads`, {body: {participant_id: pid}});
+      toast(manualMsg(r));
+    }
+    else await api(`/api/participants/${pid}/status`, {body: {status: a === "clear" ? null : a}});
+    loadRace(false);
+  });
+}
+
+async function loadReads() {
+  const reads = await api(`/api/races/${curId}/reads?limit=150`);
+  const label = {primary: "Primær", backup: "Backup", manual: "Manuel", sim: "Simuleret"};
+  $("reads").innerHTML = reads.length ? `<table><thead><tr><th>Tid</th><th>Læser</th><th>Deltager / chip</th><th></th></tr></thead><tbody>` +
+    reads.map(r => `<tr class="${r.deleted ? "ignored" : ""}"><td class="num">${clock(r.ts)}</td><td>${label[r.reader] || r.reader}</td>
+      <td>${r.participant_id ? `${r.bib ?? ""} ${esc(r.name)}` : `<span style="color:var(--gold)">Ukendt chip</span>`} <span class="muted small">${esc(r.chip)}</span>
+      ${r.duplicate ? '<span class="pill">dublet</span>' : ""}${r.approved && r.reader !== "manual" ? `<span class="pill" style="background:var(--green);color:#06170c">godkendt</span> <button data-unapprove="${r.id}" style="font-size:11px;padding:2px 6px">fortryd</button>` : ""}</td>
+      <td>${r.duplicate ? "" : `<button data-rid="${r.id}" style="font-size:12px;padding:4px 8px">${r.deleted ? "Gendan" : "Ignorér"}</button>`}</td></tr>`).join("") + "</tbody></table>"
+    : `<p class="muted" style="padding:16px">Ingen læsninger endnu.</p>`;
+  $("reads").querySelectorAll("button[data-unapprove]").forEach(b => b.onclick = async () => { await api(`/api/reads/${b.dataset.unapprove}/approve`, {body: {}}); loadRace(false); });
+  $("reads").querySelectorAll("button[data-rid]").forEach(b => b.onclick = async () => { await api(`/api/reads/${b.dataset.rid}/toggle`, {body: {}}); loadRace(false); });
+}
+
+async function loadReaders() {
+  const d = await api("/api/readers");
+  const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("") +
+    (sel && !d.devices.find(x => x.path === sel) ? `<option value="${esc(sel)}" selected>${esc(sel)} (ikke fundet)</option>` : "");
+  const st = d.status.map(s => `<div style="margin-bottom:6px"><i class="dot ${s.connected ? "active" : ""}" style="background:${s.connected ? "var(--green)" : "var(--red)"}"></i>
+    <b>${s.role === "primary" ? "Primær" : "Backup"}</b>: ${s.connected ? "forbundet" : (s.path ? "ikke forbundet" : "ikke valgt")}
+    ${s.reads ? ` · ${s.reads} læsninger` : ""}${s.error ? ` <span class="muted small">(${esc(s.error)})</span>` : ""}</div>`).join("");
+  $("readerBox").innerHTML = st + (d.evdev ? "" : `<p class="muted small">python-evdev er ikke installeret (normalt på Mac). Brug simuleringen nedenfor.</p>`) +
+    `<form id="readerForm" class="grid" style="grid-template-columns:1fr;margin-top:12px">
+      <label>Primær læser<select name="primary">${opt(d.config.primary)}</select></label>
+      <label>Backup læser<select name="backup">${opt(d.config.backup)}</select></label>
+      <label>Dublet-vindue (sek) – samme chip inden for dette ignoreres<input name="dedup_sec" type="number" step="any" value="${d.dedup_sec}"></label>
+      <button class="primary">Gem læsere</button></form>`;
+  $("readerForm").onsubmit = async e => {
+    e.preventDefault();
+    await api("/api/readers", {method: "PUT", body: Object.fromEntries(new FormData(e.target))});
+    toast("Læsere gemt"); setTimeout(loadReaders, 1500);
+  };
+}
+
+$("simForm").onsubmit = async e => {
+  e.preventDefault();
+  const r = await api("/api/sim-read", {body: Object.fromEntries(new FormData(e.target))});
+  toast(r.captured ? "Chip scannet: " + r.captured : r.duplicate ? "Dublet – ignoreret" : r.participant_id ? "Læsning registreret" : "Ukendt chip registreret");
+  loadRace(false);
+};
+
+// ------------------------------------------------ manuel tid
+function manualMsg(r) {
+  const lap = ["backyard", "backyard_custom", "timed", "record"].includes(cur.race.type);
+  if (!r.counted) return `Tiden er gemt for ${r.name}, men ændrede ikke resultatet (se loggen over læsninger)`;
+  return lap ? `Omgang registreret – ${r.name} har nu ${r.laps} omgang${r.laps === 1 ? "" : "e"}` : `Tid registreret – ${r.name}: ${hms(r.total_time)}`;
+}
+let timeRunner = null;
+function parseElapsed(s) {
+  const p = String(s).trim().split(/[:.]/).map(Number);
+  if (!p.length || p.some(isNaN)) return null;
+  return p.reduce((acc, n) => acc * 60 + n, 0);  // h:mm:ss, mm:ss eller ss
+}
+function openTimeDialog(r) {
+  timeRunner = r;
+  const t = cur.race.type, lap = ["backyard", "backyard_custom", "timed", "record"].includes(t);
+  const kinds = lap ? [["split", "Omgang / mellemtid"]]
+    : t === "timetrial" && cur.race.effective_config.start_mode === "chip" ? [["final", "Sluttid"], ["start", "Starttid"]]
+    : [["final", "Sluttid"]];
+  $("timeKinds").innerHTML = kinds.map(([v, l], i) => `<label><input type="radio" name="kind" value="${v}" ${i ? "" : "checked"}> ${l}</label>`).join("");
+  $("timeWho").textContent = `${r.bib ?? ""} ${r.name} · ${r.status_label}${lap ? ` · ${r.laps} omgange` : r.total_time != null ? " · nu: " + hms(r.total_time) : ""}`;
+  $("timeHelp").textContent = lap
+    ? "Hver tid tæller som en gennemført omgang (passage). Den sidste omgang er også løberens sluttid. Tæller også i backyards flagzone."
+    : "Sluttiden erstatter en eventuel forkert mållæsning – den gamle læsning ignoreres og kan gendannes i loggen.";
+  const f = $("timeForm");
+  f.mode.value = "clock"; f.elapsed.value = "";
+  f.clock.value = toLocalInput(Date.now() / 1000, true);
+  timeModeUI();
+  $("timeDlg").showModal();
+}
+function timeModeUI() {
+  const el = $("timeForm").mode.value === "elapsed";
+  $("clockField").hidden = el; $("elapsedField").hidden = !el;
+  const base = timeRunner?.start_ts || cur.race.started_at;
+  $("elapsedField").firstChild.textContent = `Løbstid fra ${timeRunner?.start_ts ? "løberens" : "løbets"} start${base ? " kl. " + new Date(base * 1000).toLocaleTimeString("da-DK") : ""} (t:mm:ss eller mm:ss)`;
+}
+$("timeForm").addEventListener("change", e => { if (e.target.name === "mode") timeModeUI(); });
+$("timeCancel").onclick = () => $("timeDlg").close();
+$("timeForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, body = {participant_id: timeRunner.id, kind: f.kind.value};
+  if (f.mode.value === "elapsed") {
+    const s = parseElapsed(f.elapsed.value);
+    if (s == null) return toast("Skriv løbstiden som t:mm:ss, fx 1:23:45", true);
+    body.elapsed = s;
+  } else {
+    if (!f.clock.value) return toast("Vælg et tidspunkt", true);
+    body.ts = new Date(f.clock.value).getTime() / 1000;
+  }
+  try {
+    const r = await api(`/api/races/${curId}/reads`, {body});
+    $("timeDlg").close();
+    toast(manualMsg(r) + ` (kl. ${new Date(r.ts * 1000).toLocaleTimeString("da-DK")})`);
+    loadRace(false);
+  } catch (_) {}
+};
+
+// ------------------------------------------------ chip-scan (capture)
+async function scanChip(onChip) {
+  await api("/api/capture/start", {body: {}});
+  toast("Hold armbåndet mod læseren… (30 sek.)");
+  for (let i = 0; i < 62; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    const c = await api("/api/capture");
+    if (c.chip) {
+      if (c.owner && !confirm(`Chip ${c.chip} tilhører allerede ${c.owner.name}. Brug den alligevel?`)) return;
+      return onChip(c.chip);
+    }
+    if (!c.waiting) break;
+  }
+  toast("Ingen chip læst", true);
+}
+$("addScan").onclick = () => {
+  $("addScan").innerHTML = '<span class="scan">Venter på chip…</span>';
+  scanChip(chip => { $("addChip").value = chip; toast("Chip " + chip); }).finally(() => $("addScan").textContent = "📡 Scan chip");
+};
+
+// ------------------------------------------------ deltagere
+async function loadPeople() {
+  if (!curId) { $("people").innerHTML = `<p class="muted" style="padding:16px">Opret først et løb.</p>`; return; }
+  const ps = await api(`/api/races/${curId}/participants`);
+  const tt = cur?.race.type === "timetrial", cc = !!cur?.race.effective_config?.canicross;
+  const noDogs = ps.filter(p => !(p.dogs && p.dog1 && (p.dogs < 2 || p.dog2)));
+  document.querySelectorAll("#addForm .dogf").forEach(l => l.hidden = !cc);
+  $("addDogs").required = cc; $("addForm").dog1.required = cc;
+  $("addDog2").hidden = !cc || $("addDogs").value !== "2";
+  $("peopleCount").innerHTML = `(${ps.length}, ${ps.filter(p => p.chip).length} med chip${cc ? `, <span style="color:${noDogs.length ? "var(--gold)" : "inherit"}">${noDogs.length} mangler hunde</span>` : ""})`;
+  $("people").innerHTML = ps.length ? `<table><thead><tr><th style="width:80px">Nr</th><th>Navn</th><th style="width:110px">Køn</th><th>Klub</th><th style="width:170px">Chip</th>${cc ? '<th style="width:110px">Hunde</th><th>Hund 1</th><th>Hund 2</th>' : ""}${tt ? '<th style="width:110px" title="Manuel startforskydning i sek. fra løbsstart">Start +sek</th>' : ""}<th></th></tr></thead><tbody>` +
+    ps.map(p => `<tr data-pid="${p.id}">
+      <td><input data-f="bib" value="${p.bib ?? ""}" inputmode="numeric"></td><td><input data-f="name" value="${esc(p.name)}"></td>
+      <td><select data-f="sex">${["Mand", "Kvinde", ""].map(s => `<option value="${s}" ${p.sex === s ? "selected" : ""}>${s || "–"}</option>`).join("")}</select></td>
+      <td><input data-f="club" value="${esc(p.club)}"></td>
+      <td><input data-f="chip" value="${esc(p.chip)}" placeholder="ingen chip" style="${p.chip ? "" : "border-color:var(--gold)"}"></td>
+      ${cc ? `<td><select data-dog="dogs" style="${noDogs.includes(p) ? "border-color:var(--gold)" : ""}">${[["", "Vælg"], ["1", "1 hund"], ["2", "2 hunde"]].map(([v, l]) => `<option value="${v}" ${String(p.dogs ?? "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>
+        <td><input data-dog="dog1" value="${esc(p.dog1)}" placeholder="Navn"></td>
+        <td><input data-dog="dog2" value="${esc(p.dog2)}" placeholder="${p.dogs == 2 ? "Navn" : "–"}" ${p.dogs == 2 ? "" : "disabled"}></td>` : ""}
+      ${tt ? `<td><input data-f="start_offset" type="number" value="${p.start_offset ?? ""}"></td>` : ""}
+      <td><div class="btns"><button data-a="scan">📡 Scan</button><button data-a="del" class="danger">✕</button></div></td></tr>`).join("") + "</tbody></table>"
+    : `<p class="muted" style="padding:16px">Ingen deltagere endnu.</p>`;
+  $("people").querySelectorAll("tr[data-pid]").forEach(tr => {
+    const pid = tr.dataset.pid;
+    const save = async body => { try { await api(`/api/participants/${pid}`, {method: "PUT", body}); toast("Gemt"); } catch (_) { loadPeople(); } };
+    tr.querySelectorAll("[data-f]").forEach(el => el.onchange = () => save({[el.dataset.f]: el.value}));
+    // hundefelterne gemmes samlet – og først når de er udfyldt nok til at være gyldige
+    tr.querySelectorAll("[data-dog]").forEach(el => el.onchange = async () => {
+      const v = n => tr.querySelector(`[data-dog='${n}']`).value.trim(), dogs = v("dogs");
+      const d2 = tr.querySelector("[data-dog='dog2']"); d2.disabled = dogs !== "2"; d2.placeholder = dogs === "2" ? "Navn" : "–";
+      if (!dogs || !v("dog1") || (dogs === "2" && !v("dog2"))) return;  // venter på resten
+      try { await api(`/api/participants/${pid}`, {method: "PUT", body: {dogs, dog1: v("dog1"), dog2: dogs === "2" ? v("dog2") : ""}}); toast("Hunde gemt"); loadPeople(); } catch (_) {}
+    });
+    tr.querySelector('[data-a="scan"]').onclick = e => {
+      e.target.innerHTML = '<span class="scan">Venter…</span>';
+      scanChip(async chip => { await save({chip}); }).finally(loadPeople);
+    };
+    tr.querySelector('[data-a="del"]').onclick = async () => {
+      if (!confirm("Fjern deltageren fra løbet?")) return;
+      await api(`/api/participants/${pid}`, {method: "DELETE"}); loadPeople();
+    };
+  });
+}
+$("addDogs").onchange = () => { $("addDog2").hidden = $("addDogs").value !== "2"; $("addForm").dog2.required = $("addDogs").value === "2"; };
+$("addForm").onsubmit = async e => {
+  e.preventDefault();
+  await api(`/api/races/${curId}/participants`, {body: Object.fromEntries(new FormData(e.target))});
+  toast("Deltager tilføjet"); e.target.reset(); $("addDogs").onchange(); e.target.name.focus(); loadPeople(); loadRace(false);
+};
+$("importForm").onsubmit = async e => {
+  e.preventDefault();
+  const r = await api(`/api/races/${curId}/import`, {body: new FormData(e.target)});
+  $("importResult").innerHTML = `<div class="okbox">${r.added} tilføjet, ${r.updated} opdateret.${r.errors.length ? "<br>" + r.errors.map(esc).join("<br>") : ""}</div>`;
+  e.target.reset(); loadPeople(); loadRaces();
+};
+
+// ------------------------------------------------ synkronisering
+const DEST_HELP = {
+  mirror: "Kræver en webserver med RaceTimer i spejl-tilstand (se README). Nøglen skal være den samme som RACETIMER_MIRROR_KEY på serveren. Kun nye læsninger sendes, så det er billigt over mobilnet.",
+  ftp: "Pi'en laver en færdig resultatside og uploader index.html og resultater.json til mappen. Når løbet er afsluttet, gemmes også slut-<løbsnavn>.html. Adressen skrives fx ftps://ftp.ditwebhotel.dk/public_html/resultater. Brug ftps:// (krypteret), hvis dit webhotel understøtter det; ftp:// sender koden ukrypteret. Siden genindlæser sig selv med samme interval, som Pi'en sender.",
+  webhook: "Pi'en sender hele stillingen som JSON (POST) til adressen: {event: \"update\" | \"final\", race, info, results: [...]}. Nøglen sendes som “Authorization: Bearer <nøgle>”. Se README for et PHP-eksempel.",
+};
+const INTERVAL_LABEL = s => !s ? "kun manuelt" : s < 60 ? `hvert ${s}. sek.` : s < 3600 ? `hvert ${s / 60}. min.` : "hver time";
+const ago = ts => { if (!ts) return "aldrig"; const s = Math.round(Date.now() / 1000 - ts); return s < 90 ? `${s} sek. siden` : s < 5400 ? `${Math.round(s / 60)} min. siden` : clock(ts); };
+let dests = [];
+
+const adminLink = url => url.replace(/modtag\.php(\?.*)?$/, "admin/");
+async function loadRemote() {
+  let r;
+  try { r = await api("/api/remote"); } catch (_) { return; }
+  const hooks = (dests || []).filter(d => d.announce_admin);
+  const links = hooks.map(d => `<a href="${esc(adminLink(d.url))}" target="_blank">${esc(adminLink(d.url))}</a>`).join(", ");
+  let h;
+  if (!r.installed) h = `<span class="muted">Fjernadgang er ikke installeret på denne enhed. Kør opdateringen af Pi'en (den installerer Cloudflare-tunnelen).</span>`;
+  else if (r.active && r.url) h = `<i class="dot" style="background:var(--green)"></i><b>Fjernadgang er slået til</b> · admin kan nås fra internettet på
+      <a href="${esc(r.url)}/admin" target="_blank">${esc(r.url)}/admin</a>${links ? `<div class="small" style="margin-top:6px">Fast link: ${links}</div>` : `<div class="small muted" style="margin-top:6px">Tip: sæt flueben i “Meld admin-adressen” på din JSON-destination, så virker et fast link på hjemmesiden.</div>`}`;
+  else if (r.enabled) h = `<i class="dot" style="background:var(--gold)"></i>Fjernadgang starter … (kræver internet)`;
+  else h = `<i class="dot" style="background:var(--grey)"></i>Fjernadgang er slået fra – admin kan kun nås på stævnets netværk.`;
+  $("remoteBox").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><div style="min-width:0">${h}
+      <div class="muted small" style="margin-top:8px">Pi'en åbner en krypteret tunnel ud til Cloudflare – ingen porte åbnes. Adressen skifter ved genstart; hjemmesiden følger med.
+      Standardkoden admin/admin kan ikke bruges udefra, og login spærres 15 min efter 5 forkerte forsøg.</div></div>
+    ${r.installed ? `<button class="${r.enabled ? "danger" : "go"}" id="remoteToggle">${r.enabled ? "Slå fjernadgang fra" : "Slå fjernadgang til"}</button>` : ""}</div>`;
+  const b = $("remoteToggle");
+  if (b) b.onclick = async () => {
+    if (!r.enabled && !confirm("Slå fjernadgang til? Admin kan så nås fra internettet (med login).")) return;
+    b.disabled = true;
+    try { await api("/api/remote", {body: {on: !r.enabled}}); toast(r.enabled ? "Fjernadgang slået fra" : "Fjernadgang slået til – adressen vises om et øjeblik"); } catch (_) {}
+    setTimeout(loadRemote, 4000); loadRemote();
+  };
+}
+let rcSigninUrl = null;
+async function loadPrivate() {
+  let d;
+  try { d = await api("/api/remote/private"); } catch (e) { $("tsBox").textContent = $("rcBox").textContent = e.message; return; }
+  const t = d.tailscale, c = d.connect, btn = (svc, act, label, cls = "") => `<button class="${cls}" data-svc="${svc}" data-act="${act}">${label}</button>`;
+  // --- Tailscale
+  let h;
+  if (t.error) h = `<span style="color:var(--red)">Tailscale: ${esc(t.error)}</span>`;
+  else if (!t.installed) h = `<span class="muted">Tailscale er ikke installeret på denne enhed. Kør opdateringen af Pi'en.</span>`;
+  else if (t.state === "Running") {
+    const links = [t.dns && t.dns.split(".")[0], t.dns, t.ip].filter(Boolean).map(x => `<a href="http://${esc(x)}:8000/admin" target="_blank">http://${esc(x)}:8000/admin</a>`);
+    h = `<i class="dot" style="background:var(--green)"></i><b>Forbundet</b> til dit Tailscale-netværk${t.tailnet ? ` (${esc(t.tailnet)})` : ""}.
+      <div class="small" style="margin-top:8px">Admin fra dine egne enheder med Tailscale-appen:<br>${links.join("<br>")}</div>
+      <div class="btns" style="margin-top:10px">${btn("tailscale", "down", "Slå fra")}${btn("tailscale", "logout", "Log Pi'en ud", "danger")}</div>`;
+  } else if (t.auth_url) h = `<i class="dot" style="background:var(--gold)"></i><b>Venter på godkendelse.</b> Åbn linket, log ind med din Tailscale-konto og godkend Pi'en:
+      <div style="margin:8px 0"><a href="${esc(t.auth_url)}" target="_blank" style="font-weight:700">${esc(t.auth_url)}</a></div>
+      <div class="btns">${btn("tailscale", "up", "Nyt login-link")}</div>`;
+  else h = `<i class="dot" style="background:var(--grey)"></i>Ikke forbundet.
+      <div class="btns" style="margin-top:10px">${btn("tailscale", "up", "Log ind / slå til", "go")}</div>`;
+  $("tsBox").innerHTML = h + `<p class="muted small" style="margin:10px 0 0">Kun dine egne enheder kan nå admin – den er ikke synlig på internettet.
+    Installér Tailscale-appen (gratis) på mobil/Mac og log ind med samme konto. Adressen er fast og virker på ethvert netværk.</p>`;
+  // --- Raspberry Pi Connect
+  if (c.signed_in) rcSigninUrl = null;
+  if (c.error) h = `<span style="color:var(--red)">Raspberry Pi Connect: ${esc(c.error)}</span>`;
+  else if (!c.installed) h = `<span class="muted">Raspberry Pi Connect er ikke installeret. Kør opdateringen af Pi'en.</span>`;
+  else if (c.signed_in && c.running) h = `<i class="dot" style="background:var(--green)"></i><b>Logget ind og aktiv.</b>
+      Gå til <a href="https://connect.raspberrypi.com/devices" target="_blank">connect.raspberrypi.com</a> og vælg Pi'en
+      ${c.screen ? "– skærmdeling" : ""}${c.screen && c.shell ? " og " : ""}${c.shell ? "terminal" : ""} er klar.
+      <div class="btns" style="margin-top:10px">${btn("connect", "off", "Slå fra")}${btn("connect", "signout", "Log ud", "danger")}</div>`;
+  else if (c.signed_in) h = `<i class="dot" style="background:var(--grey)"></i>Logget ind, men slået fra.
+      <div class="btns" style="margin-top:10px">${btn("connect", "on", "Slå til", "go")}${btn("connect", "signout", "Log ud", "danger")}</div>`;
+  else if (rcSigninUrl) h = `<i class="dot" style="background:var(--gold)"></i><b>Venter på login.</b> Åbn linket og log ind med din Raspberry Pi-konto:
+      <div style="margin:8px 0"><a href="${esc(rcSigninUrl)}" target="_blank" style="font-weight:700">${esc(rcSigninUrl)}</a></div>`;
+  else h = `<i class="dot" style="background:var(--grey)"></i>Ikke logget ind.
+      <div class="btns" style="margin-top:10px">${btn("connect", "signin", "Log ind", "go")}</div>`;
+  $("rcBox").innerHTML = h + `<p class="muted small" style="margin:10px 0 0">Officiel løsning fra Raspberry Pi: se Pi'ens skærm og brug dens terminal
+    direkte i browseren – praktisk til opdateringer og fejlfinding. Kræver en gratis Raspberry Pi-konto.</p>`;
+  document.querySelectorAll("#tsBox [data-svc], #rcBox [data-svc]").forEach(b => b.onclick = async () => {
+    const {svc, act} = b.dataset;
+    if (["down", "logout", "off", "signout"].includes(act) && !confirm("Er du sikker? Er du selv forbundet den vej, mister du forbindelsen.")) return;
+    b.disabled = true; b.textContent = "Arbejder…";
+    try {
+      const r = await api("/api/remote/private", {body: {service: svc, action: act}});
+      if (r.connect?.signin_url) rcSigninUrl = r.connect.signin_url;
+      if (act === "up" && !r.tailscale?.auth_url && r.tailscale?.state !== "Running") toast("Fik ikke et login-link – har Pi'en internet?", true);
+      if (act === "signin" && !r.connect?.signin_url && !r.connect?.signed_in) toast("Fik ikke et login-link – har Pi'en internet?", true);
+    } catch (_) {}
+    loadPrivate();
+  });
+}
+async function loadRemoteTab() {
+  try { dests = await api("/api/destinations"); } catch (_) {}
+  loadPrivate(); loadRemote();
+}
+async function loadDests() {
+  dests = await api("/api/destinations");
+  $("dests").innerHTML = dests.length ? dests.map(d => {
+    const state = !d.enabled ? `<span class="muted">Slået fra</span>`
+      : d.last_error ? `<i class="dot" style="background:var(--red)"></i>Fejl: ${esc(d.last_error)}`
+      : d.last_ok ? `<i class="dot" style="background:var(--green)"></i>Sendt ${ago(d.last_ok)} (${esc(d.last_event)})`
+      : `<i class="dot" style="background:var(--grey)"></i>Ikke sendt endnu`;
+    const next = d.enabled && d.interval_sec && d.next_due ? ` · næste om ${Math.max(0, Math.round(d.next_due - Date.now() / 1000))} sek.` : "";
+    return `<div class="card pad" style="margin-bottom:12px"><div class="row" style="justify-content:space-between;align-items:center">
+      <div style="min-width:0"><div style="font-weight:700;font-size:17px">${esc(d.name)} <span class="pill">${{mirror: "Spejlserver", webhook: "JSON", ftp: "FTP"}[d.type]}</span></div>
+        <div class="muted small" style="word-break:break-all">${esc(d.url)}</div>
+        <div class="small" style="margin-top:6px">${state}${next}${d.pending ? ` · <b>${d.pending}</b> læsninger venter` : ""}</div>
+        <div class="muted small" style="margin-top:2px">Sender ${INTERVAL_LABEL(d.interval_sec)}${d.on_finish ? " + endelige resultater ved afslutning" : ""}</div>
+        ${d.announce_admin ? `<div class="small" style="margin-top:2px">${d.admin_error ? `<span style="color:var(--red)">Admin-adresse: ${esc(d.admin_error)}</span>` : d.admin_announced ? `Admin-adresse meldt ${ago(d.admin_announced)} → <a href="${esc(adminLink(d.url))}" target="_blank">${esc(adminLink(d.url))}</a>` : '<span class="muted">Admin-adresse ikke meldt endnu</span>'}</div>` : ""}</div>
+      <div class="btns"><button class="go" data-a="send" data-id="${d.id}">⇪ Send nu</button>
+        <button data-a="edit" data-id="${d.id}">Rediger</button><button class="danger" data-a="del" data-id="${d.id}">Slet</button></div>
+    </div></div>`;
+  }).join("") : `<div class="card pad muted" style="margin-bottom:12px">Ingen destinationer endnu. Resultaterne vises kun på Pi'en.</div>`;
+  $("dests").querySelectorAll("button[data-a]").forEach(b => b.onclick = async () => {
+    const d = dests.find(x => x.id === b.dataset.id);
+    if (b.dataset.a === "send") {
+      b.disabled = true; b.textContent = "Sender…";
+      try { const r = await api(`/api/destinations/${d.id}/send`, {body: {}}); toast(r.final ? "Endelige resultater sendt" : "Sendt"); } catch (_) {}
+      loadDests();
+    } else if (b.dataset.a === "edit") editDest(d);
+    else if (confirm(`Slet destinationen “${d.name}”?`)) { await api(`/api/destinations/${d.id}`, {method: "DELETE"}); loadDests(); }
+  });
+}
+
+function editDest(d) {
+  const f = $("destForm");
+  f.reset();
+  f.id.value = d?.id || "";
+  if (d) {
+    f.name.value = d.name; f.type.value = d.type; f.url.value = d.url; f.username.value = d.username || ""; f.interval_sec.value = String(d.interval_sec || 0);
+    if (![...f.interval_sec.options].some(o => o.value === f.interval_sec.value))
+      f.interval_sec.insertAdjacentHTML("beforeend", `<option value="${d.interval_sec}">Hvert ${d.interval_sec}. sek.</option>`), f.interval_sec.value = String(d.interval_sec);
+    f.on_finish.checked = d.on_finish; f.enabled.checked = d.enabled; f.announce_admin.checked = !!d.announce_admin;
+    f.key.placeholder = d.key_set ? "•••••• (uændret)" : "";
+  } else f.key.placeholder = "";
+  $("destFormTitle").textContent = d ? `Rediger “${d.name}”` : "Tilføj destination";
+  $("destSave").textContent = d ? "Gem" : "Tilføj";
+  $("destCancel").hidden = !d;
+  destTypeUI();
+  if (d) f.scrollIntoView({behavior: "smooth"});
+}
+function destTypeUI() {
+  const f = $("destForm"), t = f.type.value;
+  $("destTypeHelp").textContent = DEST_HELP[t];
+  f.querySelector(".ftpOnly").style.display = t === "ftp" ? "" : "none";
+  f.querySelector(".hookOnly").style.display = t === "webhook" ? "" : "none";
+  f.querySelector(".keyLabel").textContent = t === "ftp" ? "Adgangskode (FTP)" : "Nøgle";
+  f.url.placeholder = t === "ftp" ? "ftps://ftp.ditwebhotel.dk/public_html/resultater" : "https://resultater.example.dk";
+}
+$("destForm").type.onchange = destTypeUI;
+$("destCancel").onclick = () => editDest(null);
+$("destForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const body = {name: fd.get("name"), type: fd.get("type"), url: fd.get("url"), key: fd.get("key"), username: fd.get("username"),
+    interval_sec: +fd.get("interval_sec"), on_finish: !!fd.get("on_finish"), enabled: !!fd.get("enabled"),
+    announce_admin: !!fd.get("announce_admin")};
+  if (fd.get("id")) await api(`/api/destinations/${fd.get("id")}`, {method: "PUT", body});
+  else await api("/api/destinations", {body});
+  toast("Gemt"); editDest(null); loadDests();
+};
+editDest(null);
+
+// ------------------------------------------------ WiFi
+let wifiRows = [], wifiKnown = new Map();  // ssid -> sikkerhedstype for de gemte netværk
+const SEC = [["psk", "WPA2 (kode)"], ["eap", "Brugernavn + kode"], ["open", "Åbent"]];
+const secFromScan = s => !s ? "open" : /802\.1X|EAP|Enterprise/i.test(s) ? "eap" : "psk";
+const emptyRow = () => ({ssid: "", security: "psk", identity: "", password: "", hidden: false});
+async function loadWifi() {
+  let d;
+  try { d = await api("/api/wifi"); }
+  catch (e) { $("wifiNow").innerHTML = `<span class="muted">${esc(e.message)}</span>`; $("wifiRows").innerHTML = ""; $("wifiScan").innerHTML = ""; return; }
+  const c = d.current;
+  $("wifiNow").innerHTML = (c ? `<i class="dot" style="background:var(--green)"></i>Forbundet til <b>${esc(c.ssid)}</b> · signal ${c.signal} %${c.ip ? ` · IP <b>${esc(c.ip)}</b>` : ""}`
+    : `<i class="dot" style="background:var(--red)"></i>Ikke forbundet til WiFi`) +
+    (d.others.length ? `<div class="muted small" style="margin-top:6px">Andre gemte netværk på Pi'en (fx fra Raspberry Pi Imager): ${d.others.map(esc).join(", ")}</div>` : "");
+  wifiKnown = new Map(d.saved.map(n => [n.ssid, n.security || (n.secured ? "psk" : "open")]));
+  wifiRows = d.saved.map(n => ({ssid: n.ssid, security: n.security || (n.secured ? "psk" : "open"), identity: n.identity || "", password: "", hidden: n.hidden, slot: n.slot}));
+  while (wifiRows.length < 5) wifiRows.push(emptyRow());
+  $("wifiVisible").innerHTML = d.visible.map(v => `<option value="${esc(v.ssid)}">${v.signal} %</option>`).join("");
+  $("wifiScan").innerHTML = d.visible.length ? `<table><thead><tr><th>Netværk</th><th>Signal</th><th>Sikkerhed</th><th></th></tr></thead><tbody>` +
+    d.visible.map(v => `<tr><td>${esc(v.ssid)}</td><td class="num">${v.signal} %</td><td>${esc(v.security || "Åbent")}${secFromScan(v.security) === "eap" ? ' <span class="pill">brugernavn + kode</span>' : ""}</td>
+      <td><button data-add="${esc(v.ssid)}" data-sec="${secFromScan(v.security)}" style="font-size:13px;padding:5px 10px">+ Tilføj</button></td></tr>`).join("") + "</tbody></table>"
+    : `<p class="muted" style="padding:16px">Ingen netværk fundet.</p>`;
+  $("wifiScan").querySelectorAll("button[data-add]").forEach(b => b.onclick = () => {
+    syncWifiRows();
+    const i = wifiRows.findIndex(r => !r.ssid);
+    if (i < 0) return toast("Alle 5 pladser er i brug – ryd en først", true);
+    wifiRows[i] = {...emptyRow(), ssid: b.dataset.add, security: b.dataset.sec};
+    renderWifiRows();
+    const tr = $("wifiRows").querySelectorAll("tr")[i];
+    (tr.querySelector("[data-f='identity']:not([hidden])") || tr.querySelector("[data-f='password']"))?.focus();
+  });
+  renderWifiRows();
+}
+function renderWifiRows() {
+  $("wifiRows").innerHTML = wifiRows.map((r, i) => {
+    const saved = r.ssid && wifiKnown.get(r.ssid) === r.security;
+    return `<tr>
+    <td class="num"><b>${i + 1}</b></td>
+    <td><input data-f="ssid" list="wifiVisible" value="${esc(r.ssid)}" placeholder="Netværksnavn" autocomplete="off"></td>
+    <td><select data-f="security">${SEC.map(([v, l]) => `<option value="${v}" ${r.security === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>
+    <td><div style="display:flex;flex-direction:column;gap:6px">
+      <input data-f="identity" value="${esc(r.identity)}" placeholder="Brugernavn (fx navn@aau.dk)" autocomplete="off" ${r.security === "eap" ? "" : "hidden"}>
+      <input data-f="password" type="password" value="${esc(r.password)}" autocomplete="new-password" ${r.security === "open" ? "hidden" : ""}
+        placeholder="${saved && r.security !== "open" ? "•••••• (gemt)" : "Kode"}">
+      ${r.security === "open" ? '<span class="muted small">Ingen kode</span>' : ""}</div></td>
+    <td class="small chk"><label title="Netværket sender ikke sit navn ud"><input type="checkbox" data-f="hidden" ${r.hidden ? "checked" : ""}> Skjult</label></td>
+    <td><div class="btns"><button data-mv="${i}" data-d="-1" ${i ? "" : "disabled"} title="Flyt op">↑</button><button data-mv="${i}" data-d="1" ${i < 4 ? "" : "disabled"} title="Flyt ned">↓</button>
+      ${r.slot && r.ssid ? `<button data-up="${r.slot}" title="Forbind til dette netværk nu">Forbind</button>` : ""}<button class="danger" data-clr="${i}" title="Ryd">✕</button></div></td></tr>`;
+  }).join("");
+  $("wifiRows").querySelectorAll("select[data-f='security']").forEach(el => el.onchange = () => { syncWifiRows(); renderWifiRows(); });
+  $("wifiRows").querySelectorAll("button[data-mv]").forEach(b => b.onclick = () => {
+    syncWifiRows(); const i = +b.dataset.mv, j = i + +b.dataset.d;
+    [wifiRows[i], wifiRows[j]] = [wifiRows[j], wifiRows[i]]; renderWifiRows();
+  });
+  $("wifiRows").querySelectorAll("button[data-clr]").forEach(b => b.onclick = () => { syncWifiRows(); wifiRows[+b.dataset.clr] = emptyRow(); renderWifiRows(); });
+  $("wifiRows").querySelectorAll("button[data-up]").forEach(b => b.onclick = async () => {
+    if (!confirm("Forbind nu? Er du selv på WiFi til Pi'en, kan forbindelsen til admin blive afbrudt et øjeblik.")) return;
+    b.disabled = true; b.textContent = "Forbinder…";
+    try { await api(`/api/wifi/connect/${b.dataset.up}`, {body: {}}); toast("Forbundet"); } catch (_) {}
+    loadWifi();
+  });
+}
+function syncWifiRows() {
+  $("wifiRows").querySelectorAll("tr").forEach((tr, i) => {
+    const g = f => tr.querySelector(`[data-f='${f}']`);
+    Object.assign(wifiRows[i], {ssid: g("ssid").value.trim(), security: g("security").value, identity: g("identity").value.trim(),
+                                password: g("password").value, hidden: g("hidden").checked});
+  });
+}
+$("wifiSave").onclick = async () => {
+  syncWifiRows();
+  const nets = wifiRows.filter(r => r.ssid);
+  for (const r of nets) {
+    const saved = wifiKnown.get(r.ssid) === r.security;
+    if (r.security !== "open" && !r.password && !saved) return toast(`Skriv koden til “${r.ssid}”`, true);
+    if (r.security === "psk" && r.password && (r.password.length < 8 || r.password.length > 64)) return toast(`Koden til “${r.ssid}” skal være 8–63 tegn`, true);
+    if (r.security === "eap" && !r.identity) return toast(`Skriv brugernavnet til “${r.ssid}”`, true);
+  }
+  if (new Set(nets.map(r => r.ssid)).size !== nets.length) return toast("Det samme netværk står der to gange", true);
+  const body = {networks: nets.map(r => ({ssid: r.ssid, security: r.security, identity: r.identity, hidden: r.hidden,
+                                          password: r.security === "open" ? "" : (r.password || null)}))};
+  $("wifiSave").disabled = true;
+  try { await api("/api/wifi", {method: "PUT", body}); toast("WiFi-netværk gemt – Pi'en bruger dem automatisk"); } catch (_) {}
+  $("wifiSave").disabled = false;
+  loadWifi();
+};
+
+// ------------------------------------------------ udseende
+function showBrand(b) {
+  document.title = b.name + " – Admin";
+  $("brandLogo").innerHTML = b.logo ? `<img src="${b.logo}" alt="${esc(b.name)}">` : `<span class="txt">${esc(b.name)}</span>`;
+}
+async function loadBrand() { try { showBrand(await (await fetch("/api/branding")).json()); } catch (_) {} }
+async function loadLook() {
+  const b = await api("/api/branding");
+  showBrand(b);
+  $("nameForm").name.value = b.name;
+  $("logoPrev").innerHTML = b.logo ? `<img src="${b.logo}" style="height:44px;display:block">` : `<span class="logo"><span class="txt">${esc(b.name)}</span></span>`;
+  $("logoDel").hidden = !b.logo;
+  $("splashes").innerHTML = b.splash_options.map(o => `<label><input type="radio" name="splash" value="${esc(o.id)}" ${o.id === b.splash_choice ? "checked" : ""}>
+    <div class="thumb" style="${o.url ? `background-image:url('${o.url}')` : ""}">${o.url ? "" : esc(b.name)}</div>${esc(o.label)}</label>`).join("");
+  $("splashes").querySelectorAll("input").forEach(el => el.onchange = async () => {
+    await api("/api/branding", {method: "PUT", body: {splash: el.value}}); toast("Splash valgt – vises på skærmen om et øjeblik"); loadLook();
+  });
+}
+$("nameForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding", {method: "PUT", body: {name: e.target.name.value}}); toast("Navn gemt"); loadLook(); };
+$("logoForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding/logo", {body: new FormData(e.target)}); e.target.reset(); toast("Logo gemt"); loadLook(); };
+$("splashForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding/splash", {body: new FormData(e.target)}); e.target.reset(); toast("Splash-billede gemt og valgt"); loadLook(); };
+$("logoDel").onclick = async () => { if (!confirm("Fjern logoet? Navnet vises så som tekst.")) return; await api("/api/branding/logo", {method: "DELETE"}); loadLook(); };
+loadBrand();
+
+// ------------------------------------------------ opsætningsguide (første gang)
+const WSTEPS = ["Admin-kode", "Navn og logo", "Splash", "WiFi", "RFID-læsere", "Færdig"];
+let wi = 0;
+function startWizard() { $("wizard").hidden = false; wi = me.default_password ? 0 : 1; wRender(); }
+function wNav({next = "Næste →", skip = false, back = true} = {}) {
+  $("wNext").textContent = next; $("wSkip").hidden = !skip; $("wBack").style.visibility = back && wi > 0 ? "visible" : "hidden";
+}
+async function wRender() {
+  $("wsteps").innerHTML = WSTEPS.map((t, i) => `<span class="${i === wi ? "on" : i < wi ? "done" : ""}">${i + 1}. ${t}</span>`).join("");
+  const B = $("wbody"); $("wNext").disabled = false;
+  if (wi === 0) {
+    B.innerHTML = `<h2>Velkommen 👋</h2><p class="muted">Lad os sætte RaceTimer op. Først skal standardkoden <b>admin / admin</b> skiftes –
+      ellers kan alle på netværket komme ind.</p>
+      <div class="grid" style="grid-template-columns:1fr 1fr"><label>Ny kode (mindst 6 tegn)<input id="wPw1" type="password" autocomplete="new-password"></label>
+      <label>Gentag koden<input id="wPw2" type="password" autocomplete="new-password"></label></div>`;
+    wNav({back: false});
+  } else if (wi === 1) {
+    const b = await api("/api/branding");
+    B.innerHTML = `<h2>Navn og logo</h2><p class="muted">Navnet vises øverst på resultatskærmen og på hjemmesiden.</p>
+      <label>Klubbens / løbets navn<input id="wName" maxlength="60" value="${esc(b.name)}"></label>
+      <div class="row" style="margin-top:14px;align-items:center;gap:14px"><div class="logoPrev">${b.logo ? `<img src="${b.logo}" style="height:40px;display:block">` : `<span class="logo"><span class="txt">${esc(b.name)}</span></span>`}</div>
+      <input type="file" id="wLogo" accept=".png,.jpg,.jpeg,.webp"></div>
+      <p class="muted small">Logo er valgfrit – uden logo vises navnet som tekst. Brug gerne PNG med gennemsigtig baggrund.</p>`;
+    wNav();
+  } else if (wi === 2) {
+    const b = await api("/api/branding");
+    B.innerHTML = `<h2>Splash-skærm</h2><p class="muted">Vises på skærmen, når der ikke kører et løb.</p>
+      <div class="splashes" id="wSplashes">${b.splash_options.map(o => `<label><input type="radio" name="wsplash" value="${esc(o.id)}" ${o.id === b.splash_choice ? "checked" : ""}>
+        <div class="thumb" style="${o.url ? `background-image:url('${o.url}')` : ""}">${o.url ? "" : esc(b.name)}</div>${esc(o.label)}</label>`).join("")}</div>
+      <div class="row" style="margin-top:12px"><span class="muted small">Eller upload jeres eget billede (liggende, fx 1920×1080):</span><input type="file" id="wSplashFile" accept=".png,.jpg,.jpeg,.webp"></div>`;
+    wNav();
+  } else if (wi === 3) {
+    B.innerHTML = `<h2>WiFi <span class="muted small">(valgfrit)</span></h2><p class="muted">Skriv netværk, Pi'en automatisk skal forbinde til – fx klubhus og mobil-hotspot.
+      Tidtagningen virker også helt uden WiFi. Flere netværk (op til 5) og brugernavn+kode-netværk kan sættes op under fanen <b>WiFi</b> senere.</p><div id="wWifi">Henter…</div>`;
+    wNav({skip: true});
+    try {
+      const d = await api("/api/wifi");
+      $("wWifi").innerHTML = `<p>${d.current ? `✅ Forbundet til <b>${esc(d.current.ssid)}</b>${d.current.ip ? ` (${esc(d.current.ip)})` : ""}` : "Ikke forbundet til WiFi lige nu."}</p>
+        <div class="grid" style="grid-template-columns:1fr 1fr"><label>Netværksnavn<input id="wSsid" list="wSsidList" autocomplete="off"><datalist id="wSsidList">${d.visible.map(v => `<option value="${esc(v.ssid)}">`).join("")}</datalist></label>
+        <label>Kode<input id="wWpw" type="password" autocomplete="new-password"></label></div>`;
+      $("wWifi").dataset.saved = JSON.stringify(d.saved);
+    } catch (e) { $("wWifi").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  } else if (wi === 4) {
+    const d = await api("/api/readers");
+    const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("");
+    B.innerHTML = `<h2>RFID-læsere</h2><p class="muted">Sæt læserne i Pi'ens USB-porte og vælg dem her. Én læser er nok – en backup giver ekstra sikkerhed.</p>
+      ${d.devices.length ? "" : `<p style="color:var(--gold)">Ingen læsere fundet. Sæt dem i og tryk <b>Søg igen</b> – eller spring over og gør det senere under <i>Rediger aktivt løb → Læsere</i>.</p>`}
+      <div class="grid" style="grid-template-columns:1fr 1fr"><label>Primær læser<select id="wPrim">${opt(d.config.primary)}</select></label>
+      <label>Backup læser<select id="wBack2">${opt(d.config.backup)}</select></label></div>
+      <div class="row" style="margin-top:12px"><button id="wRescan">Søg igen</button><button id="wTest">📡 Test: hold en chip mod læseren</button><span id="wTestRes" class="muted"></span></div>`;
+    wNav({skip: true});
+    $("wRescan").onclick = () => wRender();
+    $("wTest").onclick = async () => {
+      await api("/api/readers", {method: "PUT", body: {primary: $("wPrim").value, backup: $("wBack2").value}});
+      $("wTestRes").innerHTML = '<span class="scan">Venter på chip…</span>';
+      await scanChip(chip => { $("wTestRes").innerHTML = `✅ Chip læst: <b>${esc(chip)}</b> – læseren virker`; });
+      if ($("wTestRes").textContent.includes("Venter")) $("wTestRes").textContent = "Ingen chip læst";
+    };
+  } else {
+    const live = await (await fetch("/api/live")).json();
+    const drift = Math.round(live.now - Date.now() / 1000);
+    B.innerHTML = `<h2>Klar til start 🎉</h2>
+      <p>${Math.abs(drift) <= 5 ? `✅ Pi'ens ur passer med din enhed (${new Date(live.now * 1000).toLocaleTimeString("da-DK")}).`
+        : `<span style="color:var(--gold)">⚠ Pi'ens ur går ${Math.abs(drift)} sek. ${drift > 0 ? "foran" : "bagud"}. Giv Pi'en internet (så stiller den selv uret), og montér gerne et RTC-batteri.</span>`}</p>
+      <p>Der ligger et <b>demoløb</b> med 3 testløbere, så du kan prøve det hele: start det under <i>Rediger aktivt løb</i>, og brug <i>Test uden hardware</i>
+        (chip <code>DEMO01</code>–<code>DEMO03</code>) eller rigtige chips. Slet demoløbet, når du opretter jeres eget.</p>
+      <p class="muted">Resultatskærmen: <a href="/" target="_blank">${location.host}/</a> · Senere kan du sætte synkronisering til hjemmeside og fjernadgang op under fanerne af samme navn.</p>`;
+    wNav({next: "Afslut opsætning ✓"});
+  }
+}
+$("wBack").onclick = () => { wi = Math.max(0, wi - 1); wRender(); };
+$("wSkip").onclick = () => { wi++; wRender(); };
+$("wNext").onclick = async () => {
+  $("wNext").disabled = true;
+  try {
+    if (wi === 0) {
+      const a = $("wPw1").value, b = $("wPw2").value;
+      if (a.length < 6) throw toast("Koden skal være mindst 6 tegn", true);
+      if (a !== b) throw toast("De to koder er ikke ens", true);
+      if (a === "admin") throw toast("Vælg en anden kode end admin", true);
+      await api(`/api/users/${me.id}/password`, {method: "PUT", body: {password: a}});
+      me = await api("/api/me");
+    } else if (wi === 1) {
+      await api("/api/branding", {method: "PUT", body: {name: $("wName").value}});
+      const f = $("wLogo").files[0];
+      if (f) { const fd = new FormData(); fd.append("file", f); await api("/api/branding/logo", {body: fd}); }
+      loadBrand();
+    } else if (wi === 2) {
+      const f = $("wSplashFile").files[0];
+      if (f) { const fd = new FormData(); fd.append("file", f); await api("/api/branding/splash", {body: fd}); }
+      else { const c = document.querySelector("input[name=wsplash]:checked"); if (c) await api("/api/branding", {method: "PUT", body: {splash: c.value}}); }
+    } else if (wi === 3) {
+      const ssid = $("wSsid")?.value.trim();
+      if (ssid) {
+        const saved = JSON.parse($("wWifi").dataset.saved || "[]").map(n => ({ssid: n.ssid, security: n.security, identity: n.identity, hidden: n.hidden, password: null}));
+        const pw = $("wWpw").value;
+        await api("/api/wifi", {method: "PUT", body: {networks: [...saved.filter(n => n.ssid !== ssid), {ssid, security: pw ? "psk" : "open", password: pw}].slice(0, 5)}});
+        toast(`${ssid} gemt – Pi'en forbinder automatisk`);
+      }
+    } else if (wi === 4) {
+      await api("/api/readers", {method: "PUT", body: {primary: $("wPrim").value, backup: $("wBack2").value}});
+    } else {
+      await api("/api/setup/done", {body: {}});
+      toast("Opsætningen er færdig"); $("wizard").hidden = true; return boot();
+    }
+    wi++; wRender();
+  } catch (_) { $("wNext").disabled = false; }
+};
+
+// ------------------------------------------------ opdatering
+const UPD_STATE = {running: ["var(--gold)", "Opdaterer …"], rolling_back: ["var(--gold)", "Ruller tilbage …"],
+  success: ["var(--green)", "Opdateret"], failed: ["var(--red)", "Fejlede"], rolled_back: ["var(--gold)", "Rullet tilbage"]};
+let updPoll = null;
+async function loadUpdate(force) {
+  let d;
+  try { d = await api(`/api/update${force ? "?force=true" : ""}`); }
+  catch (_) { $("updBox").innerHTML = `<i class="dot" style="background:var(--gold)"></i>RaceTimer genstarter – vent et øjeblik …`; return schedUpd(); }
+  const st = d.status || {}, busy = ["running", "rolling_back"].includes(st.state);
+  let h = `<div style="font-size:18px">Installeret version: <b>${esc(d.current)}</b></div>`;
+  if (!d.configured) h += `<p class="muted">Der er ikke sat en opdateringskilde op (GitHub-repo i <code>racetimer/release.json</code>).</p>`;
+  else if (d.error) h += `<p style="color:var(--gold)">${esc(d.error)}</p>`;
+  else if (d.available) h += `<p>🎉 <b>Version ${esc(d.latest)}</b> er klar${d.published ? ` (udgivet ${new Date(d.published).toLocaleDateString("da-DK")})` : ""}.</p>
+      ${d.notes ? `<details open><summary class="muted">Hvad er nyt</summary><pre style="white-space:pre-wrap;font:inherit;font-size:14px;margin:8px 0">${esc(d.notes)}</pre></details>` : ""}`;
+  else h += `<p><i class="dot" style="background:var(--green)"></i>Du har den nyeste version.</p>`;
+  if (!d.installed) h += `<p class="muted small">${esc(d.helper_error || "")}</p>`;
+  h += `<div class="btns" style="margin-top:12px">${d.available && d.installed ? `<button class="go" id="updGo" ${busy ? "disabled" : ""}>Opdatér til ${esc(d.latest)}</button>` : ""}
+    ${d.configured ? `<button id="updCheck">Tjek igen</button>` : ""}</div>
+    <p class="muted small" style="margin-bottom:0">Pakken kontrolleres med en digital signatur, før noget installeres. Løb, deltagere og indstillinger røres ikke.
+      Starter den nye version ikke, rulles der automatisk tilbage.</p>`;
+  $("updBox").innerHTML = h;
+  if ($("updCheck")) $("updCheck").onclick = () => loadUpdate(true);
+  if ($("updGo")) $("updGo").onclick = async () => {
+    if (!confirm(`Opdatér til version ${d.latest}? RaceTimer genstarter (ca. 30 sek.) – skærmen viser derefter den nye version.`)) return;
+    let body = {};
+    if (d.race_running) { if (!confirm("Der kører et løb lige nu. Tidtagningen er væk et øjeblik under genstarten. Fortsæt alligevel?")) return; body = {force: true}; }
+    $("updGo").disabled = true;
+    try { await api("/api/update/install", {body}); toast("Opdateringen er startet"); } catch (_) {}
+    loadUpdate(); 
+  };
+  // status og log
+  const [col, label] = UPD_STATE[st.state] || [];
+  $("updLogTitle").hidden = $("updLog").hidden = !st.state;
+  if (st.state) $("updLog").innerHTML = `<div><i class="dot" style="background:${col}"></i><b>${label}</b>${st.from ? ` · ${esc(st.from)} → ${esc(st.to || "?")}` : ""}${st.error ? ` · ${esc(st.error)}` : ""}</div>
+      <pre style="white-space:pre-wrap;font-size:13px;color:var(--muted);margin:10px 0 0">${(st.log || []).map(esc).join("\n")}</pre>`;
+  const backs = d.backups || [];
+  $("updBackTitle").hidden = $("updBack").hidden = !backs.length;
+  $("updBack").innerHTML = backs.length ? `<p class="muted small" style="margin-top:0">Gemte versioner (de seneste ${backs.length}). Tilbagerulning bruger den nyeste af dem.</p>` +
+    backs.map(b => `<div>Version <b>${esc(b.version)}</b> <span class="muted small">gemt ${new Date(b.saved * 1000).toLocaleString("da-DK")}</span></div>`).join("") +
+    `<div class="btns" style="margin-top:10px"><button class="danger" id="updRoll" ${busy ? "disabled" : ""}>Rul tilbage til ${esc(backs[0].version)}</button></div>` : "";
+  if ($("updRoll")) $("updRoll").onclick = async () => {
+    if (!confirm(`Rul tilbage til version ${backs[0].version}? RaceTimer genstarter.`)) return;
+    try { await api("/api/update/rollback", {body: {}}); toast("Tilbagerulning startet"); } catch (_) {}
+    loadUpdate();
+  };
+  if (busy) schedUpd();
+}
+function schedUpd() { clearTimeout(updPoll); updPoll = setTimeout(() => { if ($("tab-update").classList.contains("on")) loadUpdate(); }, 2000); }
+
+// ------------------------------------------------ brugere
+async function loadUsers() {
+  const us = await api("/api/users");
+  $("users").innerHTML = `<table><thead><tr><th>Brugernavn</th><th>Oprettet</th><th></th></tr></thead><tbody>` +
+    us.map(u => `<tr><td>${esc(u.username)} ${u.username === me.username ? '<span class="pill">dig</span>' : ""}</td><td>${clock(u.created_at)}</td>
+      <td><div class="btns"><button data-uid="${u.id}" data-a="pw">Skift kode</button>${u.username === me.username ? "" : `<button class="danger" data-uid="${u.id}" data-a="del">Slet</button>`}</div></td></tr>`).join("") + "</tbody></table>";
+  $("users").querySelectorAll("button").forEach(b => b.onclick = async () => {
+    if (b.dataset.a === "pw") {
+      const pw = prompt("Ny kode (min. 6 tegn):"); if (!pw) return;
+      await api(`/api/users/${b.dataset.uid}/password`, {method: "PUT", body: {password: pw}}); toast("Koden er skiftet");
+      me = await api("/api/me"); $("pwWarn").hidden = !me.default_password;
+    } else if (confirm("Slet brugeren?")) { await api(`/api/users/${b.dataset.uid}`, {method: "DELETE"}); loadUsers(); }
+  });
+}
+$("userForm").onsubmit = async e => {
+  e.preventDefault();
+  await api("/api/users", {body: Object.fromEntries(new FormData(e.target))});
+  toast("Bruger oprettet"); e.target.reset(); loadUsers();
+};
+
+// løbende opdatering af stilling + læsninger når fanen er åben
+setInterval(() => { if (!$("app").hidden && $("tab-active").classList.contains("on") && curId && !document.activeElement?.closest("#editForm, #readerForm, #simForm, #raceHead")) loadRace(false);
+  if (!$("app").hidden && $("tab-sync").classList.contains("on")) loadDests();
+  if (!$("app").hidden && $("tab-remote").classList.contains("on") && !document.activeElement?.closest("#tab-remote")) loadRemoteTab();
+}, 3000);
+boot();
+</script>
+</body>
+</html>

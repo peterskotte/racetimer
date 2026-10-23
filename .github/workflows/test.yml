@@ -1,0 +1,23 @@
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Løbsmotor
+        run: python tests/test_engine.py
+      - name: Appen kan starte
+        run: RACETIMER_DATA=$(mktemp -d) python -c "import racetimer.app"
+      - name: Scripts
+        run: |
+          for f in deploy/*.sh tools/*.sh image/build.sh; do sh -n "$f"; done
+          for f in deploy/racetimer-wifi deploy/racetimer-remote deploy/racetimer-update; do python -m py_compile "$f"; done

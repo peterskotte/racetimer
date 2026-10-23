@@ -1,0 +1,75 @@
+name: Udgivelse
+# Push et tag som v1.1.0 (racetimer/VERSION og CHANGELOG.md skal være opdateret først):
+#   git tag v1.1.0 && git push origin v1.1.0
+# Så bygges og signeres opdateringspakken, SD-kort-imaget bygges, og alt lægges på en GitHub Release.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - id: v
+        name: Tjek versionsnummer
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          [ "$(cat racetimer/VERSION)" = "$V" ] || { echo "racetimer/VERSION ($(cat racetimer/VERSION)) passer ikke med tag $GITHUB_REF_NAME"; exit 1; }
+          grep -q "^## \[$V\]" CHANGELOG.md || { echo "CHANGELOG.md mangler et afsnit for [$V]"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - run: pip install -r requirements.txt && python tests/test_engine.py
+      - name: Byg og signér opdateringspakke
+        env:
+          RACETIMER_SIGNING_KEY: ${{ secrets.RACETIMER_SIGNING_KEY }}
+        run: sh tools/make-release.sh "${{ steps.v.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pakke
+          path: dist/racetimer-*
+
+  image:
+    needs: package
+    runs-on: ubuntu-24.04-arm   # bygger 64-bit Raspberry Pi OS direkte på ARM
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Byg SD-kort-image (Raspberry Pi 3/4/5)
+        run: sh image/build.sh
+      - name: Navngiv
+        run: |
+          mkdir -p img
+          mv image/out/*.img.xz "img/racetimer-${{ needs.package.outputs.version }}-raspberrypi-arm64.img.xz"
+          (cd img && sha256sum *.img.xz > "racetimer-${{ needs.package.outputs.version }}-raspberrypi-arm64.img.xz.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: img/*
+          compression-level: 0
+
+  publish:
+    needs: [package, image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ud
+          merge-multiple: true
+      - name: Udgivelsesnoter fra CHANGELOG.md
+        run: |
+          V="${{ needs.package.outputs.version }}"
+          awk -v v="$V" '$0 ~ "^## \\[" v "\\]" {f=1; next} f && /^## \[/ {exit} f' CHANGELOG.md > noter.md
+          printf '\n---\n**Ny installation:** hent `racetimer-%s-raspberrypi-arm64.img.xz` og skriv det til et SD-kort med Raspberry Pi Imager (se README).\n**Eksisterende enheder:** Admin → Opdatering → Opdatér.\n' "$V" >> noter.md
+      - name: Opret GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" ud/* --title "RaceTimer ${{ needs.package.outputs.version }}" --notes-file noter.md

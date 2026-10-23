@@ -1,0 +1,22 @@
+# pi-gen-konfiguration for RaceTimer-imaget (bruges af image/build.sh)
+IMG_NAME=racetimer
+PI_GEN_RELEASE="RaceTimer"
+TARGET_HOSTNAME=racetimer
+
+# Login på Pi'en (skift koden efter første opstart, eller vælg egen i Raspberry Pi Imager)
+FIRST_USER_NAME=racetimer
+FIRST_USER_PASS=racetimer
+DISABLE_FIRST_BOOT_USER_RENAME=1
+# SSH er slået fra i det offentlige image (standardloginet er kendt). Slå det til med eget
+# brugernavn/kode under "Rediger indstillinger" i Raspberry Pi Imager, når kortet skrives.
+ENABLE_SSH=0
+
+LOCALE_DEFAULT=da_DK.UTF-8
+KEYBOARD_KEYMAP=dk
+KEYBOARD_LAYOUT="Danish"
+TIMEZONE_DEFAULT=Europe/Copenhagen
+WPA_COUNTRY=DK
+
+# stage0-2 = Raspberry Pi OS Lite, stage3 = skrivebord (til kiosk-skærmen), derefter RaceTimer
+STAGE_LIST="stage0 stage1 stage2 stage3 stage-racetimer"
+DEPLOY_COMPRESSION=xz

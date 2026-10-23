@@ -1,0 +1,17 @@
+[Unit]
+Description=RaceTimer spejlserver (offentlige resultater)
+After=network.target
+
+[Service]
+User=racetimer
+WorkingDirectory=/opt/racetimer
+Environment=RACETIMER_MODE=mirror
+# Samme nøgle skal indtastes på Pi'en under Admin → Synkronisering (type: RaceTimer-spejlserver)
+Environment=RACETIMER_MIRROR_KEY=SKIFT-MIG
+# Kun én worker: spejlserveren bruger SQLite og holder status i hukommelsen
+ExecStart=/opt/racetimer/.venv/bin/uvicorn racetimer.app:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

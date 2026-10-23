@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RaceTimer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  main { padding: clamp(14px, 2.4vw, 32px); max-width: 1400px; margin: 0 auto; }
+
+  /* kiosk (Pi-skærmen): toppen og de 4 førende står fast – kun resten af listen ruller */
+  body.kiosk { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+  body.kiosk main { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; }
+  body.kiosk main > * { flex-shrink: 0; }
+  body.kiosk main > #board { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  body.kiosk #board::-webkit-scrollbar { display: none; }
+  body.kiosk #board thead th { position: sticky; top: 0; z-index: 1; }
+  .race-name { font-size: clamp(15px, 1.5vw, 20px); color: var(--header-muted); font-weight: 500; }
+  .clock { font-size: clamp(18px, 2vw, 28px); font-weight: 600; }
+  .readers { display: flex; gap: 10px; font-size: 13px; color: var(--header-muted); }
+  .readers span { display: flex; align-items: center; }
+  .readers .dot { background: var(--red); }
+  .readers .on .dot { background: var(--green); }
+
+  /* hero: de vigtigste tal for den aktuelle løbstype */
+  .hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+  .stat .k { color: var(--muted); font-size: clamp(12px, 1.1vw, 15px); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .stat .v { font-size: clamp(26px, 3.4vw, 52px); font-weight: 700; line-height: 1.15; margin-top: 4px; white-space: nowrap; }
+  .stat .v small { font-size: .5em; font-weight: 600; color: var(--muted); margin-left: .15em; }
+  .stat .s { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .stat.big { grid-column: span 2; }
+  .stat.warn .v { color: var(--gold); }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; margin-top: 10px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
+  .banner { border-radius: 14px; padding: 18px 22px; font-size: clamp(20px, 2.4vw, 34px); font-weight: 700; margin-bottom: 18px; }
+  .banner.winner { background: linear-gradient(90deg, #3a2f0f, var(--card)); border: 1px solid var(--gold); color: var(--gold); }
+  .banner.info { background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+
+  .filters { display: flex; gap: 8px; margin-bottom: 12px; }
+  .filters button { font-size: 14px; padding: 6px 14px; border-radius: 999px; }
+  .filters button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { background: var(--card-head); color: var(--muted); text-align: left; font-weight: 600;
+       font-size: clamp(14px, 1.4vw, 20px); padding: clamp(12px, 1.4vw, 20px) clamp(10px, 1.4vw, 22px); white-space: nowrap; }
+  td { padding: clamp(12px, 1.3vw, 20px) clamp(10px, 1.4vw, 22px); border-top: 1px solid var(--line);
+       font-size: clamp(16px, 1.75vw, 26px); }
+  th.r, td.r { text-align: right; }
+  td.place { color: var(--muted); font-weight: 600; width: 1%; }
+  td.name { font-weight: 600; text-decoration: underline; text-decoration-color: var(--dim);
+            text-underline-offset: 4px; text-decoration-thickness: 1px; }
+  td.name .bib { color: var(--muted); font-weight: 500; text-decoration: none; display: inline-block; margin-right: .45em; font-size: .8em; }
+  td.name .club { display: block; color: var(--muted); font-size: .62em; font-weight: 400; text-decoration: none; margin-top: 2px; }
+  td.name .dogs, .lead .ldogs { display: block; color: var(--brand-orange); font-size: .62em; font-weight: 600; text-decoration: none; margin-top: 2px; }
+  .lead .ldogs { font-size: clamp(13px, 1.1vw, 16px); grid-column: 2; }
+  td.name-col-sep, th.name-col-sep { border-right: 1px solid var(--line); }
+  tr.out td { color: var(--dim); }
+  tr.out td.name { text-decoration-color: var(--line); }
+  tr.st-winner td { background: rgba(242, 193, 78, .07); }
+  tr.flash td { animation: flash 2s ease-out; }
+  @keyframes flash { from { background: rgba(63, 197, 107, .28); } to { background: transparent; } }
+  .empty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 20px; }
+
+  /* de 4 førende som kort over tabellen */
+  .leaders { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .lead { --medal: var(--grey); background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--medal);
+          border-radius: 16px; padding: clamp(14px, 1.4vw, 20px); display: grid; grid-template-columns: auto 1fr;
+          grid-template-rows: auto auto 1fr auto; gap: 6px 14px; align-items: center; }
+  .lead.p1 { --medal: var(--gold); background: linear-gradient(180deg, rgba(242,193,78,.10), var(--card) 60%); }
+  .lead.p2 { --medal: #c9d0d6; }
+  .lead.p3 { --medal: #cd8b52; }
+  .lead.p4 { --medal: var(--brand-orange); }
+  .lead .pos { width: clamp(40px, 3.6vw, 56px); height: clamp(40px, 3.6vw, 56px); border-radius: 50%; background: var(--medal); color: #14100a;
+               display: grid; place-items: center; font-weight: 700; font-size: clamp(20px, 2vw, 30px); grid-row: span 2; }
+  .lead .lname { font-weight: 700; font-size: clamp(18px, 1.8vw, 28px); line-height: 1.15; }
+  .lead .lmeta { color: var(--muted); font-size: clamp(13px, 1.1vw, 16px); margin-top: 2px; }
+  .lead .lmain { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+                 border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; align-self: end; }  /* tallene flugter */
+  .lead .lmain .v { font-size: clamp(30px, 3.4vw, 52px); font-weight: 700; line-height: 1; }
+  .lead .lmain .k { color: var(--muted); font-size: clamp(12px, 1vw, 15px); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .lead .ldet { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: clamp(13px, 1.1vw, 16px); }
+  .lead .ldet b { color: var(--text); font-weight: 600; }
+  .lead.out { opacity: .55; }
+  .lead.flash { animation: flash 2s ease-out; }
+  .lead .lname { overflow-wrap: break-word; hyphens: auto; }
+  @media (max-width: 1000px) { .leaders { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) {
+    .leaders { gap: 8px; }
+    .lead { padding: 12px 10px; gap: 4px 8px; }
+    .lead .pos { width: 32px; height: 32px; font-size: 17px; }
+    .lead .lname { font-size: 15px; }
+    .lead .lmeta { font-size: 12px; }
+    .lead .ldet { display: none; }   /* mobil: kun placering, navn og hovedtal */
+  }
+
+  /* advarsel 3-2-1 minut før start */
+  #alert { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column;
+           background: rgba(0,0,0,.86); z-index: 10; text-align: center; }
+  #alert.show { display: flex; }
+  #alert .big { font-size: clamp(80px, 16vw, 240px); font-weight: 700; color: var(--gold); line-height: 1; }
+  #alert .txt { font-size: clamp(24px, 4vw, 56px); font-weight: 600; margin-top: 12px; }
+  #alert.start .big { color: var(--green); }
+  #sound { position: fixed; right: 16px; bottom: 16px; font-size: 13px; }
+
+  /* splash: vises når der ikke er et aktivt løb */
+  #splash { position: fixed; inset: 0; z-index: 5; background: #0c0e11; overflow: hidden; }
+  #splash img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%; }
+  #splash .bg { display: none; }
+  #splash .fg { animation: drift 40s ease-in-out infinite alternate; transform-origin: 60% 45%; }
+  @keyframes drift { from { transform: scale(1); } to { transform: scale(1.05); } }
+  #splashHost { position: absolute; left: clamp(16px, 3vw, 40px); bottom: clamp(14px, 3vh, 36px); color: #fff; opacity: .85;
+                font-size: clamp(13px, 1.3vw, 20px); font-weight: 500; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
+  #hostInfo { font-size: 13px; color: var(--header-muted); white-space: nowrap; display: none; }
+  body.kiosk #hostInfo { display: block; }
+  #splashClock { position: absolute; right: clamp(16px, 3vw, 40px); bottom: clamp(14px, 3vh, 36px); color: #fff;
+                 font-size: clamp(18px, 2.4vw, 40px); font-weight: 600; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+  body.splash-on header.top, body.splash-on main { display: none; }
+  /* stående skærm (mobil): vis hele billedet, med en sløret udgave bagved */
+  @media (orientation: portrait) {
+    #splash .bg { display: block; filter: blur(24px) brightness(.55); transform: scale(1.15); }
+    #splash .fg { object-fit: contain; object-position: 50% 50%; animation: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { #splash .fg { animation: none; } }
+  /* ensfarvet splash: klubnavnet stort på mørk baggrund */
+  #splashPlain { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                 text-align: center; padding: 24px; background: radial-gradient(circle at 50% 40%, #1f2b24, #0b120e 70%); }
+  #splashPlain[hidden] { display: none; }
+  #splashPlain .pn { font-weight: 800; font-style: italic; font-size: clamp(40px, 8vw, 130px); letter-spacing: -0.03em; line-height: 1.05;
+                     color: var(--brand-cream); }
+  #splashPlain .ps { margin-top: 18px; color: var(--brand-orange); font-size: clamp(16px, 2vw, 28px); font-weight: 600; letter-spacing: .04em; }
+
+  @media (max-width: 640px) {
+    .hide-sm { display: none; }
+    .stat.big { grid-column: span 2; }
+    .hero { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { padding: 10px 14px; }
+    header.top { flex-wrap: wrap; row-gap: 4px; }
+    .race-name { order: 5; flex-basis: 100%; }
+    .readers { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 class="logo" id="brandLogo"></h1>
+  <div class="race-name" id="raceName"></div>
+  <div class="spacer"></div>
+  <div class="readers" id="readers"></div>
+  <div id="hostInfo" class="num"></div>
+  <div class="clock num" id="clock"></div>
+</header>
+<main>
+  <div id="banner"></div>
+  <div class="hero" id="hero"></div>
+  <div class="filters" id="filters"></div>
+  <div class="leaders" id="leaders"></div>
+  <div class="card" id="board"><div class="empty">Henter…</div></div>
+</main>
+<div id="splash" hidden>
+  <img class="bg" id="splashBg" alt="">
+  <img class="fg" id="splashFg" alt="">
+  <div id="splashPlain" hidden><div class="pn"></div><div class="ps">Venter på næste løb</div></div>
+  <div id="splashHost" class="num"></div>
+  <div id="splashClock" class="num"></div>
+</div>
+<div id="alert"><div class="big num" id="alertBig"></div><div class="txt" id="alertTxt"></div></div>
+<button id="sound" hidden>🔈 Slå lyd til</button>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const kiosk = new URLSearchParams(location.search).has("kiosk");
+let data = null, version = null, offset = 0, filter = "Alle", lastLaps = {}, fired = new Set();
+
+function now() { return Date.now() / 1000 + offset; }
+function hms(sec, forceH) {
+  if (sec == null || isNaN(sec)) return "–";
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  const p = n => String(n).padStart(2, "0");
+  return (h || forceH) ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+}
+const clockOf = ts => ts ? new Date(ts * 1000).toLocaleTimeString("da-DK", {hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "–";
+const km = v => (v ?? 0).toLocaleString("da-DK", {maximumFractionDigits: 1, minimumFractionDigits: 1});
+
+// ---------------- lyd (Web Audio – ingen filer nødvendige)
+let actx = null;
+function beep(freq = 880, dur = .25, times = 1) {
+  try {
+    actx = actx || new AudioContext();
+    if (actx.state === "suspended") { $("sound").hidden = false; return; }
+    for (let i = 0; i < times; i++) {
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * (dur + .15);
+      o.frequency.value = freq; o.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(.4, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+      o.start(t); o.stop(t + dur);
+    }
+  } catch (e) {}
+}
+$("sound").onclick = () => { actx = actx || new AudioContext(); actx.resume(); $("sound").hidden = true; beep(660, .12); };
+
+// ---------------- data
+async function load() {
+  try {
+    const r = await fetch("/api/live", {cache: "no-store"});
+    data = await r.json();
+    // Pi'en er blevet opdateret → hent den nye side (ingen F5 nødvendig på kiosk-skærmen)
+    if (version && data.version && data.version !== version) return location.reload();
+    version = version || data.version;
+    offset = data.now - Date.now() / 1000;
+    render();
+  } catch (e) { /* netværksfejl: behold sidste visning */ }
+}
+
+function columns(type, info) {
+  const lapCols = [
+    {h: "Omgange", r: true, f: r => r.laps},
+    {h: "Distance", r: true, sm: 1, f: r => km(r.distance_km) + " km"},
+    {h: "Sidste omg.", r: true, sm: 1, f: r => hms(r.last_lap)},
+  ];
+  if (info.continuous)  // custom backyard med løb i træk: samlet tid er det, der tæller
+    return [...lapCols, {h: "Tid", r: true, sm: 1, f: r => r.total_time != null ? hms(r.total_time, true) : "–"}];
+  if (type === "backyard" || type === "backyard_custom")
+    return [...lapCols.slice(0, 2), {h: "Omg.-tid", r: true, sm: 1, f: r => r.status === "resting" ? hms(r.last_lap) : (r.last_lap ? hms(r.last_lap) : "–")}];
+  if (type === "timed" || type === "record")
+    return [...lapCols, {h: "Bedste", r: true, sm: 1, f: r => hms(r.best_lap)}];
+  const timeCol = {h: "Tid", r: true, f: r => r.total_time != null ? hms(r.total_time, true) : (r.elapsed != null ? `<span style="color:var(--muted)">${hms(r.elapsed, true)}</span>` : "–")};
+  if (type === "timetrial") return [{h: "Start", r: true, sm: 1, f: r => clockOf(r.start_ts)}, timeCol];
+  return [timeCol];
+}
+
+function hero(info, race) {
+  const t = now(), st = (k, v, s, cls = "") => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v num">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+  if (info.phase === "before") {
+    const ns = info.next_start, left = ns - t;
+    const ci = info.checkin ? st("Tjekket ind", `${info.checkin.count}<small>/ ${info.checkin.total}</small>`, `scan chippen inden for ${Math.round(info.checkin.min)} min før start`) : "";
+    if (!ns) return st("Status", "Venter", "Starten er ikke sat", "big") + ci;
+    // over et døgn til start: vis dage + dato i stedet for tusindvis af timer
+    const days = Math.floor(left / 86400);
+    const when = new Date(ns * 1000).toLocaleString("da-DK", {weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"});
+    return st("Til start", left > 86400 ? `${days} ${days === 1 ? "dag" : "dage"} <small>${hms(left - days * 86400, true)}</small>` : hms(left, true),
+              left > 86400 ? "start " + when : "til start kl. " + clockOf(ns), "big") + ci;
+  }
+  if (info.continuous) {
+    const run = info.phase === "running", elapsed = (race.finished_at || t) - race.started_at;
+    const out = [];
+    if (info.end_mode === "duration")
+      out.push(st("Tid tilbage", run ? hms(info.end_at - t, true) : "0:00:00", "slut kl. " + clockOf(info.end_at), "big"));
+    else
+      out.push(st("Løbstid", hms(elapsed, true), `først til ${info.max_yards} omgange`, "big"));
+    out.push(st(info.end_mode === "duration" ? "Flest omgange" : "Færdige", info.end_mode === "duration" ? info.leader_laps : `${info.finishers}<small>/ ${data.rows.length}</small>`,
+      info.leader ? esc(info.leader) : km(info.loop_km) + " km pr. omgang"));
+    out.push(st("På ruten", info.on_course));
+    out.push(st("Samlet", km(info.total_km) + "<small>km</small>", "alle løberes distance"));
+    return out.join("");
+  }
+  const by = info.type.startsWith("backyard");
+  if (by) {
+    const left = info.next_start - t, warn = left <= 180 && info.phase === "running";
+    const out = [];
+    if (info.phase === "running") out.push(st("Næste start", hms(left), "kl. " + clockOf(info.next_start), "big" + (warn ? " warn" : "")));
+    out.push(st("Yard", info.phase === "running" ? info.yard : info.completed_yards, km(info.loop_km) + " km pr. omgang"));
+    out.push(st("Tilbage", info.runners_left, info.phase === "running" ? `${info.on_course} på ruten` : ""));
+    out.push(st("Distance", km(info.completed_yards * info.loop_km) + "<small>km</small>", "førende løbers distance"));
+    return out.join("");
+  }
+  if (info.type === "timed")
+    return st("Tid tilbage", hms(info.end_at - t, true), "slut kl. " + clockOf(info.end_at), "big") +
+           st("Forløbet", hms(t - race.started_at, true)) + st("Samlet", km(info.total_km) + "<small>km</small>");
+  if (info.type === "record") {
+    const pct = info.record_km ? Math.min(100, info.total_km / info.record_km * 100) : 0;
+    return `<div class="stat big"><div class="k">${esc(info.record_label)}</div><div class="v num">${km(info.total_km)}<small>km</small></div>
+      ${info.record_km ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="s">${info.new_record ? "🎉 NY REKORD! " : ""}Rekord: ${km(info.record_km)} km · ${pct.toFixed(0)} %</div>` : ""}</div>` +
+      st("Omgange i alt", info.total_laps) + st("Forløbet", hms(t - race.started_at, true));
+  }
+  const elapsed = (race.finished_at || t) - race.started_at;
+  let h = st("Løbstid", hms(elapsed, true), km(info.distance_km) + " km", "big") + st("I mål", info.finished);
+  if (info.type === "timetrial" && info.next_starters?.length) {
+    const n = info.next_starters[0];
+    h += st("Næste start", hms(n.start_ts - t), `#${esc(n.bib ?? "")} ${esc(n.name)}`);
+  }
+  return h;
+}
+
+function banner(info) {
+  if (info.phase !== "ended") return "";
+  if (info.winner) return `<div class="banner winner">🏆 Vinder: ${esc(info.winner)}${info.type.startsWith("backyard") ? ` – ${info.completed_yards} yards · ${km(info.completed_yards * info.loop_km)} km` : ""}</div>`;
+  if (info.continuous) return info.leader
+    ? `<div class="banner winner">🏁 Vinder: ${esc(info.leader)} – ${info.leader_laps} omgange (${km(info.leader_laps * info.loop_km)} km)${info.end_mode === "yards" ? " på " + hms(info.leader_time, true) : ""}</div>`
+    : `<div class="banner info">Løbet er slut</div>`;
+  if (info.no_winner) return `<div class="banner info">Løbet er slut – ingen vinder (sidste løber nåede ikke solo-omgangen)</div>`;
+  return `<div class="banner info">Løbet er slut – endelige resultater</div>`;
+}
+
+// Udseende (klubnavn, logo, splash) – kommer med hvert svar fra serveren
+let brandV = null;
+function applyBrand(b) {
+  if (!b || b.v === brandV) return;
+  brandV = b.v;
+  document.title = b.name;
+  $("brandLogo").innerHTML = b.logo ? `<img src="${b.logo}" alt="${esc(b.name)}">` : `<span class="txt">${esc(b.name)}</span>`;
+  $("splashPlain").hidden = !!b.splash;
+  $("splashPlain").querySelector(".pn").textContent = b.name;
+  for (const id of ["splashBg", "splashFg"]) { $(id).hidden = !b.splash; if (b.splash) $(id).src = b.splash; }
+  $("splashFg").alt = b.name;
+}
+
+function render() {
+  applyBrand(data.brand);
+  // Pi'ens adresse (skifter når den kommer på et andet WiFi)
+  const h = data.host;
+  $("splashHost").textContent = h ? `Admin: ${h.name}:8000/admin${h.ip ? ` · ${h.ip}:8000/admin` : ""}` : "";
+  $("hostInfo").textContent = h?.ip ? h.ip : h ? "intet netværk" : "";
+  const idle = !data.race;
+  $("splash").hidden = !idle;
+  document.body.classList.toggle("splash-on", idle);
+  if (idle) {
+    $("raceName").textContent = ""; $("hero").innerHTML = ""; $("banner").innerHTML = ""; $("filters").innerHTML = ""; $("leaders").innerHTML = "";
+    $("board").innerHTML = `<div class="empty">Intet aktivt løb</div>`;
+    return;
+  }
+  const {race, info, rows} = data;
+  $("raceName").textContent = race.name + " · " + info.type_label;
+  $("readers").innerHTML = (data.readers || []).map(r => `<span class="${r.connected ? "on" : ""}"><i class="dot"></i>${r.role === "primary" ? "Primær" : "Backup"}</span>`).join("");
+  const age = data.mirror?.age;
+  const solo = info.solo && info.phase === "running"
+    ? `<div class="banner winner">⚡ ${esc(info.solo.name)} ${info.solo.state === "running" ? "løber solo-runden – gennemføres den inden tid, er det sejr" : "skal løbe én runde alene ved næste start for at vinde"}</div>` : "";
+  $("banner").innerHTML = solo + (age > 30 && info.phase !== "ended"
+    ? `<div class="banner info">⚠ Ingen forbindelse til stævnet i ${Math.round(age / 60) || "<1"} min – viser seneste data. Tidtagningen kører videre lokalt.</div>` : "") + banner(info);
+  $("hero").innerHTML = hero(info, race);
+
+  const sexes = [...new Set(rows.map(r => r.sex).filter(Boolean))];
+  $("filters").innerHTML = sexes.length > 1 ? ["Alle", ...sexes].map(s => `<button class="${s === filter ? "on" : ""}" data-s="${esc(s)}">${esc(s)}</button>`).join("") : "";
+  $("filters").querySelectorAll("button").forEach(b => b.onclick = () => { filter = b.dataset.s; render(); });
+
+  const shown = rows.filter(r => filter === "Alle" || r.sex === filter);
+  $("leaders").innerHTML = ""; $("board").hidden = false;
+  if (!shown.length) { $("board").innerHTML = `<div class="empty">Ingen deltagere endnu</div>`; return; }
+  const cols = columns(info.type, info), outSt = ["dnf", "rtc", "dsq", "dns", "nocheckin"];
+  // placering inden for filteret (Mænd/Kvinder), ellers den samlede
+  const pos = (r, i) => r.place == null ? "–" : filter === "Alle" ? r.place : i + 1;
+  const isFlash = r => lastLaps[r.id] != null && r.laps > lastLaps[r.id];
+
+  // De 4 førende fremhæves som kort – først når løbet er i gang (før start vises startlisten)
+  const nLead = Math.min(4, shown.filter(r => r.place != null).length);  // kun løbere med placering
+  const main = cols.find(c => c.h === "Omgange" || c.h === "Tid") || cols[0];
+  $("leaders").innerHTML = shown.slice(0, nLead).map((r, i) => `
+    <div class="lead p${i + 1} st-${r.status} ${outSt.includes(r.status) ? "out" : ""} ${isFlash(r) ? "flash" : ""}">
+      <div class="pos num">${pos(r, i)}</div>
+      <div class="lname">${esc(r.name)}</div>
+      <div class="lmeta">${[r.bib != null ? `#${r.bib}` : "", r.club ? esc(r.club) : "", `<i class="dot"></i>${esc(r.status_label)}`].filter(Boolean).join(" · ")}</div>
+      ${r.dogs?.length ? `<div class="ldogs">🐕 ${r.dogs.map(esc).join(" & ")}</div>` : ""}
+      <div class="lmain"><span class="v num">${main.f(r)}</span><span class="k">${main.h}</span></div>
+      <div class="ldet">${cols.filter(c => c !== main).map(c => `<span>${c.h}: <b class="num">${c.f(r)}</b></span>`).join("")}</div>
+    </div>`).join("");
+  const rest = shown.slice(nLead);
+  if (!rest.length) { $("board").hidden = true; lastLaps = Object.fromEntries(rows.map(r => [r.id, r.laps])); return; }
+  let html = `<table><thead><tr><th>#</th><th class="name-col-sep">Navn</th><th class="hide-sm">Køn</th><th>Status</th>` +
+    cols.map(c => `<th class="${c.r ? "r" : ""} ${c.sm ? "hide-sm" : ""}">${c.h}</th>`).join("") + `</tr></thead><tbody>`;
+  rest.forEach((r, j) => {
+    html += `<tr class="st-${r.status} ${outSt.includes(r.status) ? "out" : ""} ${isFlash(r) ? "flash" : ""}">
+      <td class="place num">${pos(r, nLead + j)}</td>
+      <td class="name name-col-sep">${r.bib != null ? `<span class="bib num">${r.bib}</span>` : ""}${esc(r.name)}${r.club ? `<span class="club">${esc(r.club)}</span>` : ""}${r.dogs?.length ? `<span class="dogs">🐕 ${r.dogs.map(esc).join(" & ")}</span>` : ""}</td>
+      <td class="hide-sm">${esc(r.sex)}</td>
+      <td style="white-space:nowrap"><i class="dot"></i>${esc(r.status_label)}</td>` +
+      cols.map(c => `<td class="num ${c.r ? "r" : ""} ${c.sm ? "hide-sm" : ""}">${c.f(r)}</td>`).join("") + `</tr>`;
+  });
+  $("board").innerHTML = html + "</tbody></table>";
+  lastLaps = Object.fromEntries(rows.map(r => [r.id, r.laps]));
+}
+
+// ---------------- ur + 3-2-1-advarsler (kører lokalt hvert ¼ sek.)
+function tick() {
+  const t = now();
+  $("clock").textContent = new Date(t * 1000).toLocaleTimeString("da-DK");
+  $("splashClock").textContent = new Date(t * 1000).toLocaleTimeString("da-DK", {hour: "2-digit", minute: "2-digit"});
+  if (!data?.race) return;
+  const info = data.info;
+  if (data.race && info.phase !== "before") $("hero").innerHTML = hero(info, data.race);
+  const alert = $("alert");
+  let show = false;
+  if (info.type.startsWith("backyard") && info.phase === "running" && !info.continuous) {
+    const left = info.next_start - t;
+    for (const m of info.warnings_min || []) {
+      const key = `${info.yard}-${m}`;
+      if (left <= m * 60 && left > m * 60 - 8) {
+        show = true; alert.className = "show";
+        $("alertBig").textContent = m; $("alertTxt").textContent = m === 1 ? "MINUT TIL START" : "MINUTTER TIL START";
+        if (!fired.has(key)) { fired.add(key); beep(880, .3, m); }
+      }
+    }
+    // startklokken: vis "START" i 6 sek. efter hver hel time
+    const since = t - info.block_start;
+    if (since >= 0 && since < 6 && info.yard > 0) {
+      show = true; alert.className = "show start";
+      $("alertBig").textContent = "START"; $("alertTxt").textContent = "Yard " + info.yard;
+      if (!fired.has("s" + info.yard)) { fired.add("s" + info.yard); beep(1200, .9); }
+    }
+  }
+  if (!show) alert.className = "";
+}
+
+// kiosk-tilstand: rul langsomt gennem listen under top 4 (resten af skærmen står fast)
+if (kiosk) {
+  document.body.classList.add("kiosk");
+  let dir = 1, pause = 120;
+  setInterval(() => {
+    const el = $("board"), max = el.scrollHeight - el.clientHeight;
+    if (el.hidden || max <= 0) { el.scrollTop = 0; return; }
+    if (pause > 0) { pause--; return; }
+    if (dir < 0) { el.scrollTop = 0; dir = 1; pause = 120; }      // pause i toppen (ca. 5 sek.)
+    else if (el.scrollTop >= max - 1) { dir = -1; pause = 120; }  // pause i bunden, hop så til toppen
+    else el.scrollTop += 2;
+  }, 40);
+}
+
+load(); setInterval(load, 1000); setInterval(tick, 250);
+</script>
+</body>
+</html>

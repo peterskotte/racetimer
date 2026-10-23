@@ -1,0 +1,5 @@
+# Caddy henter og fornyer automatisk HTTPS-certifikat. Peg dit domæne (A-record) på serveren først.
+resultater.example.dk {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}

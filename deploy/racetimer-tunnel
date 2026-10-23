@@ -1,0 +1,12 @@
+#!/bin/sh
+# RaceTimer: slå fjernadgang (Cloudflare-tunnel) til/fra. Kører som root via sudo – kun disse tre kommandoer.
+case "$1" in
+  status) ;;
+  on)  systemctl enable --now racetimer-tunnel >/dev/null 2>&1 ;;
+  off) systemctl disable --now racetimer-tunnel >/dev/null 2>&1 ;;
+  *)   echo '{"ok": false, "error": "Brug: racetimer-tunnel status | on | off"}'; exit 2 ;;
+esac
+installed=false; command -v cloudflared >/dev/null 2>&1 && installed=true
+enabled=false; systemctl is-enabled --quiet racetimer-tunnel 2>/dev/null && enabled=true
+active=false; systemctl is-active --quiet racetimer-tunnel 2>/dev/null && active=true
+echo "{\"ok\": true, \"installed\": $installed, \"enabled\": $enabled, \"active\": $active}"

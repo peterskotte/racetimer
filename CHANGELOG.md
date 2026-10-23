@@ -1,0 +1,20 @@
+# Ændringer
+
+Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
+
+## [1.0.0] – 2026-10-23
+
+Første offentlige udgivelse.
+
+- RFID-tidtagning med 1–2 almindelige USB- eller serielle læsere (primær og backup, dubletfiltrering)
+- Løbstyper: Backyard Ultra (officiel og custom: sidste mand, cutoff eller samlet tid), A til B, rekordløb, tidsløb (6/12/24/48 t) og intervalstart (interval, bølger eller chipstart)
+- Backyard efter de officielle tidsvinduer: afgang, flagzone til official og målvindue; solo-runde
+- Indtjekning før start, manuelle tider (omgang, sluttid, starttid), RTC/DNS/DSQ og canicross (1–2 hunde)
+- Resultatskærm i dark mode med top 4, kiosk-tilstand, splash-skærm og 3-2-1-advarsler
+- Admin med opsætningsguide, deltager-import fra Excel, chip-scanning og brugerstyring
+- Udseende: klubnavn, logo og splash kan vælges
+- Synkronisering til hjemmeside (RaceTimer-spejl, JSON/PHP eller FTP) med interval, manuelt og ved afslutning
+- WiFi med op til 5 faste netværk (også brugernavn+kode som eduroam)
+- Fjernadgang: Tailscale, Raspberry Pi Connect og offentligt link via Cloudflare
+- Opdateringer fra admin med digital signatur og automatisk tilbagerulning
+- Færdigt SD-kort-image til Raspberry Pi 3, 4 og 5 (64-bit)

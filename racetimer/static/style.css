@@ -1,0 +1,75 @@
+/* RaceTimer – fælles dark-mode tema (resultatskærm + admin)
+   Farver: skovgrøn #0c1b14, orange #e5682a, varm creme #f6efe3 */
+:root {
+  --brand-green: #0c1b14;
+  --brand-orange: #e5682a;
+  --brand-cream: #f6efe3;
+  --bg: #111814;
+  --header: var(--brand-cream);
+  --header-text: var(--brand-green);
+  --header-muted: #56635b;
+  --nav: #0b120e;
+  --card: #1a231e;
+  --card-head: #212c26;
+  --line: #2e3a33;
+  --text: #f3f1ec;
+  --muted: #a2aca5;
+  --dim: #6b766f;
+  --green: #4cc16f;
+  --teal: #2bb3a3;
+  --red: #ef5b5b;
+  --grey: #8a948d;
+  --gold: #f2c14e;
+  --blue: #5aa3ff;
+  --accent: var(--brand-orange);
+  --on-accent: #1d0d04;
+  --radius: 18px;
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { min-height: 100vh; -webkit-font-smoothing: antialiased; }
+.num { font-variant-numeric: tabular-nums; }
+a { color: inherit; }
+
+header.top {
+  background: var(--header); color: var(--header-text);
+  border-bottom: 3px solid var(--brand-orange);
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px clamp(16px, 3vw, 32px);
+}
+.logo { margin: 0; line-height: 0; flex-shrink: 0; }
+.logo img { height: clamp(28px, 3.6vw, 52px); width: auto; display: block; }
+.logo .txt { display: block; line-height: 1.1; font-weight: 800; font-style: italic; letter-spacing: -0.02em;
+             font-size: clamp(22px, 2.8vw, 38px); color: var(--brand-green); }
+header.top .muted { color: var(--header-muted); }
+header.top .spacer { flex: 1; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+button, .btn {
+  font: inherit; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--line); background: var(--card-head); color: var(--text);
+  padding: 9px 16px; border-radius: 10px; cursor: pointer; text-decoration: none; display: inline-block;
+}
+button:hover, .btn:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+button.go { background: var(--green); border-color: var(--green); color: #06170c; }
+button:disabled { opacity: .45; cursor: default; }
+
+.dot { display: inline-block; width: .55em; height: .55em; border-radius: 50%; margin-right: .55em; vertical-align: .08em; }
+.st-active .dot, .dot.active { background: var(--green); }
+.st-resting .dot, .dot.resting { background: var(--teal); }
+.st-winner .dot { background: var(--gold); }
+.st-finished .dot { background: var(--blue); }
+.st-dnf .dot, .st-dns .dot, .st-waiting .dot, .st-nocheckin .dot { background: var(--grey); }
+.st-checkedin .dot { background: var(--teal); }
+.st-rtc .dot, .st-dsq .dot { background: var(--red); }

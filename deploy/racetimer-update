@@ -1,0 +1,263 @@
+#!/usr/bin/python3 -I
+"""RaceTimer opdatering – kører som root via sudo. Kun disse kommandoer:
+
+  racetimer-update start <pakke.tar.gz> <pakke.tar.gz.sig>   → installér (kører i baggrunden)
+  racetimer-update rollback                                   → gå tilbage til forrige version (i baggrunden)
+  racetimer-update status                                     → JSON: status + gemte versioner
+
+Sikkerhed:
+* Pakken kopieres først til en mappe, kun root kan skrive i – derefter kontrolleres signaturen
+  med den OFFENTLIGE nøgle, der allerede er installeret (racetimer/release.json). En pakke, der
+  ikke er signeret med udgiverens private nøgle, installeres aldrig.
+* Data (/var/lib/racetimer), Python-miljøet (.venv) og privat branding røres aldrig.
+* Efter installation genstartes RaceTimer og der laves et sundhedstjek. Fejler det, rulles der
+  automatisk tilbage til den forrige version.
+"""
+import datetime
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.request
+
+APP = os.environ.get("RACETIMER_UPDATE_APP", "/opt/racetimer")                      # miljøvariabler kun til test
+WORK = os.environ.get("RACETIMER_UPDATE_WORK", "/var/lib/racetimer-update")
+STATUS = os.environ.get("RACETIMER_UPDATE_STATUS", "/var/lib/racetimer/update-status.json")
+HEALTH = os.environ.get("RACETIMER_UPDATE_HEALTH", "http://127.0.0.1:8000/api/setup")
+SYSTEMCTL = os.environ.get("RACETIMER_SYSTEMCTL", "systemctl")
+OPENSSL = os.environ.get("RACETIMER_OPENSSL", "openssl")
+DOWNLOADS = os.environ.get("RACETIMER_UPDATE_DOWNLOADS", "/var/lib/racetimer/update")  # hvor RaceTimer lægger hentede pakker
+KEEP = ("data", ".venv", "branding-local")   # røres aldrig ved opdatering
+BACKUPS = 3
+
+
+def log(msg, state=None, **extra):
+    st = read_status()
+    st.setdefault("log", [])
+    st["log"] = (st["log"] + [f"{datetime.datetime.now():%H:%M:%S} {msg}"])[-40:]
+    if state:
+        st["state"] = state
+    st.update(extra, updated=time.time())
+    os.makedirs(os.path.dirname(STATUS), exist_ok=True)
+    tmp = STATUS + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, ensure_ascii=False)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, STATUS)
+
+
+def read_status():
+    try:
+        with open(STATUS) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def version_of(path):
+    try:
+        with open(os.path.join(path, "racetimer", "VERSION")) as f:
+            return f.read().strip()
+    except OSError:
+        return "ukendt"
+
+
+def run(cmd, **kw):
+    r = subprocess.run(cmd, capture_output=True, text=True, **kw)
+    if r.returncode != 0:
+        raise RuntimeError(f"{os.path.basename(cmd[0])}: {(r.stderr or r.stdout).strip()[:300]}")
+    return r.stdout
+
+
+# ---------------------------------------------------------------- kontrol af pakken
+
+def verify(tar_path, sig_path):
+    """Signaturen skal passe med den installerede offentlige nøgle."""
+    with open(os.path.join(APP, "racetimer", "release.json")) as f:
+        pub = json.load(f)["pubkey"]
+    with tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False) as k:
+        k.write(pub)
+    try:
+        r = subprocess.run([OPENSSL, "pkeyutl", "-verify", "-pubin", "-inkey", k.name, "-rawin",
+                            "-in", tar_path, "-sigfile", sig_path], capture_output=True, text=True)
+    finally:
+        os.unlink(k.name)
+    if r.returncode != 0 or "Success" not in (r.stdout + r.stderr):
+        raise RuntimeError("Signaturen passer ikke – pakken er IKKE fra udgiveren eller er beskadiget. Intet er ændret.")
+
+
+def extract(tar_path, dest):
+    """Udpak sikkert: ingen absolutte stier, ingen '..', ingen links ud af mappen."""
+    with tarfile.open(tar_path, "r:gz") as t:
+        for m in t.getmembers():
+            if m.name.startswith("/") or ".." in m.name.split("/") or m.issym() or m.islnk() or m.isdev():
+                raise RuntimeError(f"Ugyldig fil i pakken: {m.name}")
+        if hasattr(tarfile, "data_filter"):
+            t.extractall(dest, filter="data")
+        else:
+            t.extractall(dest)
+    tops = [d for d in os.listdir(dest) if not d.startswith(".")]
+    root = os.path.join(dest, tops[0]) if len(tops) == 1 and os.path.isdir(os.path.join(dest, tops[0])) else dest
+    if not os.path.isfile(os.path.join(root, "racetimer", "app.py")):
+        raise RuntimeError("Pakken indeholder ikke RaceTimer")
+    return root
+
+
+# ---------------------------------------------------------------- installation og tilbagerulning
+
+def sync_into_app(src):
+    """Læg ny kode i /opt/racetimer – data, .venv og privat branding bevares."""
+    excl = sum((["--exclude", k] for k in KEEP), [])
+    run(["rsync", "-a", "--delete", "--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r", *excl, src.rstrip("/") + "/", APP + "/"])
+
+
+def backup_current():
+    ver = version_of(APP)
+    dest = os.path.join(WORK, "backup", f"{ver}-{int(time.time())}")
+    os.makedirs(dest, exist_ok=True)
+    excl = sum((["--exclude", k] for k in KEEP), [])
+    run(["rsync", "-a", *excl, APP + "/", dest + "/"])
+    olds = sorted(os.listdir(os.path.join(WORK, "backup")), key=lambda d: os.path.getmtime(os.path.join(WORK, "backup", d)))
+    for d in olds[:-BACKUPS]:
+        shutil.rmtree(os.path.join(WORK, "backup", d), ignore_errors=True)
+    return dest
+
+
+def post_update():
+    script = os.path.join(APP, "deploy", "post-update.sh")
+    if os.path.exists(script) and not os.environ.get("RACETIMER_UPDATE_SKIP_POST"):
+        out = run(["sh", script], timeout=900)
+        for line in out.strip().splitlines()[-6:]:
+            log(line.strip())
+
+
+def restart_and_check(expect_version):
+    subprocess.run([SYSTEMCTL, "restart", "racetimer"], capture_output=True)
+    for _ in range(int(os.environ.get("RACETIMER_UPDATE_HEALTH_TRIES", 45))):  # op til ~90 sek.
+        time.sleep(2)
+        try:
+            with urllib.request.urlopen(HEALTH, timeout=3) as r:
+                if r.status == 200 and version_of(APP) == expect_version:
+                    return True
+        except OSError:
+            pass
+    return False
+
+
+def install(tar_in, sig_in):
+    os.makedirs(WORK, mode=0o700, exist_ok=True)
+    os.chmod(WORK, 0o700)
+    stage = tempfile.mkdtemp(prefix="pkg-", dir=WORK)
+    try:
+        old = version_of(APP)
+        log(f"Starter opdatering fra version {old}", state="running", started=time.time(), error=None)
+        tar_path, sig_path = os.path.join(stage, "pakke.tar.gz"), os.path.join(stage, "pakke.sig")
+        shutil.copyfile(tar_in, tar_path)   # kopi som kun root kan ændre – kontrolleres herefter
+        shutil.copyfile(sig_in, sig_path)
+        verify(tar_path, sig_path)
+        log("✓ Signaturen er gyldig")
+        new_root = extract(tar_path, os.path.join(stage, "ny"))
+        new = version_of(new_root)
+        log(f"Pakken indeholder version {new}", to=new, **{"from": old})
+        backup = backup_current()
+        log(f"Nuværende version {old} gemt som backup")
+        sync_into_app(new_root)
+        post_update()
+        log("Genstarter RaceTimer og tjekker, at den svarer …")
+        if restart_and_check(new):
+            log(f"✓ Version {new} kører", state="success", finished=time.time())
+            return
+        log("✗ Den nye version svarede ikke – ruller automatisk tilbage", state="rolling_back")
+        if restore(backup, old):
+            log(f"Tilbage på version {old}", state="rolled_back", finished=time.time(), error="Ny version startede ikke")
+        else:
+            log(f"Version {old} er lagt tilbage, men svarer ikke – genstart Pi'en", state="failed", finished=time.time(),
+                error="Hverken ny eller gammel version svarede – genstart Pi'en")
+    except Exception as e:  # noqa: BLE001 – alt skal ende i status
+        log(f"✗ {e}", state="failed", finished=time.time(), error=str(e))
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
+def restore(backup, version):
+    sync_into_app(backup)
+    try:
+        post_update()
+    except RuntimeError as e:
+        log(f"(installationstrin ved tilbagerulning: {e})")
+    if not restart_and_check(version):
+        log("✗ OBS: RaceTimer svarer heller ikke efter tilbagerulning – genstart Pi'en", state="failed")
+        return False
+    return True
+
+
+def rollback():
+    backups = list_backups()
+    if not backups:
+        log("✗ Der er ingen tidligere version at rulle tilbage til", state="failed")
+        return
+    b = backups[0]
+    cur = version_of(APP)
+    log(f"Ruller tilbage fra {cur} til {b['version']}", state="rolling_back", **{"from": cur, "to": b["version"]})
+    backup_current()
+    if restore(os.path.join(WORK, "backup", b["dir"]), b["version"]):
+        log(f"✓ Tilbage på version {b['version']}", state="rolled_back", finished=time.time())
+
+
+def list_backups():
+    d = os.path.join(WORK, "backup")
+    if not os.path.isdir(d):
+        return []
+    out = [{"dir": x, "version": version_of(os.path.join(d, x)), "saved": os.path.getmtime(os.path.join(d, x))} for x in os.listdir(d)]
+    cur = version_of(APP)
+    return sorted([b for b in out if b["version"] != cur], key=lambda b: -b["saved"])
+
+
+def in_background(args):
+    """Kør selv i baggrunden (overlever at RaceTimer genstartes undervejs)."""
+    if shutil.which("systemd-run") and not os.environ.get("RACETIMER_UPDATE_INLINE"):
+        subprocess.run(["systemd-run", "--unit", f"racetimer-update-{int(time.time())}", "--collect", "--quiet",
+                        sys.executable, "-I", os.path.abspath(__file__), *args], check=True, capture_output=True)
+    else:
+        subprocess.Popen([sys.executable, "-I", os.path.abspath(__file__), *args], start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def main():
+    a = sys.argv[1:]
+    try:
+        if a == ["status"]:
+            print(json.dumps({"ok": True, "status": read_status(), "backups": list_backups(), "version": version_of(APP)},
+                             ensure_ascii=False))
+        elif len(a) == 3 and a[0] == "start":
+            if read_status().get("state") in ("running", "rolling_back") and time.time() - read_status().get("updated", 0) < 900:
+                raise RuntimeError("En opdatering kører allerede")
+            for p in a[1:]:
+                real = os.path.realpath(p)
+                if not real.startswith(os.path.realpath(DOWNLOADS) + os.sep) or not os.path.isfile(real):
+                    raise RuntimeError(f"Ugyldig pakkefil: {p}")
+            log("Opdatering sat i gang", state="running", error=None)
+            in_background(["install", a[1], a[2]])
+            print(json.dumps({"ok": True}))
+        elif len(a) == 3 and a[0] == "install":   # intern – kaldes i baggrunden
+            install(a[1], a[2])
+        elif a == ["rollback"]:
+            log("Tilbagerulning sat i gang", state="rolling_back", error=None)
+            in_background(["rollback-run"])
+            print(json.dumps({"ok": True}))
+        elif a == ["rollback-run"]:
+            rollback()
+        else:
+            raise RuntimeError("Brug: racetimer-update status | start <pakke> <signatur> | rollback")
+    except Exception as e:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
