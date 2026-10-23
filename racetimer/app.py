@@ -66,6 +66,34 @@ def host_info():
     _host_cache.update(t=time.time(), v={"ip": ip if ip and not ip.startswith("127.") else None, "name": f"{name}.local"})
     return _host_cache["v"]
 
+
+_clock_cache = {"t": 0, "v": None}
+
+
+def clock_info():
+    """Er Pi'ens ur stillet via internettet (NTP) siden opstart? None = kan ikke afgøres (fx på en Mac).
+
+    Uden RTC-batteri starter Pi'en med det klokkeslæt, den havde ved sidste slukning, indtil den får net.
+    """
+    import subprocess
+    if time.time() - _clock_cache["t"] < 10:
+        return _clock_cache["v"]
+    forced = os.environ.get("RACETIMER_CLOCK_SYNCED")  # kun til test
+    synced = None
+    if forced in ("0", "1"):
+        synced = forced == "1"
+    elif os.path.exists("/run/systemd/timesync/synchronized"):
+        synced = True  # systemd-timesyncd har stillet uret siden opstart
+    else:
+        try:
+            out = subprocess.run(["timedatectl", "show", "-p", "NTPSynchronized", "--value"],
+                                 capture_output=True, text=True, timeout=2).stdout.strip()
+            synced = {"yes": True, "no": False}.get(out)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    _clock_cache.update(t=time.time(), v={"synced": synced})
+    return _clock_cache["v"]
+
 app = FastAPI(title="RaceTimer")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -245,6 +273,7 @@ def live():
     extra["brand"] = branding.public()
     if not MIRROR:  # den offentlige spejlserver skal ikke vise stævne-netværkets adresse
         extra["host"] = host_info()
+        extra["clock"] = clock_info()
     if not race:
         return {"race": None, "now": now, **extra}
     rows, info = standings(race, now)

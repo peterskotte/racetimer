@@ -2,6 +2,10 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
+## [Ikke udgivet]
+
+- Ur-tjek: admin viser, om Pi'ens ur er stillet via internettet, og om det passer med din mobil/computer. Går uret forkert, eller er det ikke stillet siden opstart, advares der tydeligt, når løbet startes.
+
 ## [1.1.0] – 2026-10-23
 
 - Arkiv: afsluttede løb kan arkiveres med **🗄 Arkivér**. De forsvinder fra løbslisten, men kan søges frem, ses, hentes som CSV, gendannes eller slettes under den nye fane **Arkiv**.

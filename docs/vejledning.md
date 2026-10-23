@@ -25,7 +25,7 @@ Denne vejledning er til klubber og arrangører, der vil bruge RaceTimer til egne
 | **Skærm** | Alm. skærm eller TV med HDMI | Pi 4/5 har micro-HDMI, så I skal bruge et kabel eller en adapter. |
 | **RFID-læser** | 1 eller 2 USB-læsere, 13,56 MHz, "keyboard emulation" | Driverfri, billig og den mest udbredte type. Med 2 af samme model har I en backup. |
 | **Armbånd/chips** | MIFARE Classic 1K eller NTAG213 | Køb et par ekstra til glemte og defekte chips. |
-| **Ur (kun Pi 5)** | Officielt RTC-batteri | Holder uret, når Pi'en er slukket og uden internet. Pi 3/4 har ikke batteristik, så de skal have internet ved opstart (mobil-hotspot er nok). |
+| **Ur (kun Pi 5)** | Officielt RTC-batteri | Holder uret, når Pi'en er slukket og uden internet. Pi 3/4 har ikke batteristik. De stiller selv uret, så snart de har internet, så giv dem net et par minutter, inden løbet startes (mobil-hotspot er nok). |
 | Til ude i skoven | Powerbank med pass-through eller UPS | Skærmen skal også have strøm. |
 
 > **Tip:** Køb læseren før armbåndene, og test med de armbånd, der fulgte med. Læseren skal kunne læse jeres chip-type.
@@ -107,7 +107,7 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 ## 7. På løbsdagen
 
 **Før start**
-- [ ] Tænd Pi'en i god tid. Tjek at klokken øverst på resultatskærmen passer med din mobil.
+- [ ] Tænd Pi'en i god tid. Under **Rediger aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
 - [ ] Tjek at læserne står som forbundet under **Rediger aktivt løb → Læsere** (grøn prik).
 - [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2".
 - [ ] Bed løberne scanne for at tjekke ind. Skærmen viser, hvor mange der er tjekket ind, fx 18/20.
@@ -164,7 +164,7 @@ scp -r racetimer@racetimer.local:/var/lib/racetimer ./racetimer-backup
 | **Sort skærm / resultatskærmen er lukket** | Genstart Pi'en, eller log ud og ind på skrivebordet. Kiosk-visningen starter af sig selv. |
 | **Læseren reagerer ikke** | Tjek at den er valgt under *Læsere*, og at prikken er grøn. Prøv en anden USB-port. Bipper læseren, men intet sker, så hold chippen mod læseren under **📡 Scan** for at se, om den læses. |
 | **En løbers omgange tæller ikke** | Er løberen tjekket ind? Har løberen den rigtige chip? Er omgangen hurtigere end minimumstiden? Se loggen under *Seneste læsninger*. |
-| **Uret går forkert** | Pi 3/4 og Pi 5 uden RTC-batteri har brug for internet ved opstart for at stille uret. Forbind til en mobil-hotspot i et par minutter. |
+| **Uret går forkert** | Pi'en stiller selv uret, så snart den har internet. Pi 3/4 og Pi 5 uden RTC-batteri skal derfor have net et par minutter, *inden* løbet startes (mobil-hotspot er nok). Får den først net midt i løbet, hopper uret, og tiderne bliver forkerte. Admin advarer ved start. |
 | **WiFi vil ikke forbinde** | Tjek koden. Fejlbeskeden står under **WiFi**. Mobil-hotspots skal være synlige, og iPhone skal have "Maksimer kompatibilitet" slået til. |
 | **Glemt admin-kode** | En anden administrator kan sætte en ny under **Brugerstyring**. Er der ingen, så kontakt udgiveren via GitHub. |
 | **Opdateringen fejlede** | Pi'en kører videre på den gamle version. Loggen står under **Opdatering**. |

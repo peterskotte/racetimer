@@ -43,7 +43,7 @@ Når klokken slår, gælder: har en løber ingen mållæsning i runden, er løbe
 | Del | Anbefaling |
 |---|---|
 | Computer | Raspberry Pi 5 (4 eller 8 GB) anbefales; Pi 4 og Pi 3 (B/B+) virker også. Brug den officielle strømforsyning og et godt SD-kort eller en NVMe-disk |
-| **Ur** | **Officielt Pi 5 RTC-batteri** (lille knapcelle-stik). Uden det mister Pi'en tiden ved strømsvigt, hvis der ikke er internet. |
+| **Ur** | **Officielt Pi 5 RTC-batteri** (lille knapcelle-stik). Uden det (og på Pi 3/4) står uret forkert efter opstart, indtil Pi'en får internet. Admin viser urets status og advarer, før løbet startes. |
 | RFID-læsere (2 stk.) | **To ens USB HID-læsere til 13,56 MHz** ("keyboard emulation", MIFARE/NTAG). Driverfrie, billige, robuste og de mest udbredte. Brug samme model til primær og backup, så chip-ID'et har samme format. |
 | Armbånd | Silikone-armbånd med MIFARE Classic 1K eller NTAG213. ID'et kan tjekkes med en mobil med NFC. 125 kHz EM4100-armbånd + 125 kHz-læsere virker også. |
 | Strøm i felten | UPS-HAT eller powerbank med pass-through. Databasen er crash-sikker, men skærmen skal også have strøm. |

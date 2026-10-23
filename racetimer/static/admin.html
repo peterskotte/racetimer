@@ -124,6 +124,7 @@
       <button id="splashBtn" title="Fjern det aktive løb fra resultatskærmen og vis splash-billedet">Vis splash</button>
       <button class="danger" id="deleteRaceBtn">Slet løb</button>
     </div>
+    <div id="clockBox" class="small" style="margin:-4px 0 12px"></div>
     <div id="raceHead" class="card pad"></div>
 
     <h2>Indstillinger</h2>
@@ -564,6 +565,7 @@ $("newForm").onsubmit = async e => {
 // ------------------------------------------------ aktivt løb
 async function loadRaces() {
   races = (await api("/api/races")).filter(r => !r.archived_at);
+  checkClock();
   if (!races.find(r => r.id === curId)) curId = (races.find(r => r.is_active) || races[0])?.id ?? null;
   $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${esc(r.name)} – ${esc(TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
     : `<option>Ingen løb – opret et under “Tilføj nyt løb”</option>`;
@@ -624,10 +626,39 @@ $("editForm").onsubmit = async e => {
   toast("Gemt"); loadRaces();
 };
 
+// ------------------------------------------------ Pi'ens ur
+// Sammenlignes med denne enheds ur (mobiler og computere stiller selv deres ur via nettet)
+let CLOCK = null;
+async function checkClock() {
+  try {
+    const t0 = Date.now(), live = await (await fetch("/api/live", {cache: "no-store"})).json(), t1 = Date.now();
+    CLOCK = {synced: live.clock?.synced ?? null, drift: Math.round(live.now - (t0 + t1) / 2000)};
+  } catch (_) { return CLOCK; }
+  const {synced, drift} = CLOCK, off = Math.abs(drift) > 5;
+  const dir = `${Math.abs(drift)} sek. ${drift > 0 ? "foran" : "bagud"}`;
+  $("clockBox").innerHTML = off
+    ? `<div class="warnbox" style="margin:0;background:#3a1414;border-color:var(--red);color:#ffb4b4">⚠ <b>Pi'ens ur går ${dir}</b> i forhold til denne enhed. Tiderne bliver forkerte. Giv Pi'en internet et par minutter (fx mobil-hotspot), så stiller den selv uret – gør det <b>før</b> løbet startes.</div>`
+    : synced === false
+    ? `<div class="warnbox" style="margin:0">🕐 Pi'ens ur passer med denne enhed, men er <b>ikke stillet via internettet</b> siden opstart. Det er i orden at starte. Har Pi'en ikke RTC-batteri, så giv den gerne internet et øjeblik før start.</div>`
+    : `<span class="muted">🕐 Pi'ens ur: ✓ ${synced ? "stillet via internettet" : "passer med denne enhed"}</span>`;
+  return CLOCK;
+}
+async function clockOkToStart() {
+  const c = await checkClock();
+  if (!c) return true;
+  if (Math.abs(c.drift) > 5)
+    return confirm(`⚠ Pi'ens ur går ${Math.abs(c.drift)} sek. ${c.drift > 0 ? "foran" : "bagud"} i forhold til denne enhed.\n\nAlle tider i løbet bliver forkerte, og får Pi'en internet undervejs, hopper uret midt i løbet.\n\nGiv Pi'en internet et par minutter først. Start alligevel?`);
+  if (c.synced === false)
+    return confirm("⚠ Pi'ens ur er ikke stillet via internettet siden opstart.\n\nDet passer med denne enhed, så det er sikkert i orden. Men har Pi'en ikke RTC-batteri, og får den internet undervejs, kan uret hoppe lidt midt i løbet.\n\nStart løbet?");
+  return true;
+}
+setInterval(() => { if (!$("app").hidden && $("tab-active").classList.contains("on")) checkClock(); }, 30000);
+
 async function raceAction(act) {
   const ask = {reset: "Nulstil løbet? Starttid og status fjernes, og alle læsninger markeres som ignoreret (kan gendannes).", finish: "Afslut løbet nu?",
     archive: "Flyt løbet til arkivet? Det forsvinder fra løbslisten og fra resultatskærmen, men kan ses og gendannes under fanen Arkiv."};
   if (ask[act] && !confirm(ask[act])) return;
+  if ((act === "start" || act === "startAt") && !(await clockOkToStart())) return;
   if (act === "start") await api(`/api/races/${curId}/start`, {body: {}});
   else if (act === "startAt") {
     const at = fromLocalInput($("startAt").value);
