@@ -1,11 +1,13 @@
 # RaceTimer
 
-Et enkelt RFID-tidtagningssystem til løbetræning og løb, der kører på en Raspberry Pi 5.
+Et enkelt RFID-tidtagningssystem til løbetræning og løb, der kører på en Raspberry Pi 3, 4 eller 5.
 Pi'en er både server, viser resultatskærmen og har en kodebeskyttet admin-side.
 
 - **Resultatskærm** (dark mode): `http://<pi>:8000/` – virker på Pi-skærmen, en TV-skærm og på mobilen.
   `?kiosk=1` får lange lister til at rulle automatisk.
 - **Admin**: `http://<pi>:8000/admin` – første login er `admin` / `admin`. Skift koden med det samme.
+
+**Ny klub? Start med [Kom i gang-vejledningen](docs/vejledning.md)**: indkøb, SD-kort, opsætning, første løb og fejlfinding.
 
 ## Løbstyper
 
@@ -40,7 +42,7 @@ Når klokken slår, gælder: har en løber ingen mållæsning i runden, er løbe
 
 | Del | Anbefaling |
 |---|---|
-| Computer | Raspberry Pi 5 (4 eller 8 GB) med officiel 27 W-strømforsyning og en god SD-kort eller NVMe-disk |
+| Computer | Raspberry Pi 5 (4 eller 8 GB) anbefales; Pi 4 og Pi 3 (B/B+) virker også. Brug den officielle strømforsyning og et godt SD-kort eller en NVMe-disk |
 | **Ur** | **Officielt Pi 5 RTC-batteri** (lille knapcelle-stik). Uden det mister Pi'en tiden ved strømsvigt, hvis der ikke er internet. |
 | RFID-læsere (2 stk.) | **To ens USB HID-læsere til 13,56 MHz** ("keyboard emulation", MIFARE/NTAG). Driverfrie, billige, robuste og de mest udbredte. Brug samme model til primær og backup, så chip-ID'et har samme format. |
 | Armbånd | Silikone-armbånd med MIFARE Classic 1K eller NTAG213. ID'et kan tjekkes med en mobil med NFC. 125 kHz EM4100-armbånd + 125 kHz-læsere virker også. |
@@ -254,6 +256,6 @@ racetimer/
   db.py        SQLite-skema, brugere (PBKDF2), sessioner
   static/      display.html (resultatskærm), admin.html, style.css
 deploy/        install.sh, systemd-services (Pi + spejlserver), kiosk-script, Caddyfile
-docs/wifi.md   Vejledning: forbind Pi'en til WiFi
+docs/          vejledning.md (kom i gang), image.md, wifi.md, fjernadgang.md, udgivelse.md
 tests/         test af løbsmotoren
 ```
