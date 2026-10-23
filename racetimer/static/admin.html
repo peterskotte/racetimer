@@ -302,7 +302,13 @@
     <div class="card pad">
       <div class="splashes" id="splashes"></div>
       <form id="splashForm" class="row" style="margin-top:14px"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload eget billede</button></form>
-      <p class="muted small" style="margin-bottom:0">Eget billede: liggende format, fx 1920×1080. Det vises med det samme på skærmen.</p>
+      <p class="muted small">Eget billede: liggende format, fx 1920×1080. Det vises med det samme på skærmen.</p>
+      <form id="splashTextForm" class="grid" style="grid-template-columns:1fr;gap:8px;margin-top:6px">
+        <label>Tekst på splash-skærmen <span class="muted small">(valgfri, højst 160 tegn – fx “Næste løb: lørdag kl. 10”)</span>
+          <textarea name="splash_text" rows="2" maxlength="160" placeholder="Venter på næste løb"></textarea></label>
+        <div><button class="primary">Gem tekst</button></div>
+      </form>
+      <p class="muted small" style="margin-bottom:0">Splash og tekst vises på skærmen og på hjemmesiden (synkronisering), når der ikke er et aktivt løb.</p>
     </div>
   </section>
 
@@ -1163,6 +1169,7 @@ async function loadLook() {
   $("nameForm").name.value = b.name;
   $("logoPrev").innerHTML = b.logo ? `<img src="${b.logo}" style="height:44px;display:block">` : `<span class="logo"><span class="txt">${esc(b.name)}</span></span>`;
   $("logoDel").hidden = !b.logo;
+  $("splashTextForm").splash_text.value = b.splash_text || "";
   $("splashes").innerHTML = b.splash_options.map(o => `<label><input type="radio" name="splash" value="${esc(o.id)}" ${o.id === b.splash_choice ? "checked" : ""}>
     <div class="thumb" style="${o.url ? `background-image:url('${o.url}')` : ""}">${o.url ? "" : esc(b.name)}</div>${esc(o.label)}</label>`).join("");
   $("splashes").querySelectorAll("input").forEach(el => el.onchange = async () => {
@@ -1172,6 +1179,7 @@ async function loadLook() {
 $("nameForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding", {method: "PUT", body: {name: e.target.name.value}}); toast("Navn gemt"); loadLook(); };
 $("logoForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding/logo", {body: new FormData(e.target)}); e.target.reset(); toast("Logo gemt"); loadLook(); };
 $("splashForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding/splash", {body: new FormData(e.target)}); e.target.reset(); toast("Splash-billede gemt og valgt"); loadLook(); };
+$("splashTextForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding", {method: "PUT", body: {splash_text: e.target.splash_text.value}}); toast("Splash-tekst gemt"); loadLook(); };
 $("logoDel").onclick = async () => { if (!confirm("Fjern logoet? Navnet vises så som tekst.")) return; await api("/api/branding/logo", {method: "DELETE"}); loadLook(); };
 loadBrand();
 
@@ -1204,7 +1212,8 @@ async function wRender() {
     B.innerHTML = `<h2>Splash-skærm</h2><p class="muted">Vises på skærmen, når der ikke kører et løb.</p>
       <div class="splashes" id="wSplashes">${b.splash_options.map(o => `<label><input type="radio" name="wsplash" value="${esc(o.id)}" ${o.id === b.splash_choice ? "checked" : ""}>
         <div class="thumb" style="${o.url ? `background-image:url('${o.url}')` : ""}">${o.url ? "" : esc(b.name)}</div>${esc(o.label)}</label>`).join("")}</div>
-      <div class="row" style="margin-top:12px"><span class="muted small">Eller upload jeres eget billede (liggende, fx 1920×1080):</span><input type="file" id="wSplashFile" accept=".png,.jpg,.jpeg,.webp"></div>`;
+      <div class="row" style="margin-top:12px"><span class="muted small">Eller upload jeres eget billede (liggende, fx 1920×1080):</span><input type="file" id="wSplashFile" accept=".png,.jpg,.jpeg,.webp"></div>
+      <label style="margin-top:12px">Tekst på splash-skærmen <span class="muted small">(valgfri)</span><textarea id="wSplashText" rows="2" maxlength="160" placeholder="Venter på næste løb">${esc(b.splash_text || "")}</textarea></label>`;
     wNav();
   } else if (wi === 3) {
     B.innerHTML = `<h2>WiFi <span class="muted small">(valgfrit)</span></h2><p class="muted">Skriv netværk, Pi'en automatisk skal forbinde til – fx klubhus og mobil-hotspot.
@@ -1266,6 +1275,7 @@ $("wNext").onclick = async () => {
       const f = $("wSplashFile").files[0];
       if (f) { const fd = new FormData(); fd.append("file", f); await api("/api/branding/splash", {body: fd}); }
       else { const c = document.querySelector("input[name=wsplash]:checked"); if (c) await api("/api/branding", {method: "PUT", body: {splash: c.value}}); }
+      await api("/api/branding", {method: "PUT", body: {splash_text: $("wSplashText").value}});
     } else if (wi === 3) {
       const ssid = $("wSsid")?.value.trim();
       if (ssid) {

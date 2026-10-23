@@ -76,6 +76,12 @@ class SyncManager(threading.Thread):
             self._wake.wait(1)
             self._wake.clear()
 
+    def poke_state(self):
+        """Løb vist/skjult/arkiveret eller udseende ændret → send til alle destinationer med det samme."""
+        for d in destinations():
+            self._st(d)["force"] = True
+        self._wake.set()
+
     def poke_tunnel(self):
         """Fjernadgang slået til/fra → meld den nye admin-adresse med det samme."""
         self._announced.clear()
@@ -114,9 +120,11 @@ class SyncManager(threading.Thread):
         final_due = bool(d.get("on_finish") and fk and fk not in (db.setting("final_sent", {}) or {}).get(d["id"], []))
         interval = float(d.get("interval_sec") or 0)
         interval_due = interval > 0 and now >= st["next_due"]
-        if not (final_due or interval_due) or now < st.get("retry_at", 0):
+        if not (final_due or interval_due or st.get("force")) or now < st.get("retry_at", 0):
             return
         ok = self.send(d, final=final_due)
+        if ok:
+            st["force"] = False
         if interval:
             st["next_due"] = now + interval
         st["retry_at"] = 0 if ok else now + 30  # ingen forbindelse → prøv igen om 30 sek.
@@ -130,18 +138,20 @@ class SyncManager(threading.Thread):
         with lock:
             race = db.active_race()
             fk = self._final_key(race)
+            from . import branding
+            brand_v = branding.get()["v"]
+            new_brand = st.get("brand_v") != brand_v  # billeder sendes kun, når udseendet er ændret
             try:
                 if d["type"] == "webhook":
-                    self._send_webhook(d, race, final)
+                    _post(d["url"], self._results_payload(race, final, images=new_brand), d.get("key"), gz=False)
                 elif d["type"] == "ftp":
-                    if not race:
-                        raise RuntimeError("Intet aktivt løb at uploade")
-                    ftpupload.upload(d, self._results_payload(race, final))
+                    ftpupload.upload(d, self._results_payload(race, final), splash_file=new_brand)
                 else:
-                    self._send_mirror(d, race)
+                    self._send_mirror(d, race, images=new_brand)
             except Exception as e:  # noqa: BLE001
                 st["last_error"] = str(e)
                 return False
+            st["brand_v"] = brand_v
             st.update(last_ok=time.time(), last_error=None,
                       last_event="Endelige resultater" if final else ("Manuel" if manual else "Interval"))
             if final and fk:
@@ -150,13 +160,12 @@ class SyncManager(threading.Thread):
                 db.set_setting("final_sent", sent)
             return True
 
-    def _send_webhook(self, d, race, final):
-        _post(d["url"], self._results_payload(race, final), d.get("key"), gz=False)
-
-    def _results_payload(self, race, final):
+    def _results_payload(self, race, final, images=False):
+        """race=None betyder intet aktivt løb → hjemmesiden viser splash med den valgte tekst."""
         from . import branding
         payload = {"event": "final" if final else "update", "sent_at": time.time(), "race": None,
-                   "brand": branding.get()["name"]}
+                   "brand": branding.get()["name"], "branding": branding.web_export(images),
+                   "archived": [r["id"] for r in db.q("SELECT id FROM races WHERE archived_at IS NOT NULL")]}
         if race:
             rows, info = self.standings(race)
             payload.update(
@@ -168,10 +177,12 @@ class SyncManager(threading.Thread):
                          for r in rows])
         return payload
 
-    def _send_mirror(self, d, race):
+    def _send_mirror(self, d, race, images=False):
+        from . import branding
         url = d["url"].rstrip("/") + "/api/mirror/push"
+        brand = branding.web_export(images)
         if not race:
-            _post(url, {"pi_now": time.time(), "race": None}, d.get("key"))
+            _post(url, {"pi_now": time.time(), "race": None, "branding": brand}, d.get("key"))
             return
         rid = race["id"]
         allstate = db.setting("mirror_state", {}) or {}
@@ -184,6 +195,7 @@ class SyncManager(threading.Thread):
                          "WHERE race_id=? AND rev>? ORDER BY rev LIMIT ?", (rid, since, BATCH))
             payload = {
                 "pi_now": time.time(),
+                "branding": brand,
                 "race": {k: race[k] for k in ("id", "name", "type", "config", "status", "scheduled_start",
                                               "started_at", "finished_at")},
                 "participants": parts,  # lille liste – sendes altid, så rettelser altid kommer med
@@ -193,6 +205,7 @@ class SyncManager(threading.Thread):
                 "rev": reads[-1]["rev"] if reads else since,
             }
             resp = _post(url, payload, d.get("key"))
+            brand = {**brand, "images": {}}  # billeder kun med i første portion
             state[str(rid)] = 0 if resp.get("need_full") else payload["rev"]
             db.set_setting("mirror_state", allstate)
             if not resp.get("need_full") and len(reads) < BATCH:

@@ -56,7 +56,7 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 |---|---|
 | 1. **Admin-kode** | Vælg en ny kode. Standardkoden kan ikke bruges, efter I har skiftet den. |
 | 2. **Navn og logo** | Klubbens eller løbets navn og eventuelt et logo (PNG/JPG/WebP, gerne med gennemsigtig baggrund). Vises øverst på skærmen og på resultatsiderne. |
-| 3. **Splash-skærm** | Billedet, der vises, når der ikke kører et løb. Vælg et medfølgende, eller upload jeres eget. |
+| 3. **Splash-skærm** | Billedet, der vises, når der ikke kører et løb, og en valgfri tekst (fx "Næste løb: lørdag kl. 10"). Vises både på skærmen og på hjemmesiden. |
 | 4. **WiFi** (valgfrit) | Op til 5 netværk, som Pi'en selv forbinder til, fx klubhus og en mobil-hotspot. Eduroam og andre netværk med brugernavn virker også. |
 | 5. **RFID-læsere** | Vælg primær og evt. backup. Hold en chip mod læseren, og se den dukke op. |
 | 6. **Færdig** | Tjekker, at Pi'ens ur passer med jeres mobil/computer, og viser en opsummering. |
@@ -122,7 +122,8 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 **Efter løbet**
 - Afslut løbet, og hent resultaterne som **CSV** (åbnes i Excel).
-- Tryk **🗄 Arkivér**, når I er færdige med løbet. Det forsvinder fra løbslisten og skærmen, men ligger under fanen **Arkiv**, hvor det kan ses, hentes som CSV og gendannes.
+- Tryk **🗄 Arkivér**, når I er færdige med løbet. Det forsvinder fra løbslisten, skærmen og hjemmesiden, men ligger under fanen **Arkiv**, hvor det kan ses, hentes som CSV og gendannes.
+- Uden aktivt løb viser skærm og hjemmeside splash med jeres tekst. Skift teksten under **Udseende**, fx til næste løbs dato.
 - Har I sat synkronisering op, sendes de endelige resultater til hjemmesiden automatisk.
 
 > **Strømsvigt eller genstart midt i løbet?** Alle læsninger gemmes med det samme, og stillingen regnes ud fra dem. Tænd Pi'en igen, så er alt som før.

@@ -65,6 +65,36 @@ def slug(name):
     return s.strip("-") or "loeb"
 
 
+SPLASH_CSS = """
+:root{--bg:#111814;--orange:#e5682a;--cream:#f6efe3}*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--cream);border-bottom:3px solid var(--orange);padding:14px 20px}header img{height:40px;display:block}
+.brand{font-weight:800;font-size:26px;color:#0c1b14;font-style:italic}
+.splash{position:relative;flex:1;min-height:60vh;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
+.splash.plain{align-items:center;justify-content:center;flex-direction:column;text-align:center}
+.splash.plain .pn{font-weight:800;font-style:italic;font-size:clamp(36px,8vw,110px);letter-spacing:-.03em;line-height:1.05;padding:0 5vw}
+.txt{width:100%;padding:12vh 5vw 8vh;background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,.45) 55%,transparent);
+  text-align:center;font-weight:800;font-size:clamp(24px,4.6vw,64px);line-height:1.12;white-space:pre-line;text-shadow:0 2px 18px rgba(0,0,0,.5)}
+.splash.plain .txt{background:none;padding:18px 5vw 0;color:var(--orange);font-size:clamp(16px,2.4vw,30px);font-weight:600}
+"""
+
+
+def render_splash_html(payload, image=None, refresh_sec=0):
+    """Ingen aktive løb: splash-billede (eller klubnavnet) med den valgte tekst."""
+    e = html.escape
+    b = payload.get("branding") or {}
+    text = b.get("splash_text") or ""
+    refresh = f'<meta http-equiv="refresh" content="{int(refresh_sec)}">' if refresh_sec else ""
+    if image:
+        body = f'<div class="splash" style="background-image:url(\'{image}\')">' + (f'<div class="txt">{e(text)}</div>' if text else "") + "</div>"
+    else:
+        body = f'<div class="splash plain"><div class="pn">{e(_brand_name())}</div><div class="txt">{e(text or "Venter på næste løb")}</div></div>'
+    return f"""<!doctype html>
+<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+{refresh}<title>{e(_brand_name())}</title><style>{SPLASH_CSS}</style></head><body>
+<header>{_brand_header()}</header>{body}</body></html>"""
+
+
 def render_html(payload, refresh_sec=0):
     race, info, rows = payload.get("race"), payload.get("info") or {}, payload.get("results") or []
     e = html.escape
@@ -152,8 +182,12 @@ class _FTP_TLS(ftplib.FTP_TLS):
         return conn, size
 
 
-def upload(dest, payload):
-    """Upload index.html + resultater.json (+ slut-kopi) til FTP/FTPS-destinationen."""
+def upload(dest, payload, splash_file=False):
+    """Upload index.html + resultater.json (+ slut-kopi) til FTP/FTPS-destinationen.
+
+    Uden aktivt løb er index.html en splash-side. splash_file=True uploader også splash-billedet
+    (kun når udseendet er ændret – billedet kan være stort)."""
+    from . import branding
     u = urlparse(dest["url"])
     if u.scheme not in ("ftp", "ftps") or not u.hostname:
         raise RuntimeError("FTP-adressen skal se sådan ud: ftps://ftp.example.dk/mappe")
@@ -170,13 +204,26 @@ def upload(dest, payload):
         if folder not in ("", "/"):
             _cd_make(ftp, folder)
         refresh = int(dest.get("interval_sec") or 0)
-        files = {"index.html": render_html(payload, refresh_sec=max(refresh, 15) if refresh else 0),
-                 "resultater.json": json.dumps(payload, ensure_ascii=False, indent=1)}
-        if payload["event"] == "final":
+        data = {k: v for k, v in payload.items() if k != "branding"}
+        data["branding"] = {k: v for k, v in (payload.get("branding") or {}).items() if k != "images"}
+        files = {"resultater.json": json.dumps(data, ensure_ascii=False, indent=1)}
+        if payload.get("race"):
+            files["index.html"] = render_html(payload, refresh_sec=max(refresh, 15) if refresh else 0)
+        else:
+            image = None
+            if (payload.get("branding") or {}).get("splash") == "image":
+                path = branding.splash_path()
+                image = "splash" + os.path.splitext(path)[1].lower()
+                if splash_file:
+                    with open(path, "rb") as f:
+                        files[image] = f.read()
+                image += f"?v={branding.get()['v']}"
+            files["index.html"] = render_splash_html(payload, image, refresh_sec=max(refresh, 15) if refresh else 60)
+        if payload["event"] == "final" and payload.get("race"):
             files[f"slut-{slug(payload['race']['name'])}.html"] = files["index.html"]
         for name, text in files.items():
             tmp = f".{name}.upload"
-            ftp.storbinary(f"STOR {tmp}", io.BytesIO(text.encode("utf-8")))
+            ftp.storbinary(f"STOR {tmp}", io.BytesIO(text if isinstance(text, bytes) else text.encode("utf-8")))
             try:
                 ftp.delete(name)
             except ftplib.error_perm:

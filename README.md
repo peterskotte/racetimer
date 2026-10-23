@@ -91,7 +91,7 @@ Første gang du åbner `http://racetimer.local:8000/admin`, logger du ind med **
 
 1. **Ny admin-kode.** Skal vælges, før noget andet virker.
 2. **Navn og logo.** Vises på resultatskærmen og hjemmesiden.
-3. **Splash-skærm.** Vælg et medfølgende billede eller upload jeres eget.
+3. **Splash-skærm.** Vælg et medfølgende billede eller upload jeres eget, og skriv eventuelt en tekst, fx "Næste løb: lørdag kl. 10".
 4. **WiFi** (valgfrit). Flere netværk kan tilføjes senere under fanen *WiFi*.
 5. **RFID-læsere.** Vælg primær/backup og test med en chip.
 6. **Kontrol.** Tjek af Pi'ens ur og en kort opsummering.
@@ -140,6 +140,8 @@ Du kan oprette flere **destinationer**. For hver vælger du:
 | **Send nu** | Knap til manuel afsendelse. Er løbet afsluttet, sendes resultaterne som endelige. |
 
 Status for hver destination viser seneste afsendelse, eventuel fejl, næste planlagte afsendelse, og for spejlservere hvor mange læsninger der venter. **Chip-ID'er sendes aldrig.**
+
+Hjemmesiden følger Pi'ens skærm: er der ikke et aktivt løb, viser den **splash-billedet med jeres egen tekst** (vælges under **Udseende**), og **arkiverede løb vises ikke**. Ændringer sendes med det samme, også til destinationer der kun sender manuelt.
 
 **Fjernadgang:** under **Admin → Fjernadgang** kan Pi'en nås udefra på tre måder uden åbne porte:
 - **Tailscale:** privat, kun dine egne enheder, fast adresse `http://racetimer:8000/admin`.

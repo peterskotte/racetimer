@@ -269,6 +269,13 @@ async def mirror_push(request: Request):
     now = time.time()
     db.set_setting("mirror_clock_offset", now - b["pi_now"])
     db.set_setting("mirror_last_push", now)
+    brand = b.get("branding")
+    if brand and (brand.get("v") != db.setting("mirror_brand_v") or brand.get("images")):
+        try:
+            branding.apply_export(brand)
+            db.set_setting("mirror_brand_v", brand.get("v"))
+        except (ValueError, KeyError, TypeError):
+            pass  # et ugyldigt billede må aldrig stoppe resultaterne
     race = b.get("race")
     if not race:
         db.ex("UPDATE races SET is_active=0")
@@ -454,12 +461,14 @@ def delete_race(rid: int, u=Depends(admin)):
 
 def _activate(rid):
     db.ex("UPDATE races SET is_active = (id=?)", (rid,))
+    sync_mgr.poke_state()
 
 
 @app.post("/api/races/deactivate")
 def deactivate(u=Depends(admin)):
     """Intet aktivt løb → resultatskærmen viser splash-billedet."""
     db.ex("UPDATE races SET is_active=0")
+    sync_mgr.poke_state()
     return {"ok": True}
 
 
@@ -497,6 +506,7 @@ def archive_race(rid: int, u=Depends(admin)):
     if race["status"] != "finished":
         raise HTTPException(400, "Kun afsluttede løb kan arkiveres")
     db.ex("UPDATE races SET archived_at=?, is_active=0 WHERE id=?", (time.time(), rid))
+    sync_mgr.poke_state()  # hjemmesiden skal skjule løbet med det samme
     return {"ok": True}
 
 
@@ -504,6 +514,7 @@ def archive_race(rid: int, u=Depends(admin)):
 def unarchive_race(rid: int, u=Depends(admin)):
     db.race(rid) or _404()
     db.ex("UPDATE races SET archived_at=NULL WHERE id=?", (rid,))
+    sync_mgr.poke_state()
     return {"ok": True}
 
 
@@ -1061,7 +1072,14 @@ async def put_branding(request: Request, u=Depends(admin)):
         if not ok:
             raise HTTPException(400, "Ukendt splash")
         changes["splash"] = choice
-    return branding.save(**changes)
+    if "splash_text" in b:
+        text = "\n".join(line.strip() for line in str(b.get("splash_text") or "").strip().splitlines())
+        if len(text) > branding.SPLASH_TEXT_MAX:
+            raise HTTPException(400, f"Splash-teksten må højst være {branding.SPLASH_TEXT_MAX} tegn")
+        changes["splash_text"] = text
+    out = branding.save(**changes)
+    sync_mgr.poke_state()
+    return out
 
 
 @app.post("/api/branding/{kind}")
@@ -1072,12 +1090,16 @@ async def upload_branding(kind: str, file: UploadFile = File(...), u=Depends(adm
         name = branding.store_upload(kind, file.filename, await file.read())
     except ValueError as e:
         raise HTTPException(400, str(e)) from None
-    return branding.save(**({"logo": name} if kind == "logo" else {"splash": "upload:" + name}))
+    out = branding.save(**({"logo": name} if kind == "logo" else {"splash": "upload:" + name}))
+    sync_mgr.poke_state()
+    return out
 
 
 @app.delete("/api/branding/logo")
 def delete_logo(u=Depends(admin)):
-    return branding.save(logo=None)
+    out = branding.save(logo=None)
+    sync_mgr.poke_state()
+    return out
 
 
 # ------------------------------------------------------------------ opdatering

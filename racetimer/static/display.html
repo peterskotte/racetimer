@@ -128,6 +128,12 @@
   #splashPlain { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
                  text-align: center; padding: 24px; background: radial-gradient(circle at 50% 40%, #1f2b24, #0b120e 70%); }
   #splashPlain[hidden] { display: none; }
+  /* egen tekst oven på splash-billedet */
+  #splashText { position: absolute; left: 0; right: 0; bottom: 0; padding: clamp(60px, 14vh, 160px) 5vw clamp(56px, 10vh, 110px);
+    background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,.45) 55%, transparent); color: #fff; text-align: center;
+    font-weight: 800; font-size: clamp(26px, 4.6vw, 76px); line-height: 1.12; letter-spacing: -0.01em; white-space: pre-line;
+    text-shadow: 0 2px 18px rgba(0,0,0,.5); }
+  #splashText[hidden] { display: none; }
   #splashPlain .pn { font-weight: 800; font-style: italic; font-size: clamp(40px, 8vw, 130px); letter-spacing: -0.03em; line-height: 1.05;
                      color: var(--brand-cream); }
   #splashPlain .ps { margin-top: 18px; color: var(--brand-orange); font-size: clamp(16px, 2vw, 28px); font-weight: 600; letter-spacing: .04em; }
@@ -163,6 +169,7 @@
   <img class="bg" id="splashBg" alt="">
   <img class="fg" id="splashFg" alt="">
   <div id="splashPlain" hidden><div class="pn"></div><div class="ps">Venter på næste løb</div></div>
+  <div id="splashText" hidden></div>
   <div id="splashHost" class="num"></div>
   <div id="splashClock" class="num"></div>
 </div>
@@ -306,6 +313,11 @@ function applyBrand(b) {
   $("splashPlain").querySelector(".pn").textContent = b.name;
   for (const id of ["splashBg", "splashFg"]) { $(id).hidden = !b.splash; if (b.splash) $(id).src = b.splash; }
   $("splashFg").alt = b.name;
+  // egen tekst: på billedet som overlay, på den ensfarvede under klubnavnet
+  const t = (b.splash_text || "").trim();
+  $("splashText").textContent = t;
+  $("splashText").hidden = !b.splash || !t;
+  $("splashPlain").querySelector(".ps").textContent = t || "Venter på næste løb";
 }
 
 function render() {

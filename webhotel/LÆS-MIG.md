@@ -6,7 +6,7 @@ Mappen `racetimer/` her lægges op på webhotellet. Den indeholder to filer:
 |---|---|
 | `modtag.php` | Tager imod resultater fra Pi'en og gemmer dem i `data/` |
 | `index.php` | Viser resultaterne som en side, med arkiv over tidligere løb |
-| `logo.png` *(valgfri)* | Jeres logo øverst på siden – uden den vises klubnavnet som tekst |
+| `logo.png` *(valgfri)* | Reserve-logo. Normalt sender Pi'en selv logoet fra **Admin → Udseende** |
 | `admin/index.php` | Gør, at `…/racetimer/admin` viderestiller til Pi'ens admin via fjernadgang (se nedenfor) |
 
 Det kræver kun et almindeligt webhotel med PHP 7.4 eller nyere. Der skal ikke bruges en database.
@@ -36,6 +36,14 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 5. Tryk **Send nu**. Status skal vise "Sendt …".
 
 6. **Se resultaterne** på `https://ditdomæne.dk/racetimer/`. Siden opdaterer sig selv hvert 30. sekund, mens et løb kører.
+
+**Hvad siden viser:**
+- **Det løb, der vises på Pi'ens skærm**, med live- eller slutresultater.
+- **Splash, når der ikke er et aktivt løb:** samme billede og tekst som på Pi'en. De vælges under **Admin → Udseende**, og Pi'en sender selv logo og splash-billede (højst 4 MB), når de ændres.
+- **Tidligere resultater** som en liste under splash eller tabellen.
+- **Arkiverede løb vises ikke.** Arkiverer du et løb i RaceTimer, forsvinder det fra siden med det samme. Gendanner du det, kommer det tilbage.
+
+> Har du en ældre version af `modtag.php` og `index.php` på webhotellet, så upload de nye. Ellers vises arkiverede løb stadig, og splash mangler. Husk at sætte din nøgle i den nye `modtag.php`.
 
 Vil du vise resultaterne inde på en eksisterende side (fx i WordPress), kan du indsætte dem med en iframe:
 

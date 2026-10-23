@@ -6,6 +6,9 @@
  *    Synkronisering → destination af typen "Egen hjemmeside (JSON)").
  * 2. Upload denne fil + index.php til en mappe på webhotellet, fx /racetimer/
  * 3. Adressen i RaceTimer er så: https://ditdomæne.dk/racetimer/modtag.php
+ *
+ * Pi'en sender også klubbens logo, splash-billede og -tekst samt hvilke løb der er arkiveret.
+ * index.php viser splash, når der ikke er et aktivt løb, og skjuler arkiverede løb.
  */
 $RACETIMER_KEY = 'SKIFT-MIG-TIL-EN-LANG-HEMMELIG-NOEGLE';
 
@@ -61,6 +64,24 @@ if ($data['event'] === 'tunnel') {
     }
     gem("$mappe/tunnel.json", ['url' => $url, 'modtaget' => time()]);
     svar(200, 'Adresse gemt');
+}
+
+// Udseende fra Pi'en: logo og splash-billede sendes kun, når de er ændret
+$udseende = $data['branding'] ?? null;
+if (is_array($udseende)) {
+    foreach (($udseende['images'] ?? []) as $slags => $billede) {
+        if (!in_array($slags, ['logo', 'splash'], true) || !is_array($billede)) continue;
+        $ext = strtolower($billede['ext'] ?? '');
+        $bytes = base64_decode($billede['data'] ?? '', true);
+        if (!in_array($ext, ['.png', '.jpg', '.jpeg', '.webp'], true) || $bytes === false
+            || strlen($bytes) > 4 * 1024 * 1024 || !@getimagesizefromstring($bytes)) continue;
+        foreach (glob("$mappe/$slags.*") ?: [] as $gammel) @unlink($gammel);
+        if (file_put_contents("$mappe/$slags.tmp", $bytes) !== false) rename("$mappe/$slags.tmp", "$mappe/$slags$ext");
+    }
+    if (empty($udseende['logo'])) {
+        foreach (glob("$mappe/logo.*") ?: [] as $gammel) @unlink($gammel);
+    }
+    unset($data['branding']['images']);  // billederne ligger nu som filer
 }
 
 gem("$mappe/resultater.json", $data);

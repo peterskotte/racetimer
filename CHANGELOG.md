@@ -5,6 +5,10 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 ## [Ikke udgivet]
 
 - Arkiv: afsluttede løb kan arkiveres med **🗄 Arkivér**. De forsvinder fra løbslisten, men kan søges frem, ses, hentes som CSV, gendannes eller slettes under den nye fane **Arkiv**.
+- Arkiverede løb vises ikke længere på hjemmesiden (JSON/PHP). Opdatér `modtag.php` og `index.php` på webhotellet.
+- Egen tekst på splash-skærmen (**Udseende** og opsætningsguiden), fx "Næste løb: lørdag kl. 10".
+- Uden aktivt løb viser hjemmesiden splash med billede og tekst. Det gælder PHP-siden, FTP-siden og spejlserveren. Pi'en sender selv logo og splash-billede, når de ændres.
+- Ændringer af aktivt løb, arkiv og udseende sendes til hjemmesiden med det samme.
 
 ## [1.0.0] – 2026-10-23
 

@@ -3,26 +3,50 @@
  * RaceTimer → hjemmeside: viser de seneste resultater, som modtag.php har gemt.
  * Åbn https://ditdomæne.dk/racetimer/ – eller vis den i en iframe på en anden side.
  * Tidligere slutresultater vises i en liste under tabellen.
+ * Er der ikke et aktivt løb på Pi'en, vises splash-billedet med den tekst, der er valgt i RaceTimer.
+ * Løb, der er arkiveret i RaceTimer, vises ikke.
  */
 date_default_timezone_set('Europe/Copenhagen');
 $mappe = __DIR__ . '/data';
 
-$arkiv = glob("$mappe/slut-*.json") ?: [];
-rsort($arkiv);
+// Den seneste besked fra Pi'en bestemmer udseende, og hvilke løb der er arkiveret
+$seneste = is_file("$mappe/resultater.json") ? json_decode(file_get_contents("$mappe/resultater.json"), true) : null;
+$udseende = $seneste['branding'] ?? [];
+$arkiveret = array_map('intval', $seneste['archived'] ?? []);
+$skjult = function ($d) use ($arkiveret) { return in_array((int)($d['race']['id'] ?? 0), $arkiveret, true); };
+
+$arkiv = [];
+foreach (glob("$mappe/slut-*.json") ?: [] as $a) {
+    $d = json_decode(file_get_contents($a), true);
+    if ($d && !$skjult($d)) $arkiv[basename($a)] = $d;
+}
+krsort($arkiv);
 
 $vis = $_GET['vis'] ?? '';
-$fil = "$mappe/resultater.json";
-if ($vis !== '' && preg_match('/^slut-[a-z0-9-]+\.json$/', $vis) && is_file("$mappe/$vis")) {
-    $fil = "$mappe/$vis";
+$data = $seneste;
+if ($vis !== '' && isset($arkiv[$vis])) {
+    $data = $arkiv[$vis];
+} else {
+    $vis = '';
 }
-$data = is_file($fil) ? json_decode(file_get_contents($fil), true) : null;
+// Intet aktivt løb (eller det er arkiveret) → splash
+$splash = $vis === '' && (!$data || empty($data['race']) || $skjult($data));
 
 function e($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-// Logo: læg evt. jeres eget logo.png i samme mappe – ellers vises klubnavnet som tekst
-$brand = $data['brand'] ?? 'Resultater';
-$logo = is_file(__DIR__ . '/logo.png')
-    ? '<img src="logo.png" alt="' . e($brand) . '">'
+function datafil($navn) {
+    foreach (['webp', 'png', 'jpg', 'jpeg'] as $x) {
+        if (is_file(__DIR__ . "/data/$navn.$x")) return "data/$navn.$x?v=" . filemtime(__DIR__ . "/data/$navn.$x");
+    }
+    return null;
+}
+// Logo: det, Pi'en har sendt – ellers evt. et logo.png i samme mappe – ellers klubnavnet som tekst
+$brand = $udseende['name'] ?? $seneste['brand'] ?? 'Resultater';
+$logofil = datafil('logo') ?? (is_file(__DIR__ . '/logo.png') ? 'logo.png' : null);
+$logo = $logofil
+    ? '<img src="' . e($logofil) . '" alt="' . e($brand) . '">'
     : '<span class="brand">' . e($brand) . '</span>';
+$splashfil = ($udseende['splash'] ?? 'image') === 'image' ? datafil('splash') : null;
+$splashtekst = trim($udseende['splash_text'] ?? '');
 function hms($sek, $tvungen = false) {
     if ($sek === null) return '–';
     $sek = max(0, (int)$sek);
@@ -37,14 +61,14 @@ $rows = $data['results'] ?? [];
 $final = ($data['event'] ?? '') === 'final';
 $omgang = $race && in_array($race['type'], ['backyard', 'backyard_custom', 'timed', 'record'], true);
 $medtid = $omgang && !empty($info['continuous']);
-$live = $race && !$final && ($race['status'] ?? '') === 'running' && $vis === '';
+$live = !$splash && $race && !$final && ($race['status'] ?? '') === 'running' && $vis === '';
 ?><!doctype html>
 <html lang="da">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<?php if ($live): ?><meta http-equiv="refresh" content="30"><?php endif; ?>
-<title><?= $race ? e($race['name']) . ' – resultater' : 'Resultater' ?></title>
+<?php if ($live): ?><meta http-equiv="refresh" content="30"><?php elseif ($splash): ?><meta http-equiv="refresh" content="60"><?php endif; ?>
+<title><?= !$splash && $race ? e($race['name']) . ' – resultater' : e($brand) ?></title>
 <style>
 :root{--bg:#111814;--card:#1a231e;--head:#212c26;--line:#2e3a33;--text:#f3f1ec;--muted:#a2aca5;--dim:#6b766f;--orange:#e5682a;--cream:#f6efe3}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -63,12 +87,23 @@ tr.ude td{color:var(--dim)}.dot{display:inline-block;width:.55em;height:.55em;bo
 .active{background:#3fc56b}.resting{background:#2bb3a3}.winner{background:#f2c14e}.finished{background:#5aa3ff}.rtc,.dsq{background:#ef5b5b}
 .arkiv{margin-top:22px}.arkiv a{color:var(--text)}.arkiv li{margin:6px 0}
 footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text-align:center;color:var(--muted)}
+.splash{position:relative;min-height:70vh;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
+.splash.plain{align-items:center;justify-content:center;flex-direction:column;text-align:center}
+.splash .pn{font-weight:800;font-style:italic;font-size:clamp(36px,8vw,110px);letter-spacing:-.03em;line-height:1.05;padding:0 5vw}
+.splash .txt{width:100%;padding:12vh 5vw 8vh;background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,.45) 55%,transparent);color:#fff;
+  text-align:center;font-weight:800;font-size:clamp(24px,4.6vw,64px);line-height:1.12;white-space:pre-line;text-shadow:0 2px 18px rgba(0,0,0,.5)}
+.splash.plain .txt{background:none;padding:18px 5vw 0;color:var(--orange);font-size:clamp(16px,2.4vw,30px);font-weight:600}
 </style>
 </head>
 <body>
-<?php if (!$race): ?>
+<?php if ($splash): ?>
 <header><?= $logo ?></header>
-<main><h1>Resultater</h1><div class="card tom" style="margin-top:16px">Der er ingen resultater endnu.</div>
+<?php if ($splashfil): ?>
+<div class="splash" style="background-image:url('<?= e($splashfil) ?>')"><?php if ($splashtekst !== ''): ?><div class="txt"><?= e($splashtekst) ?></div><?php endif; ?></div>
+<?php else: ?>
+<div class="splash plain"><div class="pn"><?= e($brand) ?></div><div class="txt"><?= e($splashtekst !== '' ? $splashtekst : 'Venter på næste løb') ?></div></div>
+<?php endif; ?>
+<main>
 <?php else: ?>
 <header><?= $logo ?></header>
 <main>
@@ -121,7 +156,7 @@ if ($sum) echo "<div class=\"sum\">$sum</div>";
 <?php if ($arkiv): ?>
 <div class="arkiv"><h3>Tidligere resultater</h3><ul>
 <?php if ($vis !== ''): ?><li><a href="?">← Seneste løb</a></li><?php endif; ?>
-<?php foreach ($arkiv as $a): $d = json_decode(file_get_contents($a), true); $b = basename($a); ?>
+<?php foreach ($arkiv as $b => $d): ?>
   <li><a href="?vis=<?= e($b) ?>"><?= e($d['race']['name'] ?? $b) ?></a> <span style="color:var(--muted)">· <?= !empty($d['race']['started_at']) ? date('d.m.Y', (int)$d['race']['started_at']) : '' ?></span></li>
 <?php endforeach; ?>
 </ul></div>
