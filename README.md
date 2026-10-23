@@ -74,11 +74,11 @@ Scriptet:
 - giver brugeren adgang til `/dev/input`
 - starter Chromium i kiosk-tilstand på skærmen
 
-Bagefter vælger du læserne i **Admin → Rediger aktivt løb → Læsere**. Listen viser stabile `/dev/input/by-id/...`-stier, så primær og backup ikke bytter plads efter en genstart.
+Bagefter vælger du læserne i **Admin → Aktivt løb → Læsere**. Listen viser stabile `/dev/input/by-id/...`-stier, så primær og backup ikke bytter plads efter en genstart.
 
 ## Opdateringer
 
-Under **Admin → Opdatering** kan man se den installerede version, få besked om nye versioner (med ændringsliste) og opdatere med ét tryk:
+Under **Admin → ⚙ Opsætning → Opdatering** kan man se den installerede version, få besked om nye versioner (med ændringsliste) og opdatere med ét tryk:
 - Pakkerne er **digitalt signeret**, og en pakke, der ikke er fra udgiveren, installeres aldrig.
 - Starter en ny version ikke, **rulles der automatisk tilbage**. Man kan også selv rulle tilbage.
 - Løb og indstillinger røres ikke.
@@ -92,7 +92,7 @@ Første gang du åbner `http://racetimer.local:8000/admin`, logger du ind med **
 1. **Ny admin-kode.** Skal vælges, før noget andet virker.
 2. **Navn og logo.** Vises på resultatskærmen og hjemmesiden.
 3. **Splash-skærm.** Vælg et medfølgende billede eller upload jeres eget, og skriv eventuelt en tekst, fx "Næste løb: lørdag kl. 10".
-4. **WiFi** (valgfrit). Flere netværk kan tilføjes senere under fanen *WiFi*.
+4. **WiFi** (valgfrit). Flere netværk kan tilføjes senere under *⚙ Opsætning → WiFi*.
 5. **RFID-læsere.** Vælg primær/backup og test med en chip.
 6. **Kontrol.** Tjek af Pi'ens ur og en kort opsummering.
 
@@ -100,11 +100,11 @@ En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`�
 
 ## Sådan bruges det på løbsdagen
 
-1. **Tilføj nyt løb**: vælg type, navn og eventuelt planlagt start.
-2. **Deltagerregistrering**:
+1. **Nyt løb**: vælg type, navn og eventuelt planlagt start.
+2. **Deltagere**:
    - Importér fra Excel (hent skabelonen; kolonnerne er *Startnr, Navn, Køn, Klub, Chip* og ved canicross *Hunde, Hund 1, Hund 2*) eller tilføj deltagere manuelt.
    - Tryk **📡 Scan** ud for en deltager og hold armbåndet mod en læser. Så er chippen tildelt. Under scanning tæller læsningen ikke i løbet.
-3. **Rediger aktivt løb**:
+3. **Aktivt løb**:
    - **Start nu** eller **Start kl.** (Backyard: start på et helt klokkeslæt).
    - Undervejs kan du markere RTC/DNS/DSQ og ignorere eller gendanne fejllæsninger.
    - **Hvis RFID fejler:** **+ Nu** registrerer en passage med klokken lige nu. **⏱ Tid** åbner en dialog, hvor du indtaster tiden som klokkeslæt (med sekunder) eller som løbstid fra start:
@@ -124,7 +124,7 @@ En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`�
 
 ## Send resultater til en webserver
 
-Alt kører på Pi'en, også uden internet. Under **Admin → Synkronisering** bestemmer du, hvor resultaterne sendes hen, og hvornår.
+Alt kører på Pi'en, også uden internet. Under **Admin → ⚙ Opsætning → Synkronisering** bestemmer du, hvor resultaterne sendes hen, og hvornår.
 
 ```
 [læsere] → Raspberry Pi (tidtagning, admin, skærm) ──når der er net──▶ webserver(e)
@@ -141,16 +141,16 @@ Du kan oprette flere **destinationer**. For hver vælger du:
 
 Status for hver destination viser seneste afsendelse, eventuel fejl, næste planlagte afsendelse, og for spejlservere hvor mange læsninger der venter. **Chip-ID'er sendes aldrig.**
 
-Hjemmesiden følger Pi'ens skærm: er der ikke et aktivt løb, viser den **splash-billedet med jeres egen tekst** (vælges under **Udseende**), og **arkiverede løb vises ikke**. Ændringer sendes med det samme, også til destinationer der kun sender manuelt.
+Hjemmesiden følger Pi'ens skærm: er der ikke et aktivt løb, viser den **splash-billedet med jeres egen tekst** (vælges under **⚙ Opsætning → Udseende**), og **arkiverede løb vises ikke**. Ændringer sendes med det samme, også til destinationer der kun sender manuelt.
 
-**Fjernadgang:** under **Admin → Fjernadgang** kan Pi'en nås udefra på tre måder uden åbne porte:
+**Fjernadgang:** under **Admin → ⚙ Opsætning → Fjernadgang** kan Pi'en nås udefra på tre måder uden åbne porte:
 - **Tailscale:** privat, kun dine egne enheder, fast adresse `http://racetimer:8000/admin`.
 - **Raspberry Pi Connect:** Pi'ens skærm og terminal i browseren.
 - **Cloudflare:** offentligt link via **https://ditdomæne.dk/racetimer/admin**.
 
 Se [docs/fjernadgang.md](docs/fjernadgang.md).
 
-WiFi på Pi'en: op til 5 faste netværk under **Admin → WiFi**, som Pi'en selv forbinder til. Se [docs/wifi.md](docs/wifi.md).
+WiFi på Pi'en: op til 5 faste netværk under **Admin → ⚙ Opsætning → WiFi**, som Pi'en selv forbinder til. Se [docs/wifi.md](docs/wifi.md).
 
 ### A) RaceTimer-spejlserver
 
@@ -246,7 +246,7 @@ RACETIMER_MODE=mirror RACETIMER_DB=data-mirror/racetimer.db RACETIMER_MIRROR_KEY
 
 Opret en destination under Synkronisering med adressen `http://127.0.0.1:8001` og nøglen `dev-noegle-123`.
 
-Under **Admin → Rediger aktivt løb → Test uden hardware** kan du simulere chip-læsninger.
+Under **Admin → Aktivt løb → Test uden hardware** kan du simulere chip-læsninger.
 
 ## Struktur
 

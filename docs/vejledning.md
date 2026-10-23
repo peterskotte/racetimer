@@ -61,22 +61,31 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 | 5. **RFID-læsere** | Vælg primær og evt. backup. Hold en chip mod læseren, og se den dukke op. |
 | 6. **Færdig** | Tjekker, at Pi'ens ur passer med jeres mobil/computer, og viser en opsummering. |
 
-Alt kan ændres senere: navn, logo og splash under **Udseende**, netværk under **WiFi** og læsere under **Rediger aktivt løb → Læsere**.
+Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende**, netværk under **⚙ Opsætning → WiFi** og læsere under **Aktivt løb → Læsere**.
 
-> **Flere officials?** Opret en bruger til hver under **Brugerstyring**, så ingen deler kode.
+**Menuen i admin** er delt i to. Det, I bruger på løbsdagen, står forrest, og resten ligger under **⚙ Opsætning**:
+
+| Løb | ⚙ Opsætning |
+|---|---|
+| **Aktivt løb**: start, stilling, manuelle tider, læsere | *Skærm og web:* **Udseende**, **Synkronisering** |
+| **Nyt løb** | *Netværk:* **WiFi**, **Fjernadgang** |
+| **Deltagere**: import og chip-scanning | *System:* **Brugere**, **Opdatering** |
+| **Arkiv**: gamle løb | |
+
+> **Flere officials?** Opret en bruger til hver under **⚙ Opsætning → Brugere**, så ingen deler kode.
 
 ## 4. Prøv det med demoløbet
 
 En ny installation har ét demoløb, *Demoløb (kan slettes)*, med tre testløbere (chip `DEMO01`–`DEMO03`).
 
-1. Gå til **Rediger aktivt løb**, og tryk **Start nu**.
+1. Gå til **Aktivt løb**, og tryk **Start nu**.
 2. Under **Test uden hardware** kan I "scanne" en testchip og se omgangene komme på skærmen.
-3. Prøv også jeres rigtige læser: tildel jeres egen chip til en testløber under **Deltagerregistrering → 📡 Scan**, og hold den mod læseren.
+3. Prøv også jeres rigtige læser: tildel jeres egen chip til en testløber under **Deltagere → 📡 Scan**, og hold den mod læseren.
 4. Afslut demoløbet, og slet det, når I er trygge ved systemet.
 
 ## 5. Opret jeres eget løb
 
-Under **Tilføj nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
+Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 
 | I vil lave … | Vælg |
 |---|---|
@@ -95,7 +104,7 @@ Reglerne for hver type og backyards tidsvinduer står i [README](../README.md#l�
 ## 6. Deltagere og chips
 
 **Excel-import (hurtigst ved mange deltagere)**
-1. Under **Deltagerregistrering** henter I skabelonen.
+1. Under **Deltagere** henter I skabelonen.
 2. Udfyld *Startnr, Navn, Køn, Klub* og eventuelt *Chip*. Ved canicross også *Hunde, Hund 1, Hund 2*.
 3. Importér filen. CSV virker også, fx eksporteret fra jeres tilmeldingssystem.
 
@@ -107,8 +116,8 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 ## 7. På løbsdagen
 
 **Før start**
-- [ ] Tænd Pi'en i god tid. Under **Rediger aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
-- [ ] Tjek at læserne står som forbundet under **Rediger aktivt løb → Læsere** (grøn prik).
+- [ ] Tænd Pi'en i god tid. Under **Aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
+- [ ] Tjek at læserne står som forbundet under **Aktivt løb → Læsere** (grøn prik).
 - [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2".
 - [ ] Bed løberne scanne for at tjekke ind. Skærmen viser, hvor mange der er tjekket ind, fx 18/20.
 - [ ] Hav en mobil med admin åben, så I kan rette undervejs.
@@ -123,14 +132,14 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 **Efter løbet**
 - Afslut løbet, og hent resultaterne som **CSV** (åbnes i Excel).
 - Tryk **🗄 Arkivér**, når I er færdige med løbet. Det forsvinder fra løbslisten, skærmen og hjemmesiden, men ligger under fanen **Arkiv**, hvor det kan ses, hentes som CSV og gendannes.
-- Uden aktivt løb viser skærm og hjemmeside splash med jeres tekst. Skift teksten under **Udseende**, fx til næste løbs dato.
+- Uden aktivt løb viser skærm og hjemmeside splash med jeres tekst. Skift teksten under **⚙ Opsætning → Udseende**, fx til næste løbs dato.
 - Har I sat synkronisering op, sendes de endelige resultater til hjemmesiden automatisk.
 
 > **Strømsvigt eller genstart midt i løbet?** Alle læsninger gemmes med det samme, og stillingen regnes ud fra dem. Tænd Pi'en igen, så er alt som før.
 
 ## 8. Resultater på nettet
 
-RaceTimer kører fint helt uden internet. Har Pi'en net (fx via mobil-hotspot), kan den sende resultaterne videre under **Synkronisering**:
+RaceTimer kører fint helt uden internet. Har Pi'en net (fx via mobil-hotspot), kan den sende resultaterne videre under **⚙ Opsætning → Synkronisering**:
 
 | Har I … | Vælg |
 |---|---|
@@ -144,7 +153,7 @@ Vælg hvor ofte der sendes, fx hvert minut, og sæt flueben i *ved afslutning*. 
 
 ## 9. Opdateringer og sikkerhedskopi
 
-**Opdateringer:** Under **Admin → Opdatering** står den installerede version, og om der er en nyere. Tryk **Opdatér**, så hentes og installeres den nye version. Pi'en skal have internet.
+**Opdateringer:** Under **Admin → ⚙ Opsætning → Opdatering** står den installerede version, og om der er en nyere. Tryk **Opdatér**, så hentes og installeres den nye version. Pi'en skal have internet.
 - Kun pakker signeret af udgiveren installeres.
 - Starter den nye version ikke, går Pi'en automatisk tilbage til den gamle. I kan også selv rulle tilbage.
 - Løb, deltagere og indstillinger røres ikke.
@@ -165,8 +174,8 @@ scp -r racetimer@racetimer.local:/var/lib/racetimer ./racetimer-backup
 | **Læseren reagerer ikke** | Tjek at den er valgt under *Læsere*, og at prikken er grøn. Prøv en anden USB-port. Bipper læseren, men intet sker, så hold chippen mod læseren under **📡 Scan** for at se, om den læses. |
 | **En løbers omgange tæller ikke** | Er løberen tjekket ind? Har løberen den rigtige chip? Er omgangen hurtigere end minimumstiden? Se loggen under *Seneste læsninger*. |
 | **Uret går forkert** | Pi'en stiller selv uret, så snart den har internet. Pi 3/4 og Pi 5 uden RTC-batteri skal derfor have net et par minutter, *inden* løbet startes (mobil-hotspot er nok). Får den først net midt i løbet, hopper uret, og tiderne bliver forkerte. Admin advarer ved start. |
-| **WiFi vil ikke forbinde** | Tjek koden. Fejlbeskeden står under **WiFi**. Mobil-hotspots skal være synlige, og iPhone skal have "Maksimer kompatibilitet" slået til. |
-| **Glemt admin-kode** | En anden administrator kan sætte en ny under **Brugerstyring**. Er der ingen, så kontakt udgiveren via GitHub. |
-| **Opdateringen fejlede** | Pi'en kører videre på den gamle version. Loggen står under **Opdatering**. |
+| **WiFi vil ikke forbinde** | Tjek koden. Fejlbeskeden står under **⚙ Opsætning → WiFi**. Mobil-hotspots skal være synlige, og iPhone skal have "Maksimer kompatibilitet" slået til. |
+| **Glemt admin-kode** | En anden administrator kan sætte en ny under **⚙ Opsætning → Brugere**. Er der ingen, så kontakt udgiveren via GitHub. |
+| **Opdateringen fejlede** | Pi'en kører videre på den gamle version. Loggen står under **⚙ Opsætning → Opdatering**. |
 
 Finder I en fejl eller mangler en funktion, så opret en sag under **[Issues](https://github.com/peterskotte/racetimer/issues)** på GitHub. Skriv versionsnummeret (står under *Opdatering*), løbstype, og hvad der skete.

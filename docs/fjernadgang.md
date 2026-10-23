@@ -1,6 +1,6 @@
 # Fjernadgang til Pi'en
 
-Under **Admin → Fjernadgang** er der tre måder at nå Pi'en på, når du ikke er på stævnets netværk. Alle tre åbner forbindelsen **ud** fra Pi'en. Du skal ikke åbne porte i routeren, og det virker også på mobil-hotspot.
+Under **Admin → ⚙ Opsætning → Fjernadgang** er der tre måder at nå Pi'en på, når du ikke er på stævnets netværk. Alle tre åbner forbindelsen **ud** fra Pi'en. Du skal ikke åbne porte i routeren, og det virker også på mobil-hotspot.
 
 Alle tre installeres af opdateringsscriptet ("Opdater Pi.command"), men de er slået fra, indtil du logger ind. Pi'en skal have internet under opdateringen.
 
@@ -19,7 +19,7 @@ Pi'en kommer på dit private Tailscale-netværk, som er krypteret med WireGuard.
 **Første gang:**
 1. Opret en gratis konto på **tailscale.com**. Du kan logge ind med Google, Microsoft eller Apple.
 2. Installér **Tailscale-appen** på din mobil og/eller Mac, og log ind med samme konto.
-3. På Pi'en: **Admin → Fjernadgang → Tailscale → Log ind / slå til**. Der vises et link.
+3. På Pi'en: **Admin → ⚙ Opsætning → Fjernadgang → Tailscale → Log ind / slå til**. Der vises et link.
 4. Åbn linket, log ind og godkend Pi'en.
 5. Efter få sekunder står der **Forbundet** og Pi'ens faste adresser:
    - `http://racetimer:8000/admin`
@@ -35,7 +35,7 @@ Officials kan få adgang ved at blive inviteret til dit Tailscale-netværk (grat
 Raspberry Pi's officielle tjeneste. Du ser Pi'ens skærm og kan bruge dens terminal direkte i browseren. Det er praktisk, hvis kiosk-vinduet er lukket, til opdateringer, eller hvis noget skal undersøges.
 
 1. Opret en gratis **Raspberry Pi-konto** (id.raspberrypi.com).
-2. På Pi'en: **Admin → Fjernadgang → Raspberry Pi Connect → Log ind**. Åbn linket, og log ind.
+2. På Pi'en: **Admin → ⚙ Opsætning → Fjernadgang → Raspberry Pi Connect → Log ind**. Åbn linket, og log ind.
 3. Gå til **connect.raspberrypi.com**, og vælg Pi'en. Vælg *Screen sharing* (skærm) eller *Remote shell* (terminal).
 
 ## 🌍 Offentligt link via Cloudflare

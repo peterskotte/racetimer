@@ -6,7 +6,7 @@ Mappen `racetimer/` her lægges op på webhotellet. Den indeholder to filer:
 |---|---|
 | `modtag.php` | Tager imod resultater fra Pi'en og gemmer dem i `data/` |
 | `index.php` | Viser resultaterne som en side, med arkiv over tidligere løb |
-| `logo.png` *(valgfri)* | Reserve-logo. Normalt sender Pi'en selv logoet fra **Admin → Udseende** |
+| `logo.png` *(valgfri)* | Reserve-logo. Normalt sender Pi'en selv logoet fra **Admin → ⚙ Opsætning → Udseende** |
 | `admin/index.php` | Gør, at `…/racetimer/admin` viderestiller til Pi'ens admin via fjernadgang (se nedenfor) |
 
 Det kræver kun et almindeligt webhotel med PHP 7.4 eller nyere. Der skal ikke bruges en database.
@@ -27,7 +27,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 
 3. **Upload mappen.** Læg `modtag.php` og `index.php` (og evt. jeres eget `logo.png`) i mappen `/racetimer/` på webhotellet med FTP eller webhotellets filhåndtering. Webserveren skal kunne skrive i mappen, fordi `modtag.php` opretter undermappen `data/` første gang.
 
-4. **Opret destinationen i RaceTimer** under **Admin → Synkronisering**:
+4. **Opret destinationen i RaceTimer** under **Admin → ⚙ Opsætning → Synkronisering**:
    - **Type:** Egen hjemmeside (JSON)
    - **Adresse:** `https://ditdomæne.dk/racetimer/modtag.php` ← **med `modtag.php` til sidst**
    - **Nøgle:** samme nøgle som i trin 2
@@ -39,7 +39,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 
 **Hvad siden viser:**
 - **Det løb, der vises på Pi'ens skærm**, med live- eller slutresultater.
-- **Splash, når der ikke er et aktivt løb:** samme billede og tekst som på Pi'en. De vælges under **Admin → Udseende**, og Pi'en sender selv logo og splash-billede (højst 4 MB), når de ændres.
+- **Splash, når der ikke er et aktivt løb:** samme billede og tekst som på Pi'en. De vælges under **Admin → ⚙ Opsætning → Udseende**, og Pi'en sender selv logo og splash-billede (højst 4 MB), når de ændres.
 - **Tidligere resultater** som en liste under splash eller tabellen.
 - **Arkiverede løb vises ikke.** Arkiverer du et løb i RaceTimer, forsvinder det fra siden med det samme. Gendanner du det, kommer det tilbage.
 
@@ -67,9 +67,9 @@ Vil du vise resultaterne inde på en eksisterende side (fx i WordPress), kan du 
 Pi'en kan åbne en krypteret tunnel ud til Cloudflare. Det kræver ingen konto, ingen DNS-ændring og ingen åbne porte, og det virker også på mobil-hotspot. Tunnelen får en tilfældig adresse (`https://….trycloudflare.com`), som skifter, når Pi'en genstarter. Pi'en melder derfor selv sin aktuelle adresse til `modtag.php`, og `admin/index.php` viderestiller dertil.
 
 1. Upload **`modtag.php`** (ny version) og mappen **`admin/`** med `index.php` til `/racetimer/` på webhotellet.
-2. På Pi'en: **Admin → Brugerstyring**. Skift koden for `admin`. Standardkoden kan ikke bruges udefra.
-3. **Admin → Synkronisering → (jeres JSON-destination) → Rediger**. Sæt flueben i **"Meld admin-adressen (fjernadgang)"**, og tryk **Gem**.
-4. **Admin → Synkronisering → Fjernadgang til admin → Slå fjernadgang til.** Efter få sekunder vises adressen.
+2. På Pi'en: **Admin → ⚙ Opsætning → Brugere**. Skift koden for `admin`. Standardkoden kan ikke bruges udefra.
+3. **Admin → ⚙ Opsætning → Synkronisering → (jeres JSON-destination) → Rediger**. Sæt flueben i **"Meld admin-adressen (fjernadgang)"**, og tryk **Gem**.
+4. **Admin → ⚙ Opsætning → Synkronisering → Fjernadgang til admin → Slå fjernadgang til.** Efter få sekunder vises adressen.
 5. Åbn **https://ditdomæne.dk/racetimer/admin** fra en hvilken som helst enhed.
 
 Sikkerhed:

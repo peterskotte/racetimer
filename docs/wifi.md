@@ -8,7 +8,7 @@ Vejledningen gælder Raspberry Pi OS Bookworm, som er standard på en Pi 5.
 
 ## Op til 5 faste netværk fra admin (anbefalet)
 
-Når Pi'en først er på nettet én gang, kan du lægge op til **5 netværk** ind under **Admin → WiFi**. Det kan fx være klubhuset, hjemme, din mobils hotspot og en reservemobil. Pi'en forbinder automatisk til det første netværk i listen, der er inden for rækkevidde, og den bliver ved med at prøve, også efter genstart. Ude ved løbet skal du ikke røre noget.
+Når Pi'en først er på nettet én gang, kan du lægge op til **5 netværk** ind under **Admin → ⚙ Opsætning → WiFi**. Det kan fx være klubhuset, hjemme, din mobils hotspot og en reservemobil. Pi'en forbinder automatisk til det første netværk i listen, der er inden for rækkevidde, og den bliver ved med at prøve, også efter genstart. Ude ved løbet skal du ikke røre noget.
 
 - **Rækkefølgen er prioriteten.** Nr. 1 vælges før nr. 2 osv. Flyt med ↑ ↓. Koderne følger med.
 - **Netværk inden for rækkevidde** vises nederst. Tryk **+ Tilføj** for at sætte et netværk ind.

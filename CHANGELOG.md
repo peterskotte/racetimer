@@ -4,6 +4,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+- Menuen i admin er samlet: løbsfanerne (*Aktivt løb, Nyt løb, Deltagere, Arkiv*) står forrest, og resten ligger under **⚙ Opsætning**, grupperet i *Skærm og web*, *Netværk* og *System*. Menuen og toppen af siden passer nu også på mobil.
 - Ur-tjek: admin viser, om Pi'ens ur er stillet via internettet, og om det passer med din mobil/computer. Går uret forkert, eller er det ikke stillet siden opstart, advares der tydeligt, når løbet startes.
 
 ## [1.1.0] – 2026-10-23

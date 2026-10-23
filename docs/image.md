@@ -74,7 +74,7 @@ scp -r racetimer@racetimer.local:/var/lib/racetimer ./racetimer-backup
 
 ## Opdatér RaceTimer
 
-Under **Admin → Opdatering** hentes og installeres nye versioner med ét tryk (Pi'en skal have internet). Løb og data røres ikke, og fejler den nye version, rulles der automatisk tilbage. Se [udgivelse.md](udgivelse.md) for hvordan det virker.
+Under **Admin → ⚙ Opsætning → Opdatering** hentes og installeres nye versioner med ét tryk (Pi'en skal have internet). Løb og data røres ikke, og fejler den nye version, rulles der automatisk tilbage. Se [udgivelse.md](udgivelse.md) for hvordan det virker.
 
 ## Byg imaget selv igen
 
