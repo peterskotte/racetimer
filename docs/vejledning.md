@@ -122,6 +122,7 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 **Efter løbet**
 - Afslut løbet, og hent resultaterne som **CSV** (åbnes i Excel).
+- Tryk **🗄 Arkivér**, når I er færdige med løbet. Det forsvinder fra løbslisten og skærmen, men ligger under fanen **Arkiv**, hvor det kan ses, hentes som CSV og gendannes.
 - Har I sat synkronisering op, sendes de endelige resultater til hjemmesiden automatisk.
 
 > **Strømsvigt eller genstart midt i løbet?** Alle læsninger gemmes med det samme, og stillingen regnes ud fra dem. Tænd Pi'en igen, så er alt som før.

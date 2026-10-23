@@ -110,6 +110,9 @@ def _migrate(c):
         c.execute("ALTER TABLE participants ADD COLUMN dogs INTEGER")
         c.execute("ALTER TABLE participants ADD COLUMN dog1 TEXT")
         c.execute("ALTER TABLE participants ADD COLUMN dog2 TEXT")
+    rcols = [r[1] for r in c.execute("PRAGMA table_info(races)")]
+    if "archived_at" not in rcols:  # arkiverede løb skjules i løbslisten, men kan gendannes
+        c.execute("ALTER TABLE races ADD COLUMN archived_at REAL")
     c.executescript("""
         CREATE INDEX IF NOT EXISTS reads_rev ON reads(race_id, rev);
         CREATE TRIGGER IF NOT EXISTS reads_rev_ins AFTER INSERT ON reads BEGIN

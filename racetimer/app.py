@@ -465,6 +465,7 @@ def deactivate(u=Depends(admin)):
 
 @app.post("/api/races/{rid}/activate")
 def activate(rid: int, u=Depends(admin)):
+    db.ex("UPDATE races SET archived_at=NULL WHERE id=?", (rid,))  # det, der vises, hører ikke til i arkivet
     _activate(rid)
     return {"ok": True}
 
@@ -486,6 +487,23 @@ def finish_race(rid: int, u=Depends(admin)):
 @app.post("/api/races/{rid}/resume")
 def resume_race(rid: int, u=Depends(admin)):
     db.ex("UPDATE races SET status='running', finished_at=NULL WHERE id=?", (rid,))
+    return {"ok": True}
+
+
+@app.post("/api/races/{rid}/archive")
+def archive_race(rid: int, u=Depends(admin)):
+    """Flyt et afsluttet løb til arkivet. Intet slettes, og det kan gendannes."""
+    race = db.race(rid) or _404()
+    if race["status"] != "finished":
+        raise HTTPException(400, "Kun afsluttede løb kan arkiveres")
+    db.ex("UPDATE races SET archived_at=?, is_active=0 WHERE id=?", (time.time(), rid))
+    return {"ok": True}
+
+
+@app.post("/api/races/{rid}/unarchive")
+def unarchive_race(rid: int, u=Depends(admin)):
+    db.race(rid) or _404()
+    db.ex("UPDATE races SET archived_at=NULL WHERE id=?", (rid,))
     return {"ok": True}
 
 

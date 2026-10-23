@@ -113,6 +113,7 @@ En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`�
      - **Starttid** (intervalstart med chipstart): hvis løberen ikke blev læst ved start.
      - Manuelle tider er officialens afgørelse og tæller derfor også i backyards flagzone. De vises som "Manuel" i loggen og kan ignoreres der.
    - **Resultater (CSV)** henter resultatlisten.
+4. **Arkivér** løbet bagefter med **🗄 Arkivér**, så løbslisten ikke bliver lang. Under fanen **Arkiv** kan gamle løb søges frem, ses, hentes som CSV eller gendannes. Intet slettes ved arkivering.
 
 ## Driftssikkerhed
 

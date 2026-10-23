@@ -48,6 +48,9 @@
   .scan { font-weight: 700; color: var(--gold); animation: pulse 1s infinite; }
   @keyframes pulse { 50% { opacity: .4; } }
   dialog#timeDlg { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 22px; width: min(440px, 92vw); }
+  dialog#archDlg { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 22px; width: min(900px, 96vw); max-height: 90vh; }
+  dialog#archDlg::backdrop { background: rgba(0,0,0,.6); }
+  dialog#archDlg h3 { margin: 0 0 4px; font-size: 20px; }
   dialog#timeDlg::backdrop { background: rgba(0,0,0,.6); }
   dialog#timeDlg h3 { margin: 0 0 4px; font-size: 20px; }
   .seg { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -102,6 +105,7 @@
   <button data-tab="active" class="on">Rediger aktivt løb</button>
   <button data-tab="new">Tilføj nyt løb</button>
   <button data-tab="people">Deltagerregistrering</button>
+  <button data-tab="archive">Arkiv</button>
   <button data-tab="users">Brugerstyring</button>
   <button data-tab="look">Udseende</button>
   <button data-tab="sync">Synkronisering</button>
@@ -312,6 +316,14 @@
     <div class="card pad" id="updBack" hidden></div>
   </section>
 
+  <!-- ===================== ARKIV -->
+  <section class="tab" id="tab-archive">
+    <h2>Arkiv <span class="muted small" id="archCount"></span></h2>
+    <p class="muted small">Afsluttede løb kan arkiveres med <b>🗄 Arkivér</b> under <i>Rediger aktivt løb</i>. De forsvinder fra løbslisten, men intet slettes: resultater, deltagere og læsninger kan ses her og gendannes.</p>
+    <div class="row" style="margin-bottom:10px"><label style="flex:1;min-width:220px">Søg<input id="archSearch" placeholder="Løbsnavn eller år" autocomplete="off"></label></div>
+    <div class="card"><div class="tablewrap" id="archive"></div></div>
+  </section>
+
   <!-- ===================== BRUGERE -->
   <section class="tab" id="tab-users">
     <h2>Administratorer</h2>
@@ -345,6 +357,13 @@
       <button class="primary" id="timeSave" value="save">Gem tid</button>
     </div>
   </form>
+</dialog>
+<dialog id="archDlg">
+  <div class="row" style="justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <div><h3 id="archTitle"></h3><div class="muted small" id="archInfo"></div></div>
+    <div class="btns"><a class="btn" id="archCsv">⬇ CSV</a><button id="archRestore">↩ Gendan</button><button id="archClose">Luk</button></div>
+  </div>
+  <div class="tablewrap" id="archRows"></div>
 </dialog>
 <div id="toast"></div>
 
@@ -405,6 +424,7 @@ $("tabs").onclick = e => {
   document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
   if (b.dataset.tab === "people") loadPeople();
+  if (b.dataset.tab === "archive") loadArchive();
   if (b.dataset.tab === "look") loadLook();
   if (b.dataset.tab === "sync") loadDests();
   if (b.dataset.tab === "wifi") loadWifi();
@@ -537,7 +557,7 @@ $("newForm").onsubmit = async e => {
 
 // ------------------------------------------------ aktivt løb
 async function loadRaces() {
-  races = await api("/api/races");
+  races = (await api("/api/races")).filter(r => !r.archived_at);
   if (!races.find(r => r.id === curId)) curId = (races.find(r => r.is_active) || races[0])?.id ?? null;
   $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${esc(r.name)} – ${esc(TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
     : `<option>Ingen løb – opret et under “Tilføj nyt løb”</option>`;
@@ -573,7 +593,7 @@ async function loadRace(full) {
     <div class="btns">
       ${r.status === "planned" ? `<button class="go" data-act="start">▶ Start nu</button><input type="datetime-local" id="startAt" value="${toLocalInput(r.scheduled_start)}"><button data-act="startAt">Start kl.</button>` : ""}
       ${r.status === "running" ? `<button class="danger" data-act="finish">■ Afslut løb</button>` : ""}
-      ${r.status === "finished" ? `<button data-act="resume">Genoptag</button>` : ""}
+      ${r.status === "finished" ? `<button data-act="resume">Genoptag</button><button data-act="archive" title="Flyt løbet til arkivet. Det kan ses og gendannes under fanen Arkiv.">🗄 Arkivér</button>` : ""}
       ${r.status !== "planned" ? `<button class="danger" data-act="reset">Nulstil</button>` : ""}
       <a class="btn" href="/api/races/${r.id}/results.csv">⬇ Resultater (CSV)</a>
     </div></div>`;
@@ -599,7 +619,8 @@ $("editForm").onsubmit = async e => {
 };
 
 async function raceAction(act) {
-  const ask = {reset: "Nulstil løbet? Starttid og status fjernes, og alle læsninger markeres som ignoreret (kan gendannes).", finish: "Afslut løbet nu?"};
+  const ask = {reset: "Nulstil løbet? Starttid og status fjernes, og alle læsninger markeres som ignoreret (kan gendannes).", finish: "Afslut løbet nu?",
+    archive: "Flyt løbet til arkivet? Det forsvinder fra løbslisten og fra resultatskærmen, men kan ses og gendannes under fanen Arkiv."};
   if (ask[act] && !confirm(ask[act])) return;
   if (act === "start") await api(`/api/races/${curId}/start`, {body: {}});
   else if (act === "startAt") {
@@ -607,8 +628,65 @@ async function raceAction(act) {
     if (!at) return toast("Vælg et tidspunkt", true);
     await api(`/api/races/${curId}/start`, {body: {at}});
   } else await api(`/api/races/${curId}/${act}`, {body: {}});
+  if (act === "archive") { toast("Løbet er arkiveret – find det under fanen Arkiv"); curId = null; }
   loadRaces();
 }
+
+// ------------------------------------------------ arkiv
+let archived = [], archCur = null;
+const day = ts => ts ? new Date(ts * 1000).toLocaleDateString("da-DK", {day: "numeric", month: "short", year: "numeric"}) : "–";
+async function loadArchive() {
+  archived = (await api("/api/races")).filter(r => r.archived_at)
+    .sort((a, b) => (b.started_at || b.created_at) - (a.started_at || a.created_at));
+  renderArchive();
+}
+function renderArchive() {
+  const qs = $("archSearch").value.trim().toLowerCase();
+  const list = archived.filter(r => !qs || `${r.name} ${day(r.started_at || r.created_at)}`.toLowerCase().includes(qs));
+  $("archCount").textContent = archived.length ? `(${archived.length} løb)` : "";
+  $("archive").innerHTML = !archived.length ? `<p class="muted" style="padding:16px">Arkivet er tomt.</p>`
+    : !list.length ? `<p class="muted" style="padding:16px">Ingen løb matcher søgningen.</p>`
+    : `<table><thead><tr><th>Dato</th><th>Løb</th><th>Type</th><th>Deltagere</th><th>Arkiveret</th><th></th></tr></thead><tbody>` +
+      list.map(r => `<tr><td style="white-space:nowrap">${day(r.started_at || r.created_at)}</td><td><b>${esc(r.name)}</b></td>
+        <td>${esc(TYPES[r.type]?.label || r.type)}</td><td class="num">${r.n}</td><td class="muted small" style="white-space:nowrap">${day(r.archived_at)}</td>
+        <td><div class="btns"><button data-id="${r.id}" data-a="view">Se resultater</button>
+          <a class="btn" href="/api/races/${r.id}/results.csv">⬇ CSV</a>
+          <button data-id="${r.id}" data-a="restore">↩ Gendan</button>
+          <button class="danger" data-id="${r.id}" data-a="delete">Slet</button></div></td></tr>`).join("") + `</tbody></table>`;
+  $("archive").querySelectorAll("button[data-a]").forEach(b => b.onclick = () => {
+    const r = archived.find(x => x.id === +b.dataset.id);
+    if (b.dataset.a === "view") viewArchived(r.id);
+    if (b.dataset.a === "restore") restoreArchived(r);
+    if (b.dataset.a === "delete") deleteArchived(r);
+  });
+}
+$("archSearch").oninput = renderArchive;
+async function restoreArchived(r) {
+  await api(`/api/races/${r.id}/unarchive`, {body: {}});
+  toast(`${r.name} er gendannet til løbslisten`);
+  $("archDlg").open && $("archDlg").close();
+  curId = r.id; loadArchive(); loadRaces();
+}
+async function deleteArchived(r) {
+  if (!confirm(`Slet “${r.name}” permanent inkl. deltagere og resultater? Hent CSV først, hvis du vil gemme resultaterne. Rå læsninger bevares i reads.log.`)) return;
+  await api(`/api/races/${r.id}`, {method: "DELETE"});
+  toast("Løbet er slettet"); loadArchive();
+}
+async function viewArchived(id) {
+  const d = await api(`/api/races/${id}`), r = d.race, i = d.info, tt = ["p2p", "timetrial"].includes(r.type);
+  archCur = archived.find(x => x.id === id) || r;
+  const win = i.winner ? `🏆 Vinder: ${esc(i.winner)}` : i.leader ? `🏁 Vinder: ${esc(i.leader)}` : i.no_winner ? "Ingen vinder" : "";
+  $("archTitle").textContent = r.name;
+  $("archInfo").innerHTML = [esc(TYPES[r.type]?.label || r.type), `Start: ${clock(r.started_at)}`, r.finished_at ? `Slut: ${clock(r.finished_at)}` : "", `${d.rows.length} deltagere`, win].filter(Boolean).join(" · ");
+  $("archCsv").href = `/api/races/${id}/results.csv`;
+  $("archRows").innerHTML = !d.rows.length ? `<p class="muted">Ingen deltagere.</p>` :
+    `<table><thead><tr><th>#</th><th>Nr</th><th>Navn</th><th>Klub</th><th>Status</th>${tt ? "" : "<th>Omgange</th>"}<th>Tid</th></tr></thead><tbody>` +
+    d.rows.map(x => `<tr class="st-${x.status}"><td>${x.place ?? "–"}</td><td>${x.bib ?? ""}</td><td>${esc(x.name)}${x.dogs?.length ? `<div class="muted small">🐕 ${x.dogs.map(esc).join(" & ")}</div>` : ""}</td>
+      <td>${esc(x.club || "")}</td><td style="white-space:nowrap">${esc(x.status_label)}</td>${tt ? "" : `<td class="num">${x.laps}</td>`}<td class="num">${hms(x.total_time)}</td></tr>`).join("") + `</tbody></table>`;
+  $("archDlg").showModal();
+}
+$("archClose").onclick = () => $("archDlg").close();
+$("archRestore").onclick = () => archCur && restoreArchived(archCur);
 
 function renderFlags() {
   // Backyard: læsninger i flagzonen (fx 3–25 min) tæller ikke, før en official har godkendt dem
