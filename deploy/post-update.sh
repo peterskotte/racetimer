@@ -27,6 +27,11 @@ echo "$SVC_USER ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/
 chmod 440 /etc/sudoers.d/racetimer-wifi
 visudo -cf /etc/sudoers.d/racetimer-wifi >/dev/null || rm -f /etc/sudoers.d/racetimer-wifi
 
+# Moduler: lyd via USB-højttaler (ALSA) – servicebrugeren skal i gruppen audio, og aplay skal findes
+[ "$SVC_USER" = root ] || usermod -aG audio "$SVC_USER" 2>/dev/null || true
+command -v aplay >/dev/null || apt-get install -y -qq alsa-utils >/dev/null 2>&1 \
+  || echo "  (kunne ikke installere alsa-utils til højttaler-modulet – kræver internet)"
+
 # Valgfrie programmer til fjernadgang – installeres slået fra (kræver internet)
 if ! command -v cloudflared >/dev/null 2>&1; then
   ARCH=$(dpkg --print-architecture)

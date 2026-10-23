@@ -15,7 +15,7 @@ command -v chromium >/dev/null || command -v chromium-browser >/dev/null || \
 
 id racetimer-svc >/dev/null 2>&1 || \
 	useradd --system --home-dir /opt/racetimer --shell /usr/sbin/nologin --user-group racetimer-svc
-usermod -aG input,dialout racetimer-svc
+usermod -aG input,dialout,audio racetimer-svc
 
 python3 -m venv --system-site-packages /opt/racetimer/.venv
 /opt/racetimer/.venv/bin/pip install --no-cache-dir -r /opt/racetimer/requirements.txt

@@ -115,6 +115,23 @@ En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`�
    - **Resultater (CSV)** henter resultatlisten.
 4. **Arkivér** løbet bagefter med **🗄 Arkivér**, så løbslisten ikke bliver lang. Under fanen **Arkiv** kan gamle løb søges frem, ses, hentes som CSV eller gendannes. Intet slettes ved arkivering.
 
+## Scan-besked og moduler
+
+**Scan-besked:** hver gang et armbånd scannes, vises en stor bjælke nederst på resultatskærmen i 4 sekunder:
+- 🟢 **grøn:** talt (*✓ #12 Mads Hansen – Omgang 5 · 52:13*, *Tjekket ind*, *Afgang registreret*, *I mål*)
+- 🟡 **gul:** læst, men tæller ikke, med årsagen (*Allerede registreret*, *For tidligt*, *Ikke tjekket ind*, *Uden for målvinduet* …)
+- 🔴 **rød:** ukendt armbånd
+
+Den slås til og fra under *⚙ Opsætning → Udseende*.
+
+**Moduler** er eksterne enheder på USB, der reagerer på det samme. Under *⚙ Opsætning → Moduler* dukker tilsluttede enheder op af sig selv og kan tilføjes med ét tryk. Moduler kan aldrig påvirke tidtagningen: læsningen er gemt, før noget modul hører om den.
+
+| Modul | Hardware | Hvad det gør |
+|---|---|---|
+| **Højttaler** | En almindelig USB-højttaler (eller Pi'ens egen lydudgang) | Forskellige lyde for talt, afvist, ukendt armbånd, chip tildelt, nedtælling 3-2-1 og start. Lydstyrke og lyd pr. hændelse kan vælges, og den kan knyttes til læser 1, læser 2 eller begge. |
+
+LED-ring, signallampe og display via Raspberry Pi Pico er planlagt. Se [docs/moduler-udkast.md](docs/moduler-udkast.md).
+
 ## Driftssikkerhed
 
 - Hver læsning skrives til SQLite (WAL, `synchronous=FULL`), før den behandles, og desuden til en rå tekstlog `data/reads.log`.
@@ -256,9 +273,12 @@ racetimer/
   engine.py    Løbsmotor: rene funktioner pr. løbstype (al regellogik)
   readers.py   USB HID (evdev) + seriel læser, auto-genforbindelse
   sync.py      Sender resultater til webservere (interval, manuelt, ved afslutning)
+  outcome.py   Vurdering af hver læsning: talt / ignoreret (og hvorfor) / ukendt
+  events.py    Hændelser til moduler og skærmens scan-besked
+  modules/     Eksterne enheder (USB-højttaler …)
   db.py        SQLite-skema, brugere (PBKDF2), sessioner
   static/      display.html (resultatskærm), admin.html, style.css
 deploy/        install.sh, systemd-services (Pi + spejlserver), kiosk-script, Caddyfile
 docs/          vejledning.md (kom i gang), image.md, wifi.md, fjernadgang.md, udgivelse.md
-tests/         test af løbsmotoren
+tests/         test af løbsmotoren, hændelser og moduler
 ```

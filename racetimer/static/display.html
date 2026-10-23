@@ -105,6 +105,16 @@
   #alert.start .big { color: var(--green); }
   #sound { position: fixed; right: 16px; bottom: 16px; font-size: 13px; }
 
+  /* scan-besked: stor bjælke nederst ved hver scanning */
+  #scans { position: fixed; left: 50%; bottom: clamp(14px, 4vh, 40px); transform: translateX(-50%); z-index: 8; width: min(1100px, 94vw);
+    display: flex; flex-direction: column-reverse; gap: 10px; pointer-events: none; }
+  .scan { border-radius: 18px; padding: clamp(12px, 2.2vh, 22px) clamp(16px, 2.6vw, 30px); font-weight: 800; font-size: clamp(22px, 3.4vw, 46px);
+    line-height: 1.15; box-shadow: 0 10px 40px rgba(0,0,0,.45); animation: scanIn .25s ease-out; display: flex; gap: .5em; align-items: baseline; flex-wrap: wrap; }
+  .scan .sub { font-weight: 600; opacity: .85; font-size: .62em; }
+  .scan.ok { background: #1f9d4f; color: #fff; } .scan.warn { background: #f2c14e; color: #1b1e23; } .scan.bad { background: #d9433f; color: #fff; }
+  .scan.out { animation: scanOut .4s ease-in forwards; }
+  @keyframes scanIn { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes scanOut { to { transform: translateY(20px); opacity: 0; } }
   /* splash: vises når der ikke er et aktivt løb */
   #splash { position: fixed; inset: 0; z-index: 5; background: #0c0e11; overflow: hidden; }
   #splash img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%; }
@@ -165,6 +175,7 @@
   <div class="leaders" id="leaders"></div>
   <div class="card" id="board"><div class="empty">Henter…</div></div>
 </main>
+<div id="scans" aria-live="polite"></div>
 <div id="splash" hidden>
   <img class="bg" id="splashBg" alt="">
   <img class="fg" id="splashFg" alt="">
@@ -219,7 +230,37 @@ async function load() {
     version = version || data.version;
     offset = data.now - Date.now() / 1000;
     render();
+    showScans(data);
   } catch (e) { /* netværksfejl: behold sidste visning */ }
+}
+
+// ---------------- scan-besked: grøn = talt, gul = læst men tæller ikke, rød = ukendt armbånd
+let scanSeq = null;
+const SCAN_OK = {"read.counted": 1, "read.checkin": 1, "read.departure": 1, "read.started": 1};
+function scanText(e) {
+  const who = `${e.bib != null ? `#${e.bib} ` : ""}${esc(e.name || "")}`;
+  if (e.type === "read.counted") return [`✓ ${who}`, e.finish ? `I mål${e.time != null ? " · " + hms(e.time) : ""}` : `Omgang ${e.lap}${e.time != null ? " · " + hms(e.time) : ""}`];
+  if (e.type === "read.checkin") return [`✓ ${who}`, "Tjekket ind"];
+  if (e.type === "read.departure") return [`✓ ${who}`, "Afgang registreret"];
+  if (e.type === "read.started") return [`✓ ${who}`, "Startet"];
+  if (e.type === "read.ignored") return [who, esc(e.reason_label)];
+  if (e.type === "read.unknown") return ["Ukendt armbånd", "Kontakt en official"];
+  return null;
+}
+function showScans(d) {
+  const evs = d.events || [];
+  if (scanSeq === null) { scanSeq = Math.max(0, ...evs.map(e => e.seq)); return; }  // vis ikke gamle beskeder ved indlæsning
+  for (const e of evs.filter(e => e.seq > scanSeq).sort((a, b) => a.seq - b.seq)) {
+    scanSeq = e.seq;
+    const t = scanText(e);
+    if (!t || !d.race || d.brand?.scan_banner === false) continue;
+    const el = document.createElement("div");
+    el.className = "scan " + (SCAN_OK[e.type] ? "ok" : e.type === "read.unknown" ? "bad" : "warn");
+    el.innerHTML = `<span>${t[0]}</span><span class="sub">${t[1]}</span>`;
+    $("scans").prepend(el);
+    while ($("scans").children.length > 3) $("scans").lastElementChild.remove();
+    setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 400); }, 4000);
+  }
 }
 
 function columns(type, info) {

@@ -27,6 +27,7 @@ Denne vejledning er til klubber og arrangører, der vil bruge RaceTimer til egne
 | **Armbånd/chips** | MIFARE Classic 1K eller NTAG213 | Køb et par ekstra til glemte og defekte chips. |
 | **Ur (kun Pi 5)** | Officielt RTC-batteri | Holder uret, når Pi'en er slukket og uden internet. Pi 3/4 har ikke batteristik. De stiller selv uret, så snart de har internet, så giv dem net et par minutter, inden løbet startes (mobil-hotspot er nok). |
 | Til ude i skoven | Powerbank med pass-through eller UPS | Skærmen skal også have strøm. |
+| *Valgfrit:* højttaler | En USB-højttaler ved læseren | Lyd, når der scannes, så løberen kan høre, om omgangen talte. Se afsnit 7. |
 
 > **Tip:** Køb læseren før armbåndene, og test med de armbånd, der fulgte med. Læseren skal kunne læse jeres chip-type.
 
@@ -128,6 +129,7 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 - Udgår en løber, trykker I **RTC** (udgået) ud for løberen. **DNS** er for en løber, der ikke startede, og **DSQ** for diskvalifikation.
 - En forkert læsning kan ignoreres og gendannes igen i loggen. Intet slettes.
 - I backyard viser **⚑ Til vurdering** læsninger i flagzonen, som en official skal godkende eller afvise.
+- **Løberen kan se, om scanningen talte.** En stor bjælke på skærmen er grøn, når den talte, gul, når den ikke talte (med årsagen), og rød ved et ukendt armbånd. Med en **USB-højttaler** ved læseren kan det også høres: sæt den i, og tilføj den under **⚙ Opsætning → Moduler**. Tryk **▶ Test** for at høre den.
 
 **Efter løbet**
 - Afslut løbet, og hent resultaterne som **CSV** (åbnes i Excel).

@@ -20,7 +20,7 @@ BUILTIN_SPLASH = {
     "racetiming": {"label": "RaceTiming – trail og løber", "file": os.path.join(HERE, "static", "splash", "racetiming.webp")},
     "plain": {"label": "Ensfarvet med klubnavn", "file": None},
 }
-DEFAULT = {"name": "RaceTimer", "logo": None, "splash": "builtin:racetiming", "splash_text": "", "v": 0}
+DEFAULT = {"name": "RaceTimer", "logo": None, "splash": "builtin:racetiming", "splash_text": "", "scan_banner": True, "v": 0}
 SPLASH_TEXT_MAX = 160
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 MAX_BYTES = 8 * 1024 * 1024
@@ -53,7 +53,7 @@ def public():
     plain = kind == "builtin" and ref == "plain"
     return {"name": b["name"], "logo": f"/branding/logo?v={b['v']}" if b["logo"] else None,
             "splash": None if plain else f"/branding/splash?v={b['v']}", "splash_choice": b["splash"],
-            "splash_text": b.get("splash_text") or "", "v": b["v"]}
+            "splash_text": b.get("splash_text") or "", "scan_banner": b.get("scan_banner", True), "v": b["v"]}
 
 
 WEB_IMAGE_MAX = 4 * 1024 * 1024  # større billeder sendes ikke til hjemmesiden (mange webhoteller har små POST-grænser)

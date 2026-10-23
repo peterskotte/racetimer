@@ -20,7 +20,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Up
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import branding, db, engine, readers, sync, updater
+from . import branding, db, engine, events, modules, readers, sync, updater
 
 HERE = os.path.dirname(__file__)
 STATIC = os.path.join(HERE, "static")
@@ -105,6 +105,7 @@ async def _no_stale_pages(request: Request, call_next):
     return response
 
 
+bus = events.EventBus()  # hændelser til moduler og skærmens scan-besked
 _capture = {"until": 0, "chip": None}
 _cap_lock = threading.Lock()
 
@@ -122,6 +123,7 @@ def handle_read(chip, reader, ts=None):
     with _cap_lock:
         if _capture["until"] > ts:
             _capture.update(chip=chip, until=0)
+            bus.publish({"type": "chip.registered", "reader": reader})
             return {"captured": chip}
 
     race = db.active_race()
@@ -132,10 +134,13 @@ def handle_read(chip, reader, ts=None):
                 (race_id, chip, ts, window))
     rid = db.ex("INSERT INTO reads(race_id, chip, reader, ts, participant_id, duplicate) VALUES (?,?,?,?,?,?)",
                 (race_id, chip, reader, ts, p["id"] if p else None, 1 if dup else 0))
+    bus.read_stored(rid)  # vurderes i baggrunden – tidtagningen venter aldrig på moduler
     return {"id": rid, "participant_id": p["id"] if p else None, "duplicate": bool(dup)}
 
 
 reader_mgr = readers.ReaderManager(handle_read)
+module_mgr = modules.ModuleManager()
+bus.subscribe(module_mgr.on_event)
 
 
 @app.on_event("startup")
@@ -145,6 +150,8 @@ def _startup():
     if MIRROR:
         return
     sync_mgr.start()
+    module_mgr.start()
+    events.Ticker(bus, standings, reader_mgr.status).start()
     paths = db.setting("readers", {}) or {}
     for role in readers.ROLES:  # miljøvariabler kan overstyre, fx i systemd-filen
         env = os.environ.get(f"RACETIMER_{role.upper()}")
@@ -249,6 +256,7 @@ def standings(race, now=None):
     if not MIRROR and race["status"] == "running" and info.get("phase") == "ended" and not race.get("finished_at"):
         fin = info.get("resolved_at") or info.get("end_at") or now
         db.ex("UPDATE races SET status='finished', finished_at=? WHERE id=?", (fin, race["id"]))
+        bus.publish({"type": "race.finished", "race": race["name"]})
     return rows, info
 
 
@@ -274,6 +282,7 @@ def live():
     if not MIRROR:  # den offentlige spejlserver skal ikke vise stævne-netværkets adresse
         extra["host"] = host_info()
         extra["clock"] = clock_info()
+        extra["events"] = bus.recent()
     if not race:
         return {"race": None, "now": now, **extra}
     rows, info = standings(race, now)
@@ -513,12 +522,14 @@ async def start_race(rid: int, request: Request, u=Depends(admin)):
     b = await request.json() if await request.body() else {}
     at = b.get("at") or time.time()
     db.ex("UPDATE races SET status='running', started_at=?, finished_at=NULL WHERE id=?", (at, rid))
+    bus.publish({"type": "race.started", "race": (db.race(rid) or {}).get("name")})
     return {"ok": True, "started_at": at}
 
 
 @app.post("/api/races/{rid}/finish")
 def finish_race(rid: int, u=Depends(admin)):
     db.ex("UPDATE races SET status='finished', finished_at=? WHERE id=?", (time.time(), rid))
+    bus.publish({"type": "race.finished", "race": (db.race(rid) or {}).get("name")})
     return {"ok": True}
 
 
@@ -1062,6 +1073,45 @@ async def private_action(request: Request, u=Depends(admin)):
 
 # ------------------------------------------------------------------ udseende (navn, logo, splash)
 
+# ------------------------------------------------------------------ moduler (eksterne enheder)
+
+def _mod(fn, *a):
+    try:
+        return fn(*a)
+    except modules.ModuleError as e:
+        raise HTTPException(400, str(e)) from None
+
+
+@app.get("/api/modules")
+def modules_overview(u=Depends(admin)):
+    return module_mgr.overview()
+
+
+@app.post("/api/modules")
+async def modules_add(request: Request, u=Depends(admin)):
+    b = await request.json()
+    return _mod(module_mgr.add, b.get("kind"), str(b.get("device") or ""), b.get("name"))
+
+
+@app.put("/api/modules/{mid}")
+async def modules_update(mid: str, request: Request, u=Depends(admin)):
+    return _mod(module_mgr.update, mid, await request.json())
+
+
+@app.delete("/api/modules/{mid}")
+def modules_remove(mid: str, u=Depends(admin)):
+    module_mgr.remove(mid)
+    return {"ok": True}
+
+
+@app.post("/api/modules/{mid}/test")
+def modules_test(mid: str, u=Depends(admin)):
+    try:
+        return {"ok": True, "text": _mod(module_mgr.test, mid)}
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from None
+
+
 @app.get("/api/branding")
 def get_branding():
     pub = branding.public()
@@ -1106,6 +1156,8 @@ async def put_branding(request: Request, u=Depends(admin)):
         if len(text) > branding.SPLASH_TEXT_MAX:
             raise HTTPException(400, f"Splash-teksten må højst være {branding.SPLASH_TEXT_MAX} tegn")
         changes["splash_text"] = text
+    if "scan_banner" in b:
+        changes["scan_banner"] = bool(b["scan_banner"])
     out = branding.save(**changes)
     sync_mgr.poke_state()
     return out

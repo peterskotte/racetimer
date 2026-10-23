@@ -6,14 +6,14 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)"
 USER_NAME="$(id -un)"
 
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-evdev python3-serial chromium-browser curl
+sudo apt-get install -y python3-venv python3-evdev python3-serial chromium-browser curl alsa-utils
 
 # venv med adgang til apt-pakkerne (evdev/pyserial)
 python3 -m venv --system-site-packages "$DIR/.venv"
 "$DIR/.venv/bin/pip" install -r "$DIR/requirements.txt"
 
 # RFID-læsere er /dev/input-enheder → brugeren skal være i gruppen 'input'
-sudo usermod -aG input "$USER_NAME"
+sudo usermod -aG input,audio "$USER_NAME"  # audio: højttaler-modulet
 
 # systemd-service (starter automatisk ved boot og genstarter ved fejl)
 sed -e "s#__USER__#$USER_NAME#g" -e "s#__DIR__#$DIR#g" "$DIR/deploy/racetimer.service" \

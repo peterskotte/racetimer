@@ -4,3 +4,4 @@ python3-evdev
 python3-serial
 curl
 util-linux
+alsa-utils

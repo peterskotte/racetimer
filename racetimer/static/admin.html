@@ -53,6 +53,12 @@
   .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--card-head); color: var(--muted); }
   .pill.running { background: var(--green); color: #06170c; }
   .pill.finished { background: var(--blue); color: #06121f; }
+  .mod { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+  .mod .mhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mod .mname { font-weight: 700; font-size: 17px; }
+  .mod .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; margin-top: 12px; }
+  .pill.ok { background: var(--green); color: #06170c; } .pill.missing { background: var(--gold); color: #1b1e23; }
+  .pill.error { background: var(--red); color: #fff; } .pill.off { background: var(--card-head); color: var(--muted); }
   .warnbox { background: #3a2f0f; border: 1px solid var(--gold); color: var(--gold); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
   .okbox { background: #0f2a18; border: 1px solid var(--green); border-radius: 10px; padding: 12px 16px; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -130,6 +136,8 @@
   <span class="grp">Skærm og web</span>
   <button data-tab="look">Udseende</button>
   <button data-tab="sync">Synkronisering</button>
+  <span class="grp">Udstyr</span>
+  <button data-tab="modules">Moduler</button>
   <span class="grp">Netværk</span>
   <button data-tab="wifi">WiFi</button>
   <button data-tab="remote">Fjernadgang</button>
@@ -335,6 +343,11 @@
       </form>
       <p class="muted small" style="margin-bottom:0">Splash og tekst vises på skærmen og på hjemmesiden (synkronisering), når der ikke er et aktivt løb.</p>
     </div>
+    <h2>Scan-besked</h2>
+    <div class="card pad">
+      <label class="row" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="scanBanner"> Vis en stor besked på resultatskærmen, hver gang et armbånd scannes</label>
+      <p class="muted small" style="margin-bottom:0">Grøn = talt (omgang, mål, indtjekning) · gul = læst, men tæller ikke (fx dublet eller for tidligt) · rød = ukendt armbånd. Lyd ved læseren sættes op under <b>Moduler</b>.</p>
+    </div>
   </section>
 
   <!-- ===================== OPDATERING -->
@@ -353,6 +366,15 @@
     <p class="muted small">Afsluttede løb kan arkiveres med <b>🗄 Arkivér</b> under <i>Aktivt løb</i>. De forsvinder fra løbslisten, men intet slettes: resultater, deltagere og læsninger kan ses her og gendannes.</p>
     <div class="row" style="margin-bottom:10px"><label style="flex:1;min-width:220px">Søg<input id="archSearch" placeholder="Løbsnavn eller år" autocomplete="off"></label></div>
     <div class="card"><div class="tablewrap" id="archive"></div></div>
+  </section>
+
+  <!-- ===================== MODULER -->
+  <section class="tab" id="tab-modules">
+    <h2>Moduler</h2>
+    <p class="muted small">Eksterne enheder på USB, der reagerer, når der scannes, fx en højttaler ved læseren. Sæt enheden i, så dukker den op herunder. Moduler påvirker aldrig tidtagningen.</p>
+    <div class="card pad" id="modFound"></div>
+    <h2>Dine moduler</h2>
+    <div id="modList"></div>
   </section>
 
   <!-- ===================== BRUGERE -->
@@ -468,6 +490,7 @@ function showTab(tab) {
   if (tab === "wifi") loadWifi();
   if (tab === "remote") loadRemoteTab();
   if (tab === "update") loadUpdate(true);
+  if (tab === "modules") loadModules();
 }
 $("tabs").onclick = $("subtabs").onclick = e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); };
 
@@ -700,6 +723,69 @@ async function raceAction(act) {
   if (act === "archive") { toast("Løbet er arkiveret – find det under fanen Arkiv"); curId = null; }
   loadRaces();
 }
+
+// ------------------------------------------------ moduler
+let MODS = null;
+async function loadModules() {
+  MODS = await api("/api/modules");
+  const found = MODS.detected.filter(d => !d.added);
+  $("modFound").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><b>Fundne enheder</b>
+      <button id="modRescan">Søg igen</button></div>` +
+    (found.length ? found.map((d, i) => `<div class="row" style="align-items:center;justify-content:space-between;margin-top:10px">
+        <div>${d.icon} <b>${esc(d.name)}</b> <span class="muted small">${esc(d.label)}${d.usb ? " · USB" : ""}</span></div>
+        <button class="primary" data-add="${i}">+ Tilføj</button></div>`).join("")
+      : `<p class="muted small" style="margin:8px 0 0">${MODS.detected.length ? "Alle fundne enheder er tilføjet." : "Ingen enheder fundet. Sæt en USB-højttaler i og tryk Søg igen."}</p>`);
+  $("modRescan").onclick = loadModules;
+  $("modFound").querySelectorAll("[data-add]").forEach(b => b.onclick = async () => {
+    const d = found[+b.dataset.add];
+    await api("/api/modules", {body: {kind: d.kind, device: d.device, name: d.name}});
+    toast(`${d.name} er tilføjet`); loadModules();
+  });
+  renderModules();
+}
+function modField(m, f) {
+  const v = m[f.key] ?? f.default;
+  if (f.type === "select") return `<label>${esc(f.label)}<select data-k="${f.key}">${f.options.map(([k, l]) => `<option value="${k}" ${k === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
+  if (f.type === "range") return `<label>${esc(f.label)} <span class="muted small" data-out="${f.key}">${v} %</span><input type="range" data-k="${f.key}" min="${f.min}" max="${f.max}" value="${v}"></label>`;
+  if (f.type === "slots") return f.slots.map(([sk, sl]) => `<label>${esc(sl)}<select data-slot="${f.key}:${sk}">${f.options.map(([k, l]) => `<option value="${k}" ${k === (v || {})[sk] ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`).join("");
+  return "";
+}
+function renderModules() {
+  if (!MODS.modules.length) { $("modList").innerHTML = `<div class="card pad muted">Ingen moduler endnu. Tilføj en enhed fra listen ovenfor.</div>`; return; }
+  $("modList").innerHTML = MODS.modules.map(m => {
+    const k = MODS.kinds[m.kind] || {fields: [], icon: "🔌", label: m.kind};
+    const dev = MODS.detected.find(d => d.kind === m.kind && d.device === m.device);
+    return `<div class="card mod" data-id="${m.id}">
+      <div class="mhead"><span style="font-size:22px">${k.icon}</span><span class="mname">${esc(m.name)}</span>
+        <span class="pill ${m.status.state}">${esc(m.status.text)}</span>
+        <span class="muted small">${esc(k.label)}${dev ? "" : ` · ${esc(m.device)}`}</span><span style="flex:1"></span>
+        <label class="row" style="align-items:center;gap:6px;flex-direction:row"><input type="checkbox" data-k="enabled" ${m.enabled ? "checked" : ""}> Slået til</label>
+        <button data-test>▶ Test</button><button class="danger" data-del>Fjern</button></div>
+      ${m.last ? `<div class="muted small" style="margin-top:6px">Senest: ${esc(m.last.text)} · ${clock(m.last.ts)}</div>` : ""}
+      <div class="mgrid">${k.fields.map(f => modField(m, f)).join("")}</div></div>`;
+  }).join("");
+  $("modList").querySelectorAll(".mod").forEach(el => {
+    const id = el.dataset.id, m = MODS.modules.find(x => x.id === id);
+    const save = async body => { await api(`/api/modules/${id}`, {method: "PUT", body}); toast("Gemt"); };
+    el.querySelectorAll("[data-k]").forEach(inp => {
+      if (inp.type === "range") inp.oninput = () => { el.querySelector(`[data-out="${inp.dataset.k}"]`).textContent = inp.value + " %"; };
+      inp.onchange = async () => { await save({[inp.dataset.k]: inp.type === "checkbox" ? inp.checked : inp.type === "range" ? +inp.value : inp.value}); if (inp.type === "checkbox") loadModules(); };
+    });
+    el.querySelectorAll("[data-slot]").forEach(sel => sel.onchange = async () => {
+      const [key, slot] = sel.dataset.slot.split(":");
+      m[key] = {...(m[key] || {}), [slot]: sel.value};
+      await save({[key]: m[key]});
+    });
+    el.querySelector("[data-test]").onclick = async () => {
+      try { const r = await api(`/api/modules/${id}/test`, {body: {}}); toast(r.text); } finally { loadModules(); }
+    };
+    el.querySelector("[data-del]").onclick = async () => {
+      if (!confirm(`Fjern ${m.name}? Enheden kan tilføjes igen senere.`)) return;
+      await api(`/api/modules/${id}`, {method: "DELETE"}); loadModules();
+    };
+  });
+}
+setInterval(() => { if (!$("app").hidden && $("tab-modules").classList.contains("on") && !document.activeElement?.closest("#modList")) loadModules(); }, 5000);
 
 // ------------------------------------------------ arkiv
 let archived = [], archCur = null;
@@ -1233,6 +1319,7 @@ async function loadLook() {
   $("logoPrev").innerHTML = b.logo ? `<img src="${b.logo}" style="height:44px;display:block">` : `<span class="logo"><span class="txt">${esc(b.name)}</span></span>`;
   $("logoDel").hidden = !b.logo;
   $("splashTextForm").splash_text.value = b.splash_text || "";
+  $("scanBanner").checked = b.scan_banner !== false;
   $("splashes").innerHTML = b.splash_options.map(o => `<label><input type="radio" name="splash" value="${esc(o.id)}" ${o.id === b.splash_choice ? "checked" : ""}>
     <div class="thumb" style="${o.url ? `background-image:url('${o.url}')` : ""}">${o.url ? "" : esc(b.name)}</div>${esc(o.label)}</label>`).join("");
   $("splashes").querySelectorAll("input").forEach(el => el.onchange = async () => {
@@ -1242,6 +1329,7 @@ async function loadLook() {
 $("nameForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding", {method: "PUT", body: {name: e.target.name.value}}); toast("Navn gemt"); loadLook(); };
 $("logoForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding/logo", {body: new FormData(e.target)}); e.target.reset(); toast("Logo gemt"); loadLook(); };
 $("splashForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding/splash", {body: new FormData(e.target)}); e.target.reset(); toast("Splash-billede gemt og valgt"); loadLook(); };
+$("scanBanner").onchange = async e => { await api("/api/branding", {method: "PUT", body: {scan_banner: e.target.checked}}); toast(e.target.checked ? "Scan-besked slået til" : "Scan-besked slået fra"); };
 $("splashTextForm").onsubmit = async e => { e.preventDefault(); await api("/api/branding", {method: "PUT", body: {splash_text: e.target.splash_text.value}}); toast("Splash-tekst gemt"); loadLook(); };
 $("logoDel").onclick = async () => { if (!confirm("Fjern logoet? Navnet vises så som tekst.")) return; await api("/api/branding/logo", {method: "DELETE"}); loadLook(); };
 loadBrand();
