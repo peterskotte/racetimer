@@ -2,12 +2,15 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
-## [Ikke udgivet]
+## [1.2.1] – 2026-10-24
 
-- **Rettet:** opdateringstjekket gav op med *timed out* på nogle netværk. Det prøver nu igen over IPv4 og venter lidt længere, og fejlbeskeden siger, om Pi'en mangler internet, eller om det kun er GitHub, der ikke svarer.
-- Teksten ved testløb beskriver nu den orange ramme på resultatskærmen.
-- **Rettet:** splash-billede og logo nåede ikke hjemmesiden, hvis de var sendt, før den nye `modtag.php` blev lagt op. `modtag.php` fortæller nu Pi'en, hvilke billeder den har, og Pi'en sender dem igen, hvis de mangler. Upload den nye `modtag.php`.
+**Rettet**
+- **Splash på hjemmesiden:** splash-billede og logo nåede ikke frem, hvis de var sendt, før den nye `modtag.php` blev lagt op. `modtag.php` fortæller nu Pi'en, hvilke billeder den har, og Pi'en sender dem igen, hvis de mangler. **Upload den nye `modtag.php` til webhotellet** (husk at sætte jeres nøgle i den).
+- **Opdateringer:** tjekket gav op med *timed out* på nogle netværk. Det prøver nu igen over IPv4, og fejlbeskeden siger, om Pi'en mangler internet, eller om det kun er GitHub, der ikke svarer.
+
+**Ændret**
 - Admin-adresse, IP og WiFi vises kun på Pi'ens egen skærm, ikke når resultatsiden åbnes på mobiler, via Tailscale eller via det offentlige link. Splash med jeres tekst vises stadig overalt.
+- Teksten ved testløb beskriver den orange ramme på resultatskærmen.
 
 ## [1.2.0] – 2026-10-24
 
