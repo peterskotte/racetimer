@@ -9,8 +9,8 @@
 | | |
 |---|---|
 | Værtsnavn | `racetimer` → `http://racetimer.local:8000` |
-| Login på Pi'en | bruger **`racetimer`**, kode **`racetimer`** (skift den, se nedenfor) |
-| Admin i RaceTimer | **`admin` / `admin`** – opsætningsguiden beder dig skifte den ved første login |
+| Login på Pi'en | bruger **`racetimer`**, kode **`racetimer`**. Opsætningsguiden beder dig skifte den, og `sudo` kræver kode. |
+| Admin i RaceTimer | **`admin`** og en tilfældig førstegangskode, som vises på Pi'ens skærm og ligger i `racetimer-kode.txt` på SD-kortet. Guiden beder dig skifte den. |
 | Sprog / tastatur / tidszone | Dansk, dansk tastatur, Europe/Copenhagen, WiFi-land DK |
 | SSH | Slået fra – slå det til med eget login under *Rediger indstillinger* i Raspberry Pi Imager |
 | RaceTimer | Installeret i `/opt/racetimer` som systemd-service. Starter ved boot og genstarter ved fejl. |
@@ -33,9 +33,9 @@ Mere om WiFi, flere netværk og mobil-hotspot: [wifi.md](wifi.md).
 1. Sæt kortet i Pi'en, og tilslut skærm (HDMI 0, nærmest strømstikket), RFID-læsere og strøm.
 2. Første opstart tager 1-2 minutter, fordi Pi'en gør kortet større og lægger dine indstillinger ind. Derefter kommer skrivebordet, og resultatskærmen åbner af sig selv.
 3. Fra en mobil eller bærbar på samme netværk åbner du `http://racetimer.local:8000/admin`. Virker `.local` ikke, så brug IP-adressen, som står nederst på resultatskærmen.
-4. Log ind med `admin` / `admin`. En opsætningsguide fører dig igennem ny admin-kode, navn og logo, splash-skærm, WiFi og RFID-læsere. Se [vejledning.md](vejledning.md#3-første-opstart-og-opsætningsguiden).
+4. Log ind med `admin` og førstegangskoden fra Pi'ens skærm (eller fra `racetimer-kode.txt` på SD-kortet). En opsætningsguide fører dig igennem ny admin-kode, ny kode til Pi'en, navn og logo, splash-skærm, WiFi og RFID-læsere. Se [vejledning.md](vejledning.md#3-første-opstart-og-opsætningsguiden).
 
-**Skift koden til Pi'en** (hvis du ikke valgte en egen i Imager). Åbn en terminal på Pi'en eller log ind via `ssh racetimer@racetimer.local`, og kør:
+**Skift koden til Pi'en igen senere:** opsætningsguiden skifter standardkoden én gang. Vil du skifte den igen, så åbn en terminal på Pi'en, eller log ind via `ssh racetimer@racetimer.local`, og kør:
 
 ```bash
 passwd

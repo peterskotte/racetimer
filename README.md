@@ -5,7 +5,7 @@ Pi'en er både server, viser resultatskærmen og har en kodebeskyttet admin-side
 
 - **Resultatskærm** (dark mode): `http://<pi>:8000/` – virker på Pi-skærmen, en TV-skærm og på mobilen.
   `?kiosk=1` får lange lister til at rulle automatisk.
-- **Admin**: `http://<pi>:8000/admin` – første login er `admin` / `admin`. Skift koden med det samme.
+- **Admin**: `http://<pi>:8000/admin`. Første login er `admin` og en tilfældig **førstegangskode**, der står på Pi'ens skærm (og i `racetimer-kode.txt` på SD-kortet).
 
 **Ny klub? Start med [Kom i gang-vejledningen](docs/vejledning.md)**: indkøb, SD-kort, opsætning, første løb og fejlfinding.
 
@@ -88,14 +88,15 @@ Sådan udgiver man en ny version: [docs/udgivelse.md](docs/udgivelse.md).
 
 ## Første opstart (ny installation)
 
-Første gang du åbner `http://racetimer.local:8000/admin`, logger du ind med **admin / admin**. Derefter fører en opsætningsguide dig igennem:
+Første gang du åbner `http://racetimer.local:8000/admin`, logger du ind med **admin** og **førstegangskoden**. Hver Pi laver sin egen tilfældige kode ved første opstart. Den står stort på Pi'ens skærm og i filen `racetimer-kode.txt` på SD-kortet, så den også kan findes uden skærm. Derefter fører en opsætningsguide dig igennem:
 
-1. **Ny admin-kode.** Skal vælges, før noget andet virker.
-2. **Navn og logo.** Vises på resultatskærmen og hjemmesiden.
-3. **Splash-skærm.** Vælg et medfølgende billede eller upload jeres eget, og skriv eventuelt en tekst, fx "Næste løb: lørdag kl. 10".
-4. **WiFi** (valgfrit). Flere netværk kan tilføjes senere under *⚙ Opsætning → WiFi*.
-5. **RFID-læsere.** Vælg primær/backup og test med en chip.
-6. **Kontrol.** Tjek af Pi'ens ur og en kort opsummering.
+1. **Ny admin-kode** (mindst 10 tegn). Skal vælges, før noget andet virker. Førstegangskoden slettes, også fra SD-kortet.
+2. **Pi'ens kode.** Skifter Pi-brugerens kendte standardkode (`racetimer`). Derefter kræver `sudo` den nye kode. RaceTimer kan kun skifte den én gang, fra standardkoden. Senere skifter man den selv med `passwd` på Pi'en.
+3. **Navn og logo.** Vises på resultatskærmen og hjemmesiden.
+4. **Splash-skærm.** Vælg et medfølgende billede eller upload jeres eget, og skriv eventuelt en tekst, fx "Næste løb: lørdag kl. 10".
+5. **WiFi** (valgfrit). Flere netværk kan tilføjes senere under *⚙ Opsætning → WiFi*.
+6. **RFID-læsere.** Vælg primær/backup og test med en chip.
+7. **Kontrol.** Tjek af Pi'ens ur og en kort opsummering.
 
 En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`–`DEMO03`), så du kan prøve alt med *Test uden hardware*. Slet det, når I opretter jeres eget løb. Alt fra guiden kan ændres senere, fx navn, logo og splash under fanen **Udseende**.
 

@@ -39,7 +39,13 @@ curl -fsSL "https://pkgs.tailscale.com/stable/debian/$CODENAME.tailscale-keyring
 apt-get update -qq && apt-get install -y tailscale rpi-connect
 install -m 755 -o root -g root /opt/racetimer/deploy/racetimer-remote /usr/local/sbin/racetimer-remote
 install -m 755 -o root -g root /opt/racetimer/deploy/racetimer-update /usr/local/sbin/racetimer-update
-echo "racetimer-svc ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/sbin/racetimer-tunnel, /usr/local/sbin/racetimer-remote, /usr/local/sbin/racetimer-update" > /etc/sudoers.d/racetimer-wifi
+install -m 755 -o root -g root /opt/racetimer/deploy/racetimer-system /usr/local/sbin/racetimer-system
+# Pi-brugeren har en kendt standardkode: markér det, så opsætningsguiden beder om en ny (én gang).
+# sudo kræver kode – også standardkoden – i stedet for Raspberry Pi OS' "NOPASSWD".
+install -d -m 755 /etc/racetimer
+echo "Pi-brugeren har stadig standardkoden fra RaceTimer-imaget" > /etc/racetimer/default-pi-password
+rm -f /etc/sudoers.d/010_pi-nopasswd
+echo "racetimer-svc ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/sbin/racetimer-tunnel, /usr/local/sbin/racetimer-remote, /usr/local/sbin/racetimer-update, /usr/local/sbin/racetimer-system" > /etc/sudoers.d/racetimer-wifi
 chmod 440 /etc/sudoers.d/racetimer-wifi
 
 # Kiosk via labwc's egen autostart også (kiosk.sh sikrer at kun én kører)

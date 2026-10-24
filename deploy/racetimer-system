@@ -1,0 +1,130 @@
+#!/usr/bin/python3 -I
+"""RaceTimer system-hjælper – kører som root via sudo. Kun disse kommandoer:
+
+  racetimer-system status     → JSON: Pi-brugerens navn, og om den stadig har standardkoden
+  racetimer-system passwd     → skift Pi-brugerens kode (JSON {"password": ...} på stdin)
+  racetimer-system bootcode   → læg RaceTimers førstegangskode på SD-kortet – eller fjern den igen
+
+Sikkerhed:
+* passwd virker KUN, mens Pi'en stadig har standardkoden fra imaget (markøren DEFAULT_MARK).
+  Derefter skifter man koden selv med "passwd" på Pi'en. Så kan en fejl i webappen aldrig
+  bruges til at overtage Pi-brugeren.
+* Når koden er skiftet, kræver sudo kode for Pi-brugeren (NOPASSWD-linjer fjernes).
+"""
+import glob
+import json
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+
+DEFAULT_MARK = os.environ.get("RACETIMER_SYS_MARK", "/etc/racetimer/default-pi-password")  # miljø kun til test
+CODE_SRC = os.environ.get("RACETIMER_SYS_CODE", "/var/lib/racetimer/forste-kode.txt")
+BOOT_DIRS = ("/boot/firmware", "/boot")
+SUDOERS = os.environ.get("RACETIMER_SYS_SUDOERS", "/etc/sudoers.d")
+MIN_PW = 10
+
+
+def out(**kw):
+    print(json.dumps({"ok": True, **kw}, ensure_ascii=False))
+
+
+def pi_user():
+    """Pi'ens almindelige bruger (den første, uid 1000 – i imaget "racetimer")."""
+    if os.environ.get("RACETIMER_SYS_USER"):  # kun til test
+        return os.environ["RACETIMER_SYS_USER"]
+    try:
+        return pwd.getpwuid(1000).pw_name
+    except KeyError:
+        return None
+
+
+def status():
+    user = pi_user()
+    out(user=user, default=bool(user) and os.path.exists(DEFAULT_MARK))
+
+
+def passwd():
+    user = pi_user()
+    if not user:
+        raise RuntimeError("Fandt ingen Pi-bruger")
+    if not os.path.exists(DEFAULT_MARK):
+        raise RuntimeError("Koden er allerede skiftet. Skift den igen på Pi'en med kommandoen passwd.")
+    pw = json.loads(sys.stdin.read() or "{}").get("password") or ""
+    if not (MIN_PW <= len(pw) <= 128) or "\n" in pw or "\r" in pw:
+        raise RuntimeError(f"Koden skal være {MIN_PW}–128 tegn")
+    r = subprocess.run([os.environ.get("RACETIMER_SYS_CHPASSWD", "chpasswd")], input=f"{user}:{pw}\n", capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError("Kunne ikke skifte koden: " + (r.stderr or r.stdout).strip()[:200])
+    os.remove(DEFAULT_MARK)
+    require_sudo_password(user)
+    out(user=user)
+
+
+def require_sudo_password(user):
+    """Fjern 'NOPASSWD' for Pi-brugeren (fx /etc/sudoers.d/010_pi-nopasswd), så sudo kræver koden."""
+    pat = re.compile(rf"^\s*{re.escape(user)}\s+ALL\s*=.*NOPASSWD:\s*ALL\s*$")
+    for path in glob.glob(os.path.join(SUDOERS, "*")):
+        try:
+            with open(path) as f:
+                lines = f.readlines()
+        except OSError:
+            continue
+        if not any(pat.match(l) for l in lines):
+            continue
+        new = [l.replace("NOPASSWD:", "") if pat.match(l) else l for l in lines]
+        tmp = path + ".racetimer-tmp"
+        with open(tmp, "w") as f:
+            f.writelines(new)
+        os.chmod(tmp, 0o440)
+        if shutil.which("visudo") and subprocess.run(["visudo", "-cf", tmp], capture_output=True).returncode:
+            os.remove(tmp)  # ugyldig – rør ikke ved den
+            continue
+        os.replace(tmp, path)
+
+
+def bootcode():
+    """Kopiér førstegangskoden til SD-kortets boot-partition (kan læses fra enhver computer).
+    Når koden er skiftet (filen findes ikke længere), fjernes den fra SD-kortet."""
+    boot = os.environ.get("RACETIMER_SYS_BOOT") or next((d for d in BOOT_DIRS if os.path.ismount(d)), None)
+    if not boot:
+        return out(boot=None)
+    dst = os.path.join(boot, "racetimer-kode.txt")
+    try:
+        with open(CODE_SRC) as f:
+            code = f.read().strip()
+    except OSError:
+        code = ""
+    if re.fullmatch(r"[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}", code):
+        with open(dst, "w") as f:
+            f.write("RaceTimer – første login\r\n\r\n"
+                    f"Brugernavn: admin\r\nKode:       {code}\r\n\r\n"
+                    "Åbn http://racetimer.local:8000/admin på en mobil eller computer på samme netværk.\r\n"
+                    "Opsætningsguiden beder dig vælge en ny kode – derefter forsvinder denne fil.\r\n")
+        out(boot=boot, written=True)
+    else:
+        if os.path.exists(dst):
+            os.remove(dst)
+        out(boot=boot, written=False)
+
+
+def main():
+    a = sys.argv[1:]
+    try:
+        if a == ["status"]:
+            status()
+        elif a == ["passwd"]:
+            passwd()
+        elif a == ["bootcode"]:
+            bootcode()
+        else:
+            raise RuntimeError("Brug: racetimer-system status | passwd | bootcode")
+    except Exception as e:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

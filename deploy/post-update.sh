@@ -22,8 +22,9 @@ install -m 755 -o root -g root "$APP/deploy/racetimer-wifi"   /usr/local/sbin/ra
 install -m 755 -o root -g root "$APP/deploy/racetimer-tunnel" /usr/local/sbin/racetimer-tunnel
 install -m 755 -o root -g root "$APP/deploy/racetimer-remote" /usr/local/sbin/racetimer-remote
 install -m 755 -o root -g root "$APP/deploy/racetimer-update" /usr/local/sbin/racetimer-update
+install -m 755 -o root -g root "$APP/deploy/racetimer-system" /usr/local/sbin/racetimer-system
 install -m 644 "$APP/deploy/racetimer-tunnel.service" /etc/systemd/system/racetimer-tunnel.service
-echo "$SVC_USER ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/sbin/racetimer-tunnel, /usr/local/sbin/racetimer-remote, /usr/local/sbin/racetimer-update" > /etc/sudoers.d/racetimer-wifi
+echo "$SVC_USER ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/sbin/racetimer-tunnel, /usr/local/sbin/racetimer-remote, /usr/local/sbin/racetimer-update, /usr/local/sbin/racetimer-system" > /etc/sudoers.d/racetimer-wifi
 chmod 440 /etc/sudoers.d/racetimer-wifi
 visudo -cf /etc/sudoers.d/racetimer-wifi >/dev/null || rm -f /etc/sudoers.d/racetimer-wifi
 

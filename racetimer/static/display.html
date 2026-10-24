@@ -111,6 +111,14 @@
   #testTag { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 21; background: var(--brand-orange); color: #1b1e23;
     font-weight: 800; letter-spacing: .08em; padding: 4px 16px 6px; border-radius: 0 0 10px 10px; font-size: clamp(12px, 1.2vw, 16px); }
   #testTag[hidden] { display: none; }
+  /* ny installation: førstegangskoden – kun på Pi'ens egen skærm, indtil den er skiftet */
+  #firstCode { position: fixed; top: clamp(70px, 12vh, 140px); left: 50%; transform: translateX(-50%); z-index: 22; width: min(900px, 92vw);
+    background: #0c1b14f2; border: 3px solid var(--brand-orange); border-radius: 18px; padding: clamp(14px, 2.4vh, 28px) clamp(16px, 3vw, 36px);
+    color: #fff; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #firstCode[hidden] { display: none; }
+  #firstCode .fc-t { font-size: clamp(16px, 1.8vw, 24px); color: var(--brand-orange); font-weight: 700; }
+  #firstCode .fc-code { font-size: clamp(36px, 6vw, 84px); font-weight: 800; letter-spacing: .08em; margin: 6px 0; font-family: ui-monospace, Menlo, monospace; }
+  #firstCode .fc-s { font-size: clamp(14px, 1.5vw, 20px); opacity: .9; }
   /* scan-besked: stor bjælke nederst ved hver scanning */
   #scans { position: fixed; left: 50%; bottom: clamp(14px, 4vh, 40px); transform: translateX(-50%); z-index: 8; width: min(1100px, 94vw);
     display: flex; flex-direction: column-reverse; gap: 10px; pointer-events: none; }
@@ -182,6 +190,7 @@
   <div class="card" id="board"><div class="empty">Henter…</div></div>
 </main>
 <div id="scans" aria-live="polite"></div>
+<div id="firstCode" hidden><div class="fc-t">Første login i admin</div><div class="fc-code"></div><div class="fc-s"></div></div>
 <div id="testTag" hidden>🧪 TESTLØB</div>
 <div id="splash" hidden>
   <img class="bg" id="splashBg" alt="">
@@ -376,6 +385,12 @@ function render() {
   const h = data.host;
   $("splashHost").textContent = h ? `Admin: ${h.name}:8000/admin${h.ip ? ` · ${h.ip}:8000/admin` : ""}${h.wifi ? ` · WiFi: ${h.wifi}` : ""}` : "";
   $("hostInfo").textContent = h?.ip ? `${h.ip}${h.wifi ? ` · ${h.wifi}` : ""}` : h ? "intet netværk" : "";
+  // ny installation: vis førstegangskoden (sendes kun til Pi'ens egen skærm), indtil den er skiftet
+  $("firstCode").hidden = !data.first_code;
+  if (data.first_code) {
+    $("firstCode").querySelector(".fc-code").textContent = data.first_code;
+    $("firstCode").querySelector(".fc-s").textContent = `Åbn ${h?.ip ? `http://${h.ip}:8000/admin` : "http://racetimer.local:8000/admin"} på en mobil eller computer · brugernavn: admin · kode: som ovenfor`;
+  }
   const idle = !data.race;
   $("splash").hidden = !idle;
   document.body.classList.toggle("splash-on", idle);

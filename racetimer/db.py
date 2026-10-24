@@ -86,8 +86,12 @@ def conn():
         _conn.executescript(SCHEMA)
         _migrate(_conn)
         if not q("SELECT 1 FROM users LIMIT 1"):
-            # helt ny installation: standard-login, ét demoløb og opsætningsguiden ved første login
-            create_user("admin", "admin")
+            # helt ny installation: tilfældig førstegangskode (vises kun på Pi'ens egen skærm og på
+            # SD-kortet), ét demoløb og opsætningsguiden ved første login
+            code = new_first_code()
+            create_user("admin", code)
+            set_setting("first_code", code)
+            _write_first_code(code)
             _create_demo()
             set_setting("setup_done", False)
     return _conn
@@ -110,6 +114,9 @@ def _migrate(c):
         c.execute("ALTER TABLE participants ADD COLUMN dogs INTEGER")
         c.execute("ALTER TABLE participants ADD COLUMN dog1 TEXT")
         c.execute("ALTER TABLE participants ADD COLUMN dog2 TEXT")
+    ucols = [r[1] for r in c.execute("PRAGMA table_info(users)")]
+    if "strong" not in ucols:  # koden er mindst MIN_PW tegn (kræves for login via det offentlige link)
+        c.execute("ALTER TABLE users ADD COLUMN strong INTEGER NOT NULL DEFAULT 0")
     rcols = [r[1] for r in c.execute("PRAGMA table_info(races)")]
     if "archived_at" not in rcols:  # arkiverede løb skjules i løbslisten, men kan gendannes
         c.execute("ALTER TABLE races ADD COLUMN archived_at REAL")
@@ -164,14 +171,53 @@ def check_pw(pw, stored):
     return secrets.compare_digest(hash_pw(pw, salt), stored)
 
 
+MIN_PW = 10
+FIRST_CODE_FILE = os.path.join(DATA_DIR, "forste-kode.txt")
+
+
+def new_first_code():
+    """Fx 'K7PQ-M2XD-9HTA' – uden tegn der let forveksles (0/O, 1/I/L)."""
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "-".join("".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
+
+
+def _write_first_code(code):
+    """Til hjælperen, der lægger koden på SD-kortet (til dem uden skærm). Kun læsbar for RaceTimer."""
+    try:
+        fd = os.open(FIRST_CODE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(code + "\n")
+    except OSError:
+        pass
+
+
+def first_code():
+    """Førstegangskoden, så længe den ikke er skiftet."""
+    return setting("first_code")
+
+
 def create_user(username, pw):
-    return ex("INSERT INTO users(username, pw_hash, created_at) VALUES (?,?,?)", (username, hash_pw(pw), time.time()))
+    return ex("INSERT INTO users(username, pw_hash, created_at, strong) VALUES (?,?,?,?)",
+              (username, hash_pw(pw), time.time(), int(len(pw) >= MIN_PW)))
+
+
+def set_password(uid, pw):
+    ex("UPDATE users SET pw_hash=?, strong=? WHERE id=?", (hash_pw(pw), int(len(pw) >= MIN_PW), uid))
+    u = q1("SELECT username FROM users WHERE id=?", (uid,))
+    if u and u["username"] == "admin" and first_code():
+        ex("DELETE FROM settings WHERE key='first_code'")
+        try:
+            os.remove(FIRST_CODE_FILE)
+        except OSError:
+            pass
 
 
 def login(username, pw):
     u = q1("SELECT * FROM users WHERE username=?", (username,))
     if not u or not check_pw(pw, u["pw_hash"]):
         return None
+    if bool(u.get("strong")) != (len(pw) >= MIN_PW):  # hold "stærk kode" opdateret for ældre brugere
+        ex("UPDATE users SET strong=? WHERE id=?", (int(len(pw) >= MIN_PW), u["id"]))
     token = secrets.token_urlsafe(32)
     ex("INSERT INTO sessions VALUES (?,?,?)", (token, u["id"], time.time() + 12 * 3600))
     return token
@@ -185,8 +231,12 @@ def session_user(token):
 
 
 def default_password_in_use():
+    """Bruges admin stadig med admin/admin (ældre installationer) eller med førstegangskoden?"""
     u = q1("SELECT pw_hash FROM users WHERE username='admin'")
-    return bool(u and check_pw("admin", u["pw_hash"]))
+    if not u:
+        return False
+    code = first_code()
+    return check_pw("admin", u["pw_hash"]) or bool(code and check_pw(code, u["pw_hash"]))
 
 
 # ---------- løb ----------

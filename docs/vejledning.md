@@ -51,16 +51,21 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 2. Første opstart tager 1–2 minutter. Derefter åbner resultatskærmen af sig selv og viser **Pi'ens adresse** nederst, fx `http://192.168.1.23:8000`.
 3. På en mobil eller bærbar **på samme netværk** åbner I adressen med `/admin` bagefter, fx `http://192.168.1.23:8000/admin`. `http://racetimer.local:8000/admin` virker også på de fleste netværk.
    Er Pi'en ikke på et netværk endnu, kan I åbne `http://localhost:8000/admin` på Pi'en selv med mus og tastatur. Luk kiosk-visningen med **Alt+F4**.
-4. Log ind med **admin / admin**. Opsætningsguiden starter:
+4. Log ind med brugernavnet **admin** og **førstegangskoden**. Det er en tilfældig kode som `K7PQ-M2XD-9HTA`, som hver Pi laver selv ved første opstart, så ingen andre kender den.
+   - **Med skærm:** koden står stort på Pi'ens skærm, sammen med adressen.
+   - **Uden skærm:** sluk Pi'en, sæt SD-kortet i en computer, og åbn filen `racetimer-kode.txt` på kortet. Filen forsvinder af sig selv, når koden er skiftet.
+
+   Opsætningsguiden starter:
 
 | Trin | Hvad sker der |
 |---|---|
-| 1. **Admin-kode** | Vælg en ny kode. Standardkoden kan ikke bruges, efter I har skiftet den. |
-| 2. **Navn og logo** | Klubbens eller løbets navn og eventuelt et logo (PNG/JPG/WebP, gerne med gennemsigtig baggrund). Vises øverst på skærmen og på resultatsiderne. |
-| 3. **Splash-skærm** | Billedet, der vises, når der ikke kører et løb, og en valgfri tekst (fx "Næste løb: lørdag kl. 10"). Vises både på skærmen og på hjemmesiden. |
-| 4. **WiFi** (valgfrit) | Op til 5 netværk, som Pi'en selv forbinder til, fx klubhus og en mobil-hotspot. Eduroam og andre netværk med brugernavn virker også. |
-| 5. **RFID-læsere** | Vælg primær og evt. backup. Hold en chip mod læseren, og se den dukke op. |
-| 6. **Færdig** | Tjekker, at Pi'ens ur passer med jeres mobil/computer, og viser en opsummering. |
+| 1. **Admin-kode** | Vælg jeres egen kode på mindst 10 tegn. Førstegangskoden holder op med at virke. |
+| 2. **Pi'ens kode** | Selve Raspberry Pi'en leveres med en kendt kode (bruger `racetimer`, kode `racetimer`). Vælg en ny på mindst 10 tegn. Den bruges til skrivebordet, SSH og administrator-rettigheder (sudo). Gem den sikkert. |
+| 3. **Navn og logo** | Klubbens eller løbets navn og eventuelt et logo (PNG/JPG/WebP, gerne med gennemsigtig baggrund). Vises øverst på skærmen og på resultatsiderne. |
+| 4. **Splash-skærm** | Billedet, der vises, når der ikke kører et løb, og en valgfri tekst (fx "Næste løb: lørdag kl. 10"). Vises både på skærmen og på hjemmesiden. |
+| 5. **WiFi** (valgfrit) | Op til 5 netværk, som Pi'en selv forbinder til, fx klubhus og en mobil-hotspot. Eduroam og andre netværk med brugernavn virker også. |
+| 6. **RFID-læsere** | Vælg primær og evt. backup. Hold en chip mod læseren, og se den dukke op. |
+| 7. **Færdig** | Tjekker, at Pi'ens ur passer med jeres mobil/computer, og viser en opsummering. |
 
 Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende**, netværk under **⚙ Opsætning → WiFi** og læsere under **⚙ Opsætning → RFID-læsere**.
 
@@ -73,7 +78,7 @@ Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende
 | **Deltagere**: import og chip-scanning | *Netværk:* **WiFi**, **Fjernadgang** |
 | **Arkiv**: gamle løb | *System:* **Brugere**, **Opdatering** |
 
-> **Flere officials?** Opret en bruger til hver under **⚙ Opsætning → Brugere**, så ingen deler kode.
+> **Flere officials?** Opret en bruger til hver under **⚙ Opsætning → Brugere**, så ingen deler kode. Alle koder skal være mindst 10 tegn, og det offentlige link kan først slås til, når alle administratorer har en kode på mindst 10 tegn.
 
 ### Uden skærm
 

@@ -177,6 +177,7 @@ def _startup():
         return
     sync_mgr.start()
     module_mgr.start()
+    threading.Thread(target=sync_bootcode, daemon=True).start()
     events.Ticker(bus, standings, reader_mgr.status).start()
     paths = db.setting("readers", {}) or {}
     for role in readers.ROLES:  # miljøvariabler kan overstyre, fx i systemd-filen
@@ -232,8 +233,11 @@ async def login(request: Request, response: Response):
     body = await request.json()
     user = body.get("username", "")
     if is_remote(request) and user == "admin" and db.default_password_in_use():
-        raise HTTPException(403, "Standardkoden admin/admin kan ikke bruges via fjernadgang – skift koden lokalt først")
+        raise HTTPException(403, "Førstegangskoden kan ikke bruges via fjernadgang – skift koden lokalt først")
     token = db.login(user, body.get("password", ""))
+    if token and is_remote(request) and len(body.get("password", "")) < db.MIN_PW:
+        db.ex("DELETE FROM sessions WHERE token=?", (token,))
+        raise HTTPException(403, f"Koden er for kort til login via det offentlige link – skift den lokalt til mindst {db.MIN_PW} tegn")
     if not token:
         fails += 1
         _login_fails[ip] = (fails, time.time() + 15 * 60 if fails >= 5 else 0)
@@ -325,6 +329,8 @@ def live(request: Request):
     if not MIRROR and on_pi_screen(request):
         # admin-adresse, IP og WiFi kun på Pi'ens egen skærm – ikke for publikum på mobiler eller via fjernadgang
         extra["host"] = host_info()
+        if db.first_code():  # ny installation: vis førstegangskoden på Pi'ens egen skærm
+            extra["first_code"] = db.first_code()
     if not MIRROR:
         extra["clock"] = clock_info()
         extra["events"] = bus.recent()
@@ -1020,6 +1026,59 @@ async def set_readers(request: Request, u=Depends(admin)):
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ Pi'ens system (kode, førstegangskode)
+
+SYSTEM_HELPER = "/usr/local/sbin/racetimer-system"
+
+
+def _system(*args, stdin=None):
+    """Kald system-hjælperen (root via sudo). RACETIMER_SYSTEM_CMD kan overstyre ved test."""
+    import shlex
+    import subprocess
+    cmd = shlex.split(os.environ.get("RACETIMER_SYSTEM_CMD", "")) or ["sudo", "-n", SYSTEM_HELPER]
+    if not os.environ.get("RACETIMER_SYSTEM_CMD") and not os.path.exists(SYSTEM_HELPER):
+        return None  # fx under udvikling på en Mac
+    r = subprocess.run(cmd + list(args), input=stdin, capture_output=True, text=True, timeout=30)
+    try:
+        out = json.loads(r.stdout or "{}")
+    except ValueError:
+        out = {"ok": False, "error": (r.stderr or r.stdout or "Ukendt fejl").strip()[:300]}
+    if r.returncode != 0 or out.get("ok") is False:
+        raise HTTPException(400, out.get("error") or "Fejl i system-hjælperen")
+    return out
+
+
+def sync_bootcode():
+    """Læg førstegangskoden på SD-kortet (til dem uden skærm) – eller fjern den, når koden er skiftet."""
+    try:
+        _system("bootcode")
+    except Exception:  # noqa: BLE001 – må aldrig stoppe RaceTimer
+        pass
+
+
+@app.get("/api/system/pi")
+def pi_status(u=Depends(admin)):
+    """Har Pi-brugeren stadig standardkoden fra imaget?"""
+    try:
+        st = _system("status")
+    except HTTPException as e:
+        return {"available": False, "error": e.detail}
+    return {"available": True, **st} if st else {"available": False}
+
+
+@app.post("/api/system/pi/password")
+async def pi_password(request: Request, u=Depends(admin)):
+    pw = (await request.json()).get("password") or ""
+    if len(pw) < db.MIN_PW:
+        raise HTTPException(400, f"Koden skal være mindst {db.MIN_PW} tegn")
+    if is_remote(request):
+        raise HTTPException(403, "Pi'ens kode kan kun skiftes lokalt")
+    out = _system("passwd", stdin=json.dumps({"password": pw}))
+    if out is None:
+        raise HTTPException(503, "Kan kun skiftes på en Pi installeret fra RaceTimer-imaget")
+    return {"ok": True, "user": out.get("user")}
+
+
 # ------------------------------------------------------------------ WiFi (op til 5 netværk, Pi'en)
 
 WIFI_HELPER = "/usr/local/sbin/racetimer-wifi"
@@ -1115,7 +1174,11 @@ def remote_status(request: Request, u=Depends(admin)):
 async def remote_toggle(request: Request, u=Depends(admin)):
     on = bool((await request.json()).get("on"))
     if on and db.default_password_in_use():
-        raise HTTPException(400, "Skift standardkoden admin/admin under Brugerstyring, før fjernadgang slås til")
+        raise HTTPException(400, "Skift førstegangskoden under ⚙ Opsætning → Brugere, før det offentlige link slås til")
+    weak = [w["username"] for w in db.q("SELECT username FROM users WHERE strong=0 ORDER BY username")]
+    if on and weak:
+        raise HTTPException(400, f"Alle administratorer skal have en kode på mindst {db.MIN_PW} tegn, før det offentlige "
+                                 f"link slås til. Skift koden for: {', '.join(weak)} (⚙ Opsætning → Brugere)")
     if not on and is_remote(request):
         raise HTTPException(400, "Du er selv logget ind via fjernadgang – slå den fra lokalt på stævnet")
     st = _tunnel("on" if on else "off")
@@ -1332,14 +1395,14 @@ def update_rollback(u=Depends(admin)):
 
 @app.get("/api/users")
 def users(u=Depends(admin)):
-    return db.q("SELECT id, username, created_at FROM users ORDER BY username")
+    return db.q("SELECT id, username, created_at, strong FROM users ORDER BY username")
 
 
 @app.post("/api/users")
 async def add_user(request: Request, u=Depends(admin)):
     b = await request.json()
-    if not b.get("username") or len(b.get("password") or "") < 6:
-        raise HTTPException(400, "Brugernavn og kode på mindst 6 tegn kræves")
+    if not b.get("username") or len(b.get("password") or "") < db.MIN_PW:
+        raise HTTPException(400, f"Brugernavn og kode på mindst {db.MIN_PW} tegn kræves")
     if db.q1("SELECT 1 FROM users WHERE username=?", (b["username"],)):
         raise HTTPException(409, "Brugernavnet findes allerede")
     return {"id": db.create_user(b["username"], b["password"])}
@@ -1348,9 +1411,12 @@ async def add_user(request: Request, u=Depends(admin)):
 @app.put("/api/users/{uid}/password")
 async def change_pw(uid: int, request: Request, u=Depends(admin)):
     pw = (await request.json()).get("password") or ""
-    if len(pw) < 6:
-        raise HTTPException(400, "Koden skal være mindst 6 tegn")
-    db.ex("UPDATE users SET pw_hash=? WHERE id=?", (db.hash_pw(pw), uid))
+    if len(pw) < db.MIN_PW:
+        raise HTTPException(400, f"Koden skal være mindst {db.MIN_PW} tegn")
+    if pw == "admin" or pw == db.first_code():
+        raise HTTPException(400, "Vælg en ny kode")
+    db.set_password(uid, pw)
+    threading.Thread(target=sync_bootcode, daemon=True).start()  # fjern førstegangskoden fra SD-kortet
     return {"ok": True}
 
 

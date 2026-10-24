@@ -5,6 +5,9 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 ## [Ikke udgivet]
 
 **Sikkerhed**
+- **Tilfældig førstegangskode:** nye installationer starter ikke længere med admin/admin. Hver Pi laver sin egen kode, som kun vises på Pi'ens egen skærm og ligger i `racetimer-kode.txt` på SD-kortet. Indtil guiden er kørt, kan andre på netværket altså ikke overtage den.
+- **Pi'ens egen kode:** opsætningsguiden (og *⚙ Opsætning → Brugere*) skifter Pi-brugerens kendte standardkode `racetimer`, og derefter kræver `sudo` kode. Imaget kræver kode til `sudo` fra start. RaceTimer kan kun skifte koden én gang, fra standardkoden.
+- **Stærkere koder:** admin-koder skal være mindst 10 tegn. Det offentlige link (Cloudflare) kan kun slås til, når alle administratorer har en kode på mindst 10 tegn, og kortere koder kan ikke bruges udefra. Brugere med kort kode er markeret under *Brugere*.
 - Spærringen efter 5 forkerte login kunne omgås på det lokale net med en falsk Cloudflare-header. Headeren bruges nu kun, når den kommer fra tunnelen på Pi'en selv.
 - Et forkert login frøs hele serveren i 1 sekund (også resultatskærmen), så mange forsøg kunne lamme den. Ventetiden blokerer nu kun det ene login-forsøg.
 - Udviklerens signeringsnøgle kan ikke længere komme med i et lokalt bygget image, og rester af den fjernes fra Pi'en og dens gemte backups ved opdatering.

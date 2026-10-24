@@ -48,7 +48,8 @@ sudo systemctl daemon-reload
   fi
   sudo install -m 755 -o root -g root "$DIR/deploy/racetimer-remote" /usr/local/sbin/racetimer-remote
 sudo install -m 755 -o root -g root "$DIR/deploy/racetimer-update" /usr/local/sbin/racetimer-update
-echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/sbin/racetimer-tunnel, /usr/local/sbin/racetimer-remote, /usr/local/sbin/racetimer-update" | sudo tee /etc/sudoers.d/racetimer-wifi >/dev/null
+sudo install -m 755 -o root -g root "$DIR/deploy/racetimer-system" /usr/local/sbin/racetimer-system
+echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/sbin/racetimer-tunnel, /usr/local/sbin/racetimer-remote, /usr/local/sbin/racetimer-update, /usr/local/sbin/racetimer-system" | sudo tee /etc/sudoers.d/racetimer-wifi >/dev/null
 sudo chmod 440 /etc/sudoers.d/racetimer-wifi
 
 # Kiosk-skærm ved login (Raspberry Pi OS bruger labwc som skrivebord)

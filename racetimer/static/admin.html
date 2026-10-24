@@ -155,7 +155,7 @@
     <label>Brugernavn<input name="username" autocomplete="username" required></label>
     <label>Kode<input name="password" type="password" autocomplete="current-password" required></label>
     <button class="primary">Log ind</button>
-    <p class="muted small" id="firstLoginHint" hidden style="margin:0">Første gang: log ind med <b>admin</b> / <b>admin</b> – derefter guider opsætningen dig igennem resten.</p>
+    <p class="muted small" id="firstLoginHint" hidden style="margin:0">Første gang: brugernavn <b>admin</b> og <b>førstegangskoden</b>, der står på Pi'ens skærm – eller i filen <code>racetimer-kode.txt</code> på SD-kortet (sæt kortet i en computer). Derefter guider opsætningen dig igennem resten.</p>
   </form>
 </div>
 
@@ -176,7 +176,7 @@
 </nav>
 <div id="layout">
 <main>
-  <div id="pwWarn" class="warnbox" hidden>Standardkoden <b>admin / admin</b> er stadig aktiv. Skift den under <b>⚙ Opsætning → Brugere</b>.</div>
+  <div id="pwWarn" class="warnbox" hidden>Førstegangskoden (eller den gamle standardkode admin/admin) er stadig aktiv. Skift den under <b>⚙ Opsætning → Brugere</b>.</div>
 
   <!-- ===================== AKTIVT LØB -->
   <section class="tab on" id="tab-active">
@@ -454,10 +454,12 @@
         <div class="card pad">
           <form id="userForm" class="row">
             <label>Brugernavn<input name="username" required autocomplete="off"></label>
-            <label>Kode (min. 6 tegn)<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
+            <label>Kode (min. 10 tegn)<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
             <button class="primary">Opret</button>
           </form>
         </div>
+        <h2>Pi'ens egen kode</h2>
+        <div class="card pad" id="piPwBox">Henter…</div>
       </section>
     </div>
   </div>
@@ -572,7 +574,7 @@ function loadTab(tab) {
   if (tab === "modules") loadModules();
   if (tab === "readers") loadReaders();
   if (tab === "devtest") loadDevtest();
-  if (tab === "users") loadUsers();
+  if (tab === "users") { loadUsers(); loadPiPw(); }
 }
 function markNav(tab) { document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === tab)); }
 function openSetup(tab, toggle) {
@@ -1591,7 +1593,7 @@ $("logoDel").onclick = async () => { if (!confirm("Fjern logoet? Navnet vises s�
 loadBrand();
 
 // ------------------------------------------------ opsætningsguide (første gang)
-const WSTEPS = ["Admin-kode", "Navn og logo", "Splash", "WiFi", "RFID-læsere", "Færdig"];
+const WSTEPS = ["Admin-kode", "Pi'ens kode", "Navn og logo", "Splash", "WiFi", "RFID-læsere", "Færdig"];
 let wi = 0;
 function startWizard() { $("wizard").hidden = false; wi = me.default_password ? 0 : 1; wRender(); }
 function wNav({next = "Næste →", skip = false, back = true} = {}) {
@@ -1601,12 +1603,23 @@ async function wRender() {
   $("wsteps").innerHTML = WSTEPS.map((t, i) => `<span class="${i === wi ? "on" : i < wi ? "done" : ""}">${i + 1}. ${t}</span>`).join("");
   const B = $("wbody"); $("wNext").disabled = false;
   if (wi === 0) {
-    B.innerHTML = `<h2>Velkommen 👋</h2><p class="muted">Lad os sætte RaceTimer op. Først skal standardkoden <b>admin / admin</b> skiftes –
-      ellers kan alle på netværket komme ind.</p>
-      <div class="grid" style="grid-template-columns:1fr 1fr"><label>Ny kode (mindst 6 tegn)<input id="wPw1" type="password" autocomplete="new-password"></label>
+    B.innerHTML = `<h2>Velkommen 👋</h2><p class="muted">Lad os sætte RaceTimer op. Først skal du vælge din egen admin-kode i stedet for
+      førstegangskoden. Den bruges, når du logger ind fra mobilen eller via fjernadgang.</p>
+      <div class="grid" style="grid-template-columns:1fr 1fr"><label>Ny kode (mindst 10 tegn)<input id="wPw1" type="password" minlength="10" autocomplete="new-password"></label>
       <label>Gentag koden<input id="wPw2" type="password" autocomplete="new-password"></label></div>`;
     wNav({back: false});
   } else if (wi === 1) {
+    B.innerHTML = `<h2>Pi'ens kode</h2><div id="wPi">Henter…</div>`;
+    wNav();
+    const d = await api("/api/system/pi").catch(() => ({available: false}));
+    $("wPi").innerHTML = d.available && d.default
+      ? `<p class="muted">Selve Raspberry Pi'en har stadig standardkoden fra imaget (bruger <b>${esc(d.user)}</b>, kode <b>racetimer</b>), som alle kan slå op.
+          Vælg en ny kode. Den bruges, hvis man logger ind på Pi'ens skrivebord eller via SSH, og når man giver den administrator-rettigheder (sudo).</p>
+        <div class="grid" style="grid-template-columns:1fr 1fr"><label>Ny kode til Pi'en (mindst 10 tegn)<input id="wPiPw1" type="password" minlength="10" autocomplete="new-password"></label>
+        <label>Gentag koden<input id="wPiPw2" type="password" autocomplete="new-password"></label></div>
+        <p class="muted small">Gem den et sikkert sted – fx sammen med admin-koden. Den kan senere skiftes på Pi'en med kommandoen <code>passwd</code>.</p>`
+      : `<p>✅ ${d.available ? `Pi'ens kode er allerede skiftet fra standardkoden.` : `Pi'ens kode styres ikke af RaceTimer på denne enhed.`}</p>`;
+  } else if (wi === 2) {
     const b = await api("/api/branding");
     B.innerHTML = `<h2>Navn og logo</h2><p class="muted">Navnet vises øverst på resultatskærmen og på hjemmesiden.</p>
       <label>Klubbens / løbets navn<input id="wName" maxlength="60" value="${esc(b.name)}"></label>
@@ -1614,7 +1627,7 @@ async function wRender() {
       <input type="file" id="wLogo" accept=".png,.jpg,.jpeg,.webp"></div>
       <p class="muted small">Logo er valgfrit – uden logo vises navnet som tekst. Brug gerne PNG med gennemsigtig baggrund.</p>`;
     wNav();
-  } else if (wi === 2) {
+  } else if (wi === 3) {
     const b = await api("/api/branding");
     B.innerHTML = `<h2>Splash-skærm</h2><p class="muted">Vises på skærmen, når der ikke kører et løb.</p>
       <div class="splashes" id="wSplashes">${b.splash_options.map(o => `<label><input type="radio" name="wsplash" value="${esc(o.id)}" ${o.id === b.splash_choice ? "checked" : ""}>
@@ -1622,7 +1635,7 @@ async function wRender() {
       <div class="row" style="margin-top:12px"><span class="muted small">Eller upload jeres eget billede (liggende, fx 1920×1080):</span><input type="file" id="wSplashFile" accept=".png,.jpg,.jpeg,.webp"></div>
       <label style="margin-top:12px">Tekst på splash-skærmen <span class="muted small">(valgfri)</span><textarea id="wSplashText" rows="2" maxlength="160" placeholder="Venter på næste løb">${esc(b.splash_text || "")}</textarea></label>`;
     wNav();
-  } else if (wi === 3) {
+  } else if (wi === 4) {
     B.innerHTML = `<h2>WiFi <span class="muted small">(valgfrit)</span></h2><p class="muted">Skriv netværk, Pi'en automatisk skal forbinde til – fx klubhus og mobil-hotspot.
       Tidtagningen virker også helt uden WiFi. Flere netværk (op til 5) og brugernavn+kode-netværk kan sættes op under <b>⚙ Opsætning → WiFi</b> senere.</p><div id="wWifi">Henter…</div>`;
     wNav({skip: true});
@@ -1633,7 +1646,7 @@ async function wRender() {
         <label>Kode<input id="wWpw" type="password" autocomplete="new-password"></label></div>`;
       $("wWifi").dataset.saved = JSON.stringify(d.saved);
     } catch (e) { $("wWifi").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
-  } else if (wi === 4) {
+  } else if (wi === 5) {
     const d = await api("/api/readers");
     const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("");
     B.innerHTML = `<h2>RFID-læsere</h2><p class="muted">Sæt læserne i Pi'ens USB-porte og vælg dem her. Én læser er nok – en backup giver ekstra sikkerhed.</p>
@@ -1668,22 +1681,29 @@ $("wNext").onclick = async () => {
   try {
     if (wi === 0) {
       const a = $("wPw1").value, b = $("wPw2").value;
-      if (a.length < 6) throw toast("Koden skal være mindst 6 tegn", true);
+      if (a.length < 10) throw toast("Koden skal være mindst 10 tegn", true);
       if (a !== b) throw toast("De to koder er ikke ens", true);
-      if (a === "admin") throw toast("Vælg en anden kode end admin", true);
       await api(`/api/users/${me.id}/password`, {method: "PUT", body: {password: a}});
       me = await api("/api/me");
     } else if (wi === 1) {
+      if ($("wPiPw1")) {
+        const a = $("wPiPw1").value, b = $("wPiPw2").value;
+        if (a.length < 10) throw toast("Koden skal være mindst 10 tegn", true);
+        if (a !== b) throw toast("De to koder er ikke ens", true);
+        await api("/api/system/pi/password", {body: {password: a}});
+        toast("Pi'ens kode er skiftet");
+      }
+    } else if (wi === 2) {
       await api("/api/branding", {method: "PUT", body: {name: $("wName").value}});
       const f = $("wLogo").files[0];
       if (f) { const fd = new FormData(); fd.append("file", f); await api("/api/branding/logo", {body: fd}); }
       loadBrand();
-    } else if (wi === 2) {
+    } else if (wi === 3) {
       const f = $("wSplashFile").files[0];
       if (f) { const fd = new FormData(); fd.append("file", f); await api("/api/branding/splash", {body: fd}); }
       else { const c = document.querySelector("input[name=wsplash]:checked"); if (c) await api("/api/branding", {method: "PUT", body: {splash: c.value}}); }
       await api("/api/branding", {method: "PUT", body: {splash_text: $("wSplashText").value}});
-    } else if (wi === 3) {
+    } else if (wi === 4) {
       const ssid = $("wSsid")?.value.trim();
       if (ssid) {
         const saved = JSON.parse($("wWifi").dataset.saved || "[]").map(n => ({ssid: n.ssid, security: n.security, identity: n.identity, hidden: n.hidden, password: null}));
@@ -1691,7 +1711,7 @@ $("wNext").onclick = async () => {
         await api("/api/wifi", {method: "PUT", body: {networks: [...saved.filter(n => n.ssid !== ssid), {ssid, security: pw ? "psk" : "open", password: pw}].slice(0, 5)}});
         toast(`${ssid} gemt – Pi'en forbinder automatisk`);
       }
-    } else if (wi === 4) {
+    } else if (wi === 5) {
       await api("/api/readers", {method: "PUT", body: {primary: $("wPrim").value, backup: $("wBack2").value}});
     } else {
       await api("/api/setup/done", {body: {}});
@@ -1754,15 +1774,31 @@ function schedUpd() { clearTimeout(updPoll); updPoll = setTimeout(() => { if ($(
 async function loadUsers() {
   const us = await api("/api/users");
   $("users").innerHTML = `<table><thead><tr><th>Brugernavn</th><th>Oprettet</th><th></th></tr></thead><tbody>` +
-    us.map(u => `<tr><td>${esc(u.username)} ${u.username === me.username ? '<span class="pill">dig</span>' : ""}</td><td>${clock(u.created_at)}</td>
+    us.map(u => `<tr><td>${esc(u.username)} ${u.username === me.username ? '<span class="pill">dig</span>' : ""}
+      ${u.strong ? "" : `<span class="pill" style="background:var(--gold);color:#1b1e23" title="Koden er under 10 tegn – den kan ikke bruges via det offentlige link">kort kode</span>`}</td><td>${clock(u.created_at)}</td>
       <td><div class="btns"><button data-uid="${u.id}" data-a="pw">Skift kode</button>${u.username === me.username ? "" : `<button class="danger" data-uid="${u.id}" data-a="del">Slet</button>`}</div></td></tr>`).join("") + "</tbody></table>";
   $("users").querySelectorAll("button").forEach(b => b.onclick = async () => {
     if (b.dataset.a === "pw") {
-      const pw = prompt("Ny kode (min. 6 tegn):"); if (!pw) return;
+      const pw = prompt("Ny kode (min. 10 tegn):"); if (!pw) return;
       await api(`/api/users/${b.dataset.uid}/password`, {method: "PUT", body: {password: pw}}); toast("Koden er skiftet");
-      me = await api("/api/me"); $("pwWarn").hidden = !me.default_password;
+      me = await api("/api/me"); $("pwWarn").hidden = !me.default_password; loadUsers();
     } else if (confirm("Slet brugeren?")) { await api(`/api/users/${b.dataset.uid}`, {method: "DELETE"}); loadUsers(); }
   });
+}
+async function loadPiPw() {
+  const d = await api("/api/system/pi").catch(() => ({available: false}));
+  if (!d.available) { $("piPwBox").innerHTML = `<span class="muted">Pi'ens kode styres ikke af RaceTimer på denne enhed. Skift den på Pi'en med kommandoen <code>passwd</code>.</span>`; return; }
+  if (!d.default) { $("piPwBox").innerHTML = `✅ Pi-brugeren <b>${esc(d.user)}</b> har fået sin egen kode. Skift den igen på Pi'en med kommandoen <code>passwd</code>.`; return; }
+  $("piPwBox").innerHTML = `<p style="color:var(--gold);margin-top:0">⚠ Pi-brugeren <b>${esc(d.user)}</b> har stadig standardkoden <b>racetimer</b>. Vælg en ny (mindst 10 tegn).</p>
+    <form id="piPwForm" class="row"><label>Ny kode til Pi'en<input name="pw1" type="password" minlength="10" required autocomplete="new-password"></label>
+    <label>Gentag<input name="pw2" type="password" required autocomplete="new-password"></label><button class="primary">Skift Pi'ens kode</button></form>`;
+  $("piPwForm").onsubmit = async e => {
+    e.preventDefault();
+    const f = e.target;
+    if (f.pw1.value !== f.pw2.value) return toast("De to koder er ikke ens", true);
+    await api("/api/system/pi/password", {body: {password: f.pw1.value}});
+    toast("Pi'ens kode er skiftet"); loadPiPw();
+  };
 }
 $("userForm").onsubmit = async e => {
   e.preventDefault();

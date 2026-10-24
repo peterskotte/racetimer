@@ -19,9 +19,11 @@ jobs:
         run: python tests/test_events.py
       - name: Læserlisten
         run: python tests/test_readers.py
+      - name: Sikkerhed (førstegangskode, koder, system-hjælper)
+        run: python tests/test_security.py
       - name: Appen kan starte
         run: RACETIMER_DATA=$(mktemp -d) python -c "import racetimer.app"
       - name: Scripts
         run: |
           for f in deploy/*.sh tools/*.sh image/build.sh; do sh -n "$f"; done
-          for f in deploy/racetimer-wifi deploy/racetimer-remote deploy/racetimer-update; do python -m py_compile "$f"; done
+          for f in deploy/racetimer-wifi deploy/racetimer-remote deploy/racetimer-update deploy/racetimer-system; do python -m py_compile "$f"; done

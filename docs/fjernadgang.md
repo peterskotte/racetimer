@@ -43,7 +43,8 @@ Raspberry Pi's officielle tjeneste. Du ser Pi'ens skærm og kan bruge dens termi
 Giver adgang fra en hvilken som helst enhed via **https://ditdomæne.dk/racetimer/admin**. Opsætningen står i [webhotel/LÆS-MIG.md](../webhotel/LÆS-MIG.md#fjernadgang-til-admin-via-hjemmesiden).
 
 Admin er her åben på internettet, kun beskyttet af RaceTimers login:
-- Standardkoden kan ikke bruges udefra.
+- Førstegangskoden kan ikke bruges udefra.
+- Linket kan kun slås til, når alle administratorer har en kode på mindst 10 tegn, og kortere koder kan ikke bruges udefra.
 - Login spærres i 15 min efter 5 forkerte forsøg.
 
 Brug Tailscale, hvis det kun er dig og nogle få officials, der skal ind.
