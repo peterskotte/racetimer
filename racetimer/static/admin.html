@@ -734,7 +734,7 @@ function testFields(t) {
       <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_checkin" ${t.no_checkin ? "checked" : ""}> Ingen indtjekning før start</label>
       <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_dedup" ${t.no_dedup ? "checked" : ""}> Intet dublet-filter – samme armbånd kan scannes igen med det samme</label>
     </div>
-    <p class="muted small" style="margin:8px 0 0">Testløb vises med 🧪 på skærmen og sendes aldrig til hjemmesiden. Distancer er uændrede.</p>`;
+    <p class="muted small" style="margin:8px 0 0">Under et testløb får resultatskærmen en <b>orange ramme</b> og mærkatet 🧪 TESTLØB, så ingen tror, det er et rigtigt løb. Testløb sendes aldrig til hjemmesiden. Distancer er uændrede.</p>`;
 }
 function readTest(f) {
   return {speed: +f.querySelector("[name='t.speed']").value, no_minimum: f.querySelector("[name='t.no_minimum']").checked,

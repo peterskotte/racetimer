@@ -8,7 +8,9 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
+import threading
 import time
 import urllib.request
 
@@ -19,6 +21,39 @@ HELPER = "/usr/local/sbin/racetimer-update"
 DOWNLOADS = os.environ.get("RACETIMER_UPDATE_DOWNLOADS", os.path.join(db.DATA_DIR, "update"))
 API = os.environ.get("RACETIMER_UPDATE_API", "https://api.github.com")
 _cache = {"t": 0, "v": None}
+_v4_lock = threading.Lock()
+
+
+def _urlopen(req, timeout):
+    """urlopen, der prøver igen kun over IPv4, hvis forbindelsen hænger.
+
+    Et net med halvt fungerende IPv6 (fx nogle mobil-hotspots) er en klassisk årsag til timeouts.
+    """
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except OSError as e:
+        if "timed out" not in str(e) and not isinstance(e, TimeoutError):
+            raise
+    with _v4_lock:
+        orig = socket.getaddrinfo
+        socket.getaddrinfo = lambda host, port, family=0, *a, **k: orig(host, port, socket.AF_INET, *a, **k)
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        finally:
+            socket.getaddrinfo = orig
+
+
+def _net_error(e):
+    """Forståelig fejl: har Pi'en slet ikke internet, eller er det kun GitHub, der ikke svarer?"""
+    try:
+        socket.create_connection(("1.1.1.1", 443), timeout=4).close()
+        online = True
+    except OSError:
+        online = False
+    if not online:
+        return "Pi'en har ikke forbindelse til internettet. Tjek WiFi under ⚙ Opsætning → WiFi, og prøv igen."
+    return (f"Pi'en har internet, men GitHub svarer ikke ({e}). Prøv igen om lidt. "
+            "Fortsætter det, blokerer netværket måske github.com – prøv et andet net, fx et mobil-hotspot.")
 
 
 def current_version():
@@ -45,10 +80,10 @@ def check(force=False):
     req = urllib.request.Request(f"{API}/repos/{repo}/releases/latest",
                                  headers={"Accept": "application/vnd.github+json", "User-Agent": "RaceTimer"})
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with _urlopen(req, 20) as r:
             rel = json.loads(r.read())
     except OSError as e:
-        return {"configured": True, "repo": repo, "current": current_version(), "error": f"Kunne ikke kontakte GitHub: {e}"}
+        return {"configured": True, "repo": repo, "current": current_version(), "error": _net_error(e)}
     latest = (rel.get("tag_name") or "").lstrip("v")
     assets = {a["name"]: a["browser_download_url"] for a in rel.get("assets", [])}
     tar = f"racetimer-{latest}.tar.gz"
@@ -71,7 +106,7 @@ def download(info):
     for url, name in ((info["package"], "pakke.tar.gz"), (info["signature"], "pakke.tar.gz.sig")):
         dest = os.path.join(DOWNLOADS, name)
         req = urllib.request.Request(url, headers={"User-Agent": "RaceTimer"})
-        with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
+        with _urlopen(req, 120) as r, open(dest, "wb") as f:
             while True:
                 chunk = r.read(65536)
                 if not chunk:

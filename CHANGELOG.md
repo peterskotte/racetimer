@@ -2,6 +2,11 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
+## [Ikke udgivet]
+
+- **Rettet:** opdateringstjekket gav op med *timed out* på nogle netværk. Det prøver nu igen over IPv4 og venter lidt længere, og fejlbeskeden siger, om Pi'en mangler internet, eller om det kun er GitHub, der ikke svarer.
+- Teksten ved testløb beskriver nu den orange ramme på resultatskærmen.
+
 ## [1.2.0] – 2026-10-24
 
 **Nyt**
