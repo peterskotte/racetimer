@@ -46,7 +46,8 @@ Når klokken slår, gælder: har en løber ingen mållæsning i runden, er løbe
 | **Ur** | **Officielt Pi 5 RTC-batteri** (lille knapcelle-stik). Uden det (og på Pi 3/4) står uret forkert efter opstart, indtil Pi'en får internet. Admin viser urets status og advarer, før løbet startes. |
 | RFID-læsere (2 stk.) | **To ens USB HID-læsere til 13,56 MHz** ("keyboard emulation", MIFARE/NTAG). Driverfrie, billige, robuste og de mest udbredte. Brug samme model til primær og backup, så chip-ID'et har samme format. |
 | Armbånd | Silikone-armbånd med MIFARE Classic 1K eller NTAG213. ID'et kan tjekkes med en mobil med NFC. 125 kHz EM4100-armbånd + 125 kHz-læsere virker også. |
-| Strøm i felten | UPS-HAT eller powerbank med pass-through. Databasen er crash-sikker, men skærmen skal også have strøm. |
+| Skærm *(valgfri)* | HDMI-skærm eller TV til resultatskærmen ved målet. **Ikke nødvendig:** resultater og admin kan også ses på mobil, tablet og bærbar (`http://racetimer.local:8000/`), og en USB-højttaler kan give scan-bekræftelse. |
+| Strøm i felten | UPS-HAT eller powerbank med pass-through. Databasen er crash-sikker. Bruger I skærm, skal den også have strøm. |
 
 **Placering:** Sæt de to læsere ca. 30 cm fra hinanden ved målet, mærket "1" og "2". Hvis de står helt tæt, kan 13,56 MHz-felterne forstyrre hinanden. Løberen holder armbåndet mod læser 1. Hvis den ikke bipper, bruger løberen læser 2. Hvis begge læsere ser samme chip inden for dublet-vinduet (10 sek. som standard), tæller det kun én gang. Dublet-vinduet kan ændres i admin.
 

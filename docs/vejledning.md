@@ -22,11 +22,11 @@ Denne vejledning er til klubber og arrangører, der vil bruge RaceTimer til egne
 |---|---|---|
 | **Raspberry Pi** | Pi 5 (anbefalet), Pi 4 eller Pi 3 (B/B+) | Pi 3 klarer tidtagningen fint, men skærmen er langsommere. Brug den officielle strømforsyning. |
 | **SD-kort** | 32 GB eller større, gerne "A2"/"Application class" | Et godt mærkekort holder længere. |
-| **Skærm** | Alm. skærm eller TV med HDMI | Pi 4/5 har micro-HDMI, så I skal bruge et kabel eller en adapter. |
+| **Skærm** *(valgfri)* | Alm. skærm eller TV med HDMI | **Ikke nødvendig for at tage tid.** Resultater og admin kan ses på mobil, tablet eller bærbar (se [Uden skærm](#uden-skærm)). Pi 4/5 har micro-HDMI, så I skal bruge et kabel eller en adapter. |
 | **RFID-læser** | 1 eller 2 USB-læsere, 13,56 MHz, "keyboard emulation" | Driverfri, billig og den mest udbredte type. Med 2 af samme model har I en backup. |
 | **Armbånd/chips** | MIFARE Classic 1K eller NTAG213 | Køb et par ekstra til glemte og defekte chips. |
 | **Ur (kun Pi 5)** | Officielt RTC-batteri | Holder uret, når Pi'en er slukket og uden internet. Pi 3/4 har ikke batteristik. De stiller selv uret, så snart de har internet, så giv dem net et par minutter, inden løbet startes (mobil-hotspot er nok). |
-| Til ude i skoven | Powerbank med pass-through eller UPS | Skærmen skal også have strøm. |
+| Til ude i skoven | Powerbank med pass-through eller UPS | Uden skærm rækker en almindelig powerbank længe. Med skærm skal den også have strøm. |
 | *Valgfrit:* højttaler | En USB-højttaler ved læseren | Lyd, når der scannes, så løberen kan høre, om omgangen talte. Se afsnit 7. |
 
 > **Tip:** Køb læseren før armbåndene, og test med de armbånd, der fulgte med. Læseren skal kunne læse jeres chip-type.
@@ -47,7 +47,7 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 
 ## 3. Første opstart og opsætningsguiden
 
-1. Sæt kortet i Pi'en. Tilslut skærm (på Pi 4/5 HDMI 0, porten nærmest strømstikket), RFID-læsere og til sidst strøm.
+1. Sæt kortet i Pi'en. Tilslut evt. en skærm (på Pi 4/5 HDMI 0, porten nærmest strømstikket), RFID-læsere og til sidst strøm.
 2. Første opstart tager 1–2 minutter. Derefter åbner resultatskærmen af sig selv og viser **Pi'ens adresse** nederst, fx `http://192.168.1.23:8000`.
 3. På en mobil eller bærbar **på samme netværk** åbner I adressen med `/admin` bagefter, fx `http://192.168.1.23:8000/admin`. `http://racetimer.local:8000/admin` virker også på de fleste netværk.
    Er Pi'en ikke på et netværk endnu, kan I åbne `http://localhost:8000/admin` på Pi'en selv med mus og tastatur. Luk kiosk-visningen med **Alt+F4**.
@@ -74,6 +74,16 @@ Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende
 | **Arkiv**: gamle løb | *System:* **Brugere**, **Opdatering** |
 
 > **Flere officials?** Opret en bruger til hver under **⚙ Opsætning → Brugere**, så ingen deler kode.
+
+### Uden skærm
+
+En skærm er rar at have ved målet, men **RaceTimer kører fuldt ud uden**. Pi'en tager tid, gemmer læsninger og sender til hjemmesiden, uanset om der er en skærm.
+
+- **Find Pi'en:** på samme netværk er adressen `http://racetimer.local:8000`. Med Tailscale er den `http://racetimer:8000`, uanset netværk. Ellers kan IP-adressen findes i routerens liste over enheder eller i mobil-hotspottets liste over forbundne enheder.
+- **Admin:** `http://racetimer.local:8000/admin` på en mobil eller bærbar.
+- **Resultatskærm:** `http://racetimer.local:8000/` virker på enhver mobil, tablet, bærbar eller smart-TV med browser, og flere kan se med på én gang. Tilføj `?kiosk=1` på en tablet eller et TV ved målet, så ruller listen af sig selv.
+- **Scan-bekræftelse uden skærm:** sæt en **USB-højttaler** i (se afsnit 7). Så kan løberen høre, om scanningen talte. Læserens eget bip fortæller kun, at armbåndet er læst.
+- **Første opstart uden skærm:** læg WiFi ind i Raspberry Pi Imager, når kortet skrives (afsnit 2), så Pi'en kommer på nettet af sig selv. Opsætningsguiden køres derefter fra mobilen.
 
 ## 4. Prøv det med demoløbet
 
@@ -173,7 +183,7 @@ scp -r racetimer@racetimer.local:/var/lib/racetimer ./racetimer-backup
 
 | Problem | Løsning |
 |---|---|
-| **Jeg kan ikke finde Pi'ens adresse** | Den står nederst på resultatskærmen. Prøv også `http://racetimer.local:8000/admin`. Mobil og Pi skal være på samme netværk. |
+| **Jeg kan ikke finde Pi'ens adresse** | Den står nederst på resultatskærmen. Prøv også `http://racetimer.local:8000/admin`. Mobil og Pi skal være på samme netværk. Uden skærm kan du se den i routerens eller mobil-hotspottets liste over forbundne enheder, eller bruge `http://racetimer:8000` via Tailscale. |
 | **Sort skærm / resultatskærmen er lukket** | Genstart Pi'en, eller log ud og ind på skrivebordet. Kiosk-visningen starter af sig selv. |
 | **Læseren reagerer ikke** | Tjek at den er valgt under *⚙ Opsætning → RFID-læsere*, og at prikken er grøn. Prøv en anden USB-port. Bipper læseren, men intet sker, så hold chippen mod læseren under **📡 Scan** for at se, om den læses. |
 | **En løbers omgange tæller ikke** | Er løberen tjekket ind? Har løberen den rigtige chip? Er omgangen hurtigere end minimumstiden? Se loggen under *Seneste læsninger*. |
