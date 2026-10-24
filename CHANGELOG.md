@@ -2,7 +2,9 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
-## [Ikke udgivet]
+## [1.3.0] – 2026-10-24
+
+**Til eksisterende installationer:** jeres admin-kode virker som før. Er den kortere end 10 tegn, skal den skiftes under *⚙ Opsætning → Brugere*, før det offentlige link kan bruges. Pi'er installeret før denne version kan ikke få Pi'ens kode skiftet fra RaceTimer – brug `passwd` på Pi'en.
 
 **Sikkerhed**
 - **Tilfældig førstegangskode:** nye installationer starter ikke længere med admin/admin. Hver Pi laver sin egen kode, som kun vises på Pi'ens egen skærm og ligger i `racetimer-kode.txt` på SD-kortet. Indtil guiden er kørt, kan andre på netværket altså ikke overtage den.
