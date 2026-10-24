@@ -4,6 +4,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+- Linjen med Pi'ens adresse (splash-skærmen og kiosk-toppen) viser nu også, hvilket WiFi Pi'en er forbundet til.
 - **Rettet:** med to ens læsere (samme model) blev kun den ene vist i læserlisten. Ens læsere vises nu med deres USB-port, og samme læser kan ikke vælges som både primær og backup.
 - **Scan-besked:** stor grøn, gul eller rød bjælke på resultatskærmen, hver gang et armbånd scannes. Den viser, om scanningen talte, og hvorfor ikke. Slås til og fra under *Udseende*.
 - **Moduler** (*⚙ Opsætning → Moduler*): eksterne enheder på USB, der reagerer på scanninger og nedtælling. Første modul er **USB-højttaler** med valgfri lyd pr. hændelse, lydstyrke og læser. Moduler påvirker aldrig tidtagningen.

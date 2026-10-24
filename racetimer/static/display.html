@@ -365,8 +365,8 @@ function render() {
   applyBrand(data.brand);
   // Pi'ens adresse (skifter når den kommer på et andet WiFi)
   const h = data.host;
-  $("splashHost").textContent = h ? `Admin: ${h.name}:8000/admin${h.ip ? ` · ${h.ip}:8000/admin` : ""}` : "";
-  $("hostInfo").textContent = h?.ip ? h.ip : h ? "intet netværk" : "";
+  $("splashHost").textContent = h ? `Admin: ${h.name}:8000/admin${h.ip ? ` · ${h.ip}:8000/admin` : ""}${h.wifi ? ` · WiFi: ${h.wifi}` : ""}` : "";
+  $("hostInfo").textContent = h?.ip ? `${h.ip}${h.wifi ? ` · ${h.wifi}` : ""}` : h ? "intet netværk" : "";
   const idle = !data.race;
   $("splash").hidden = !idle;
   document.body.classList.toggle("splash-on", idle);

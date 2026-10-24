@@ -63,8 +63,25 @@ def host_info():
         except (OSError, subprocess.SubprocessError):
             ip = None
     name = socket.gethostname().split(".")[0]
-    _host_cache.update(t=time.time(), v={"ip": ip if ip and not ip.startswith("127.") else None, "name": f"{name}.local"})
+    _host_cache.update(t=time.time(), v={"ip": ip if ip and not ip.startswith("127.") else None, "name": f"{name}.local",
+                                         "wifi": wifi_ssid()})
     return _host_cache["v"]
+
+
+def wifi_ssid():
+    """Navnet på det WiFi, Pi'en er forbundet til (None ved kabel eller uden NetworkManager)."""
+    import re
+    import subprocess
+    try:
+        out = subprocess.run([os.environ.get("RACETIMER_NMCLI", "nmcli"), "-t", "-f", "ACTIVE,SSID", "device", "wifi",
+                              "list", "--rescan", "no"], capture_output=True, text=True, timeout=3).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        active, _, ssid = line.partition(":")  # nmcli -t escaper ':' i navnet som '\:'
+        if active == "yes" and ssid:
+            return re.sub(r"\\(.)", r"\1", ssid)
+    return None
 
 
 _clock_cache = {"t": 0, "v": None}
