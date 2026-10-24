@@ -64,7 +64,7 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 
 Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende**, netværk under **⚙ Opsætning → WiFi** og læsere under **⚙ Opsætning → RFID-læsere**.
 
-**Menuen i admin** er delt i to. Det, I bruger på løbsdagen, står forrest, og resten ligger under **⚙ Opsætning**:
+**Menuen i admin** er delt i to. Det, I bruger på løbsdagen, står i menuen foroven, og resten ligger under **⚙ Opsætning**. På en computer er ⚙ Opsætning et panel i højre side, hvor hver sektion klappes ud for sig, så du kan rette indstillinger og samtidig se løbet. På mobil og tablet er ⚙ Opsætning en fane i menuen.
 
 | Løb | ⚙ Opsætning |
 |---|---|

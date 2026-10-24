@@ -4,6 +4,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+- **Ny admin-opbygning:** på computer ligger ⚙ Opsætning som panel i højre side med sektioner, der klappes ud (accordion), mens løbet vises til venstre. Admin er gjort mobilvenlig: på mobil og tablet er Opsætning en fane, og stillingen vises som kompakte kort med knapperne under hver løber.
 - **Testløb (simulering):** alle løbstyper kan oprettes som testløb med hurtigere tid (10×, 60×, 120×) og med minimumstid, indtjekning og dublet-filter slået fra. Testløb vises med orange ramme og 🧪 TESTLØB på skærmen og sendes aldrig til hjemmesiden.
 - **Rettet:** højttalerens startsignal spillede ikke ved hver ny backyard-time, kun ved selve løbsstarten.
 - **Udstyrstest** (*⚙ Opsætning → Udstyrstest*): guide, der tester læser 1 og læser 2 med et armbånd (og advarer om byttede USB-stik), hver højttaler og resultatskærmen. Scanninger under testen tæller ikke, og resultatet gemmes.

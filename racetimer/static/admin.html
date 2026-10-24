@@ -13,19 +13,52 @@
   nav.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--muted); padding: 12px 14px; white-space: nowrap; }
   nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
   nav.tabs .gap { flex: 1; }
-  /* undermenu til Opsætning: grupperet i Skærm og web · Netværk · System */
-  nav.subtabs { display: flex; align-items: center; gap: 2px; padding: 8px clamp(16px, 3vw, 32px); border-bottom: 1px solid var(--line); overflow-x: auto; }
-  nav.subtabs[hidden] { display: none; }
-  nav.subtabs .grp { color: var(--dim, #6b766f); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 0 4px 0 14px; white-space: nowrap; }
-  nav.subtabs .grp:first-child { margin-left: 0; }
-  nav.subtabs button { background: none; border: 1px solid transparent; color: var(--muted); padding: 6px 12px; border-radius: 99px; white-space: nowrap; font-size: 14px; }
-  nav.subtabs button.on { color: var(--text); background: var(--card); border-color: var(--line); }
+  /* layout: løbsfanerne til venstre, ⚙ Opsætning som accordion-panel i højre side (desktop) */
+  #layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 30vw, 520px); align-items: start; }
+  #layout > main { max-width: 1200px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+  #setup { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; border-left: 1px solid var(--line); padding: 16px 16px 60px; box-sizing: border-box; }
+  .setup-title { font-weight: 800; font-size: 18px; margin: 2px 2px 10px; }
+  .acc-grp { color: var(--dim, #6b766f); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin: 16px 4px 6px; }
+  .acc { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--card); }
+  .acc-h { width: 100%; display: flex; justify-content: space-between; align-items: center; background: none; border: 0; border-radius: 12px;
+    padding: 12px 14px; font-weight: 700; font-size: 15px; color: var(--text); cursor: pointer; text-align: left; }
+  .acc-h:hover { background: var(--card-head); }
+  .acc .chev { transition: transform .15s; color: var(--muted); }
+  .acc.open { border-color: var(--accent); }
+  .acc.open .chev { transform: rotate(90deg); }
+  .acc-b { display: none; padding: 0 14px 16px; }
+  .acc.open .acc-b { display: block; }
+  .acc-b .card { background: var(--bg); }
+  .acc-b h2 { font-size: 16px; margin: 18px 0 8px; }
+  .acc-b .card.pad { padding: 14px; }
+  .acc-b .grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  @media (min-width: 1100px) { .mobile-only { display: none !important; } }
+  @media (max-width: 1099px) {  /* tablet og mobil: Opsætning er en fane for sig */
+    #layout { grid-template-columns: minmax(0, 1fr); }
+    #setup { position: static; max-height: none; overflow: visible; border-left: 0; padding: 16px clamp(16px, 3vw, 32px) 60px; }
+    body:not(.setup-view) #setup { display: none; }
+    body.setup-view #layout > main { display: none; }
+  }
   @media (max-width: 700px) {  /* mobil: alle menupunkter synlige uden at rulle sidelæns */
-    nav.tabs, nav.subtabs { flex-wrap: wrap; overflow: visible; }
-    nav.tabs .gap, nav.subtabs .grp { display: none; }
+    nav.tabs { flex-wrap: wrap; overflow: visible; }
+    nav.tabs .gap { display: none; }
     nav.tabs button { padding: 10px 10px; }
-    nav.subtabs { gap: 4px; }
     header.top { flex-wrap: wrap; row-gap: 8px; }
+    /* stillingen som kompakte kort: plads · nr · navn · omgange / status · sidste / knapper */
+    #standings thead { display: none; }
+    #standings table, #standings tbody { display: block; }
+    #standings tr { display: grid; grid-template-columns: 26px auto minmax(0, 1fr) auto; grid-template-areas: "pl bib name main" ". st dep sub" "act act act act";
+      gap: 2px 8px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: baseline; }
+    #standings tr:first-child { border-top: 0; }
+    #standings td { border: 0; padding: 0; }
+    #standings .c-pl { grid-area: pl; color: var(--muted); } #standings .c-bib { grid-area: bib; color: var(--muted); }
+    #standings .c-name { grid-area: name; text-align: left; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #standings .c-main { grid-area: main; font-weight: 700; } #standings .c-main:not([data-l=""])::after { content: " " attr(data-l); font-weight: 400; color: var(--muted); font-size: 12px; }
+    #standings .c-st { grid-area: st; font-size: 13px; } #standings .c-dep { grid-area: dep; font-size: 13px; } #standings .c-dep:not(:empty)::before { content: "Afgang "; color: var(--muted); }
+    #standings .c-sub { grid-area: sub; font-size: 13px; color: var(--muted); } #standings .c-sub::before { content: attr(data-l); }
+    #standings .c-act { grid-area: act; margin-top: 6px; }
+    #standings .btns { gap: 6px; } #standings .btns button { padding: 6px 9px; }
+    main, #setup { padding-left: 12px; padding-right: 12px; }
     header.top .logo img { max-width: 60vw; }
     #logoPrev img { max-width: 100%; height: auto !important; }
   }
@@ -104,8 +137,8 @@
   .wsteps span.done { border-color: var(--green); }
   #wizard h2 { margin-top: 0; }
   .wnav { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 800px) { .two { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -139,23 +172,9 @@
   <button data-tab="people">Deltagere</button>
   <button data-tab="archive">Arkiv</button>
   <span class="gap"></span>
-  <button data-tab="setup">⚙ Opsætning</button>
+  <button data-tab="setup" class="mobile-only">⚙ Opsætning</button>
 </nav>
-<nav class="subtabs" id="subtabs" hidden>
-  <span class="grp">Skærm og web</span>
-  <button data-tab="look">Udseende</button>
-  <button data-tab="sync">Synkronisering</button>
-  <span class="grp">Udstyr</span>
-  <button data-tab="readers">RFID-læsere</button>
-  <button data-tab="modules">Moduler</button>
-  <button data-tab="devtest">Udstyrstest</button>
-  <span class="grp">Netværk</span>
-  <button data-tab="wifi">WiFi</button>
-  <button data-tab="remote">Fjernadgang</button>
-  <span class="grp">System</span>
-  <button data-tab="users">Brugere</button>
-  <button data-tab="update">Opdatering</button>
-</nav>
+<div id="layout">
 <main>
   <div id="pwWarn" class="warnbox" hidden>Standardkoden <b>admin / admin</b> er stadig aktiv. Skift den under <b>⚙ Opsætning → Brugere</b>.</div>
 
@@ -264,118 +283,10 @@
     <div class="card"><div class="tablewrap" id="people"></div></div>
   </section>
 
-  <!-- ===================== SYNKRONISERING -->
-  <section class="tab" id="tab-sync">
-    <h2>Send resultater til webserver</h2>
-    <p class="muted" style="margin-top:0">Alt kører på Pi'en – også uden internet. Her bestemmer du, hvor resultaterne sendes hen,
-      og hvornår: med faste intervaller, manuelt med “Send nu”, og/eller automatisk når løbet afsluttes. Chip-ID'er sendes aldrig.</p>
-    <div id="dests"></div>
-    <h2 id="destFormTitle">Tilføj destination</h2>
-    <div class="card pad">
-      <form id="destForm">
-        <input type="hidden" name="id">
-        <div class="grid">
-          <label>Navn<input name="name" placeholder="fx Klubbens hjemmeside" required></label>
-          <label>Type<select name="type">
-            <option value="mirror">RaceTimer-spejlserver (samme skærm online)</option>
-            <option value="webhook">Egen hjemmeside (JSON)</option>
-            <option value="ftp">FTP-upload til webhotel (færdig side)</option></select></label>
-          <label style="grid-column:1/-1">Adresse<input name="url" placeholder="https://resultater.example.dk" required></label>
-          <label class="ftpOnly">Brugernavn (FTP)<input name="username" autocomplete="off"></label>
-          <label><span class="keyLabel">Nøgle</span><input name="key" type="password" autocomplete="off"></label>
-          <label>Send automatisk<select name="interval_sec">
-            <option value="0">Kun manuelt</option><option value="10">Hvert 10. sek.</option><option value="30">Hvert 30. sek.</option>
-            <option value="60" selected>Hvert minut</option><option value="300">Hvert 5. minut</option>
-            <option value="900">Hvert 15. minut</option><option value="3600">Hver time</option></select></label>
-        </div>
-        <div class="row" style="margin-top:14px;gap:22px">
-          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="on_finish" checked> Send endelige resultater, når løbet afsluttes</label>
-          <label class="hookOnly" style="flex-direction:row;align-items:center;gap:8px" title="Hjemmesiden viderestiller …/racetimer/admin til Pi'ens fjernadgang"><input type="checkbox" name="announce_admin"> Meld admin-adressen (fjernadgang)</label>
-          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="enabled" checked> Aktiv</label>
-          <div style="flex:1"></div>
-          <button type="button" id="destCancel" hidden>Annullér</button>
-          <button class="primary" id="destSave">Tilføj</button>
-        </div>
-        <p class="muted small" id="destTypeHelp"></p>
-      </form>
-    </div>
-  </section>
 
-  <!-- ===================== WIFI -->
-  <section class="tab" id="tab-wifi">
-    <h2>WiFi</h2>
-    <p class="muted" style="margin-top:0">Skriv op til 5 netværk ind – fx klubhuset, hjemme og din mobils hotspot. Pi'en forbinder
-      automatisk til det første netværk i listen, der er inden for rækkevidde, og bliver ved med at prøve – også efter genstart.
-      Tidtagningen kører altid, også uden WiFi.</p>
-    <div class="card pad" id="wifiNow" style="margin-bottom:16px">Henter…</div>
-    <div class="card"><div class="tablewrap"><table>
-      <thead><tr><th style="width:44px">#</th><th>Netværk (SSID)</th><th style="width:170px">Sikkerhed</th><th>Login</th><th style="width:90px"></th><th style="width:230px"></th></tr></thead>
-      <tbody id="wifiRows"></tbody></table></div></div>
-    <datalist id="wifiVisible"></datalist>
-    <div class="row" style="margin-top:14px;justify-content:space-between">
-      <span class="muted small">Tom kode = behold den gemte kode. Rækkefølgen er prioriteten (1 vælges først). Eduroam o.l. = “Brugernavn + kode”.</span>
-      <button class="primary" id="wifiSave">Gem WiFi-netværk</button>
-    </div>
-    <h2>Netværk inden for rækkevidde</h2>
-    <div class="card"><div class="tablewrap" id="wifiScan"></div></div>
-  </section>
 
-  <!-- ===================== FJERNADGANG -->
-  <section class="tab" id="tab-remote">
-    <h2>Fjernadgang</h2>
-    <p class="muted" style="margin-top:0">Kom til Pi'en, når du ikke er på stævnets netværk. Alle tre løsninger åbner forbindelsen
-      <i>ud</i> fra Pi'en – der skal ikke åbnes porte i routeren, og det virker også på mobil-hotspot.</p>
-    <h2 style="font-size:17px">🔒 Tailscale – privat (anbefalet)</h2>
-    <div class="card pad" id="tsBox" style="margin-bottom:8px">Henter…</div>
-    <h2 style="font-size:17px">🖥️ Raspberry Pi Connect – skærm og terminal</h2>
-    <div class="card pad" id="rcBox" style="margin-bottom:8px">Henter…</div>
-    <h2 style="font-size:17px">🌍 Offentligt link via Cloudflare</h2>
-    <div class="card pad" id="remoteBox" style="margin-bottom:8px">Henter…</div>
-  </section>
 
-  <!-- ===================== UDSEENDE -->
-  <section class="tab" id="tab-look">
-    <h2>Navn og logo</h2>
-    <div class="card pad">
-      <form id="nameForm" class="row">
-        <label style="flex:1;min-width:220px">Klubbens / løbets navn (vises i toppen og som titel)<input name="name" maxlength="60" required></label>
-        <button class="primary">Gem navn</button>
-      </form>
-      <div class="row" style="margin-top:16px;align-items:center;gap:16px">
-        <div class="logoPrev" id="logoPrev"></div>
-        <form id="logoForm" class="row"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload logo</button></form>
-        <button class="danger" id="logoDel" hidden>Fjern logo</button>
-      </div>
-      <p class="muted small" style="margin-bottom:0">Logoet vises på en lys bjælke – brug gerne PNG med gennemsigtig baggrund. Uden logo vises navnet som tekst.</p>
-    </div>
-    <h2>Splash-skærm <span class="muted small">(vises når der ikke er et aktivt løb)</span></h2>
-    <div class="card pad">
-      <div class="splashes" id="splashes"></div>
-      <form id="splashForm" class="row" style="margin-top:14px"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload eget billede</button></form>
-      <p class="muted small">Eget billede: liggende format, fx 1920×1080. Det vises med det samme på skærmen.</p>
-      <form id="splashTextForm" class="grid" style="grid-template-columns:1fr;gap:8px;margin-top:6px">
-        <label>Tekst på splash-skærmen <span class="muted small">(valgfri, højst 160 tegn – fx “Næste løb: lørdag kl. 10”)</span>
-          <textarea name="splash_text" rows="2" maxlength="160" placeholder="Venter på næste løb"></textarea></label>
-        <div><button class="primary">Gem tekst</button></div>
-      </form>
-      <p class="muted small" style="margin-bottom:0">Splash og tekst vises på skærmen og på hjemmesiden (synkronisering), når der ikke er et aktivt løb.</p>
-    </div>
-    <h2>Scan-besked</h2>
-    <div class="card pad">
-      <label class="row" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="scanBanner"> Vis en stor besked på resultatskærmen, hver gang et armbånd scannes</label>
-      <p class="muted small" style="margin-bottom:0">Grøn = talt (omgang, mål, indtjekning) · gul = læst, men tæller ikke (fx dublet eller for tidligt) · rød = ukendt armbånd. Lyd ved læseren sættes op under <b>Moduler</b>.</p>
-    </div>
-  </section>
 
-  <!-- ===================== OPDATERING -->
-  <section class="tab" id="tab-update">
-    <h2>Opdatering</h2>
-    <div class="card pad" id="updBox">Henter…</div>
-    <h2 id="updLogTitle" hidden>Seneste opdatering</h2>
-    <div class="card pad" id="updLog" hidden></div>
-    <h2 id="updBackTitle" hidden>Tidligere versioner</h2>
-    <div class="card pad" id="updBack" hidden></div>
-  </section>
 
   <!-- ===================== ARKIV -->
   <section class="tab" id="tab-archive">
@@ -384,44 +295,186 @@
     <div class="row" style="margin-bottom:10px"><label style="flex:1;min-width:220px">Søg<input id="archSearch" placeholder="Løbsnavn eller år" autocomplete="off"></label></div>
     <div class="card"><div class="tablewrap" id="archive"></div></div>
   </section>
-
-  <!-- ===================== RFID-LÆSERE -->
-  <section class="tab" id="tab-readers">
-    <h2>RFID-læsere</h2>
-    <p class="muted small">Én læser er nok – en backup giver ekstra sikkerhed. Sæt læserne i Pi'ens USB-porte og vælg dem her. Hold et armbånd mod en læser for at se, at den tæller op herunder.</p>
-    <div class="card pad" id="readerBox"></div>
-  </section>
-
-  <!-- ===================== MODULER -->
-  <section class="tab" id="tab-modules">
-    <h2>Moduler</h2>
-    <p class="muted small">Eksterne enheder på USB, der reagerer, når der scannes, fx en højttaler ved læseren. Sæt enheden i, så dukker den op herunder. Moduler påvirker aldrig tidtagningen.</p>
-    <div class="card pad" id="modFound"></div>
-    <h2>Dine moduler</h2>
-    <div id="modList"></div>
-  </section>
-
-  <!-- ===================== UDSTYRSTEST -->
-  <section class="tab" id="tab-devtest">
-    <h2>Udstyrstest</h2>
-    <p class="muted small">Gå alt tilsluttet udstyr igennem trin for trin, fx før et løb: læser 1, læser 2, højttalere og resultatskærmen. Scanninger under testen tæller ikke i noget løb.</p>
-    <div class="card pad" id="dtBox"></div>
-  </section>
-
-  <!-- ===================== BRUGERE -->
-  <section class="tab" id="tab-users">
-    <h2>Administratorer</h2>
-    <div class="card"><div class="tablewrap" id="users"></div></div>
-    <h2>Ny administrator</h2>
-    <div class="card pad">
-      <form id="userForm" class="row">
-        <label>Brugernavn<input name="username" required autocomplete="off"></label>
-        <label>Kode (min. 6 tegn)<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
-        <button class="primary">Opret</button>
-      </form>
-    </div>
-  </section>
 </main>
+<aside id="setup" aria-label="Opsætning">
+  <div class="setup-title">⚙ Opsætning</div>
+  <div class="acc-grp">Skærm og web</div>
+  <div class="acc" id="acc-look">
+    <button class="acc-h" data-tab="look" aria-expanded="false"><span>Udseende</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-look">
+        <h2>Navn og logo</h2>
+        <div class="card pad">
+          <form id="nameForm" class="row">
+            <label style="flex:1;min-width:220px">Klubbens / løbets navn (vises i toppen og som titel)<input name="name" maxlength="60" required></label>
+            <button class="primary">Gem navn</button>
+          </form>
+          <div class="row" style="margin-top:16px;align-items:center;gap:16px">
+            <div class="logoPrev" id="logoPrev"></div>
+            <form id="logoForm" class="row"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload logo</button></form>
+            <button class="danger" id="logoDel" hidden>Fjern logo</button>
+          </div>
+          <p class="muted small" style="margin-bottom:0">Logoet vises på en lys bjælke – brug gerne PNG med gennemsigtig baggrund. Uden logo vises navnet som tekst.</p>
+        </div>
+        <h2>Splash-skærm <span class="muted small">(vises når der ikke er et aktivt løb)</span></h2>
+        <div class="card pad">
+          <div class="splashes" id="splashes"></div>
+          <form id="splashForm" class="row" style="margin-top:14px"><input type="file" name="file" accept=".png,.jpg,.jpeg,.webp" required><button>Upload eget billede</button></form>
+          <p class="muted small">Eget billede: liggende format, fx 1920×1080. Det vises med det samme på skærmen.</p>
+          <form id="splashTextForm" class="grid" style="grid-template-columns:1fr;gap:8px;margin-top:6px">
+            <label>Tekst på splash-skærmen <span class="muted small">(valgfri, højst 160 tegn – fx “Næste løb: lørdag kl. 10”)</span>
+              <textarea name="splash_text" rows="2" maxlength="160" placeholder="Venter på næste løb"></textarea></label>
+            <div><button class="primary">Gem tekst</button></div>
+          </form>
+          <p class="muted small" style="margin-bottom:0">Splash og tekst vises på skærmen og på hjemmesiden (synkronisering), når der ikke er et aktivt løb.</p>
+        </div>
+        <h2>Scan-besked</h2>
+        <div class="card pad">
+          <label class="row" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="scanBanner"> Vis en stor besked på resultatskærmen, hver gang et armbånd scannes</label>
+          <p class="muted small" style="margin-bottom:0">Grøn = talt (omgang, mål, indtjekning) · gul = læst, men tæller ikke (fx dublet eller for tidligt) · rød = ukendt armbånd. Lyd ved læseren sættes op under <b>Moduler</b>.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="acc" id="acc-sync">
+    <button class="acc-h" data-tab="sync" aria-expanded="false"><span>Synkronisering</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-sync">
+        <h2>Send resultater til webserver</h2>
+        <p class="muted" style="margin-top:0">Alt kører på Pi'en – også uden internet. Her bestemmer du, hvor resultaterne sendes hen,
+          og hvornår: med faste intervaller, manuelt med “Send nu”, og/eller automatisk når løbet afsluttes. Chip-ID'er sendes aldrig.</p>
+        <div id="dests"></div>
+        <h2 id="destFormTitle">Tilføj destination</h2>
+        <div class="card pad">
+          <form id="destForm">
+            <input type="hidden" name="id">
+            <div class="grid">
+              <label>Navn<input name="name" placeholder="fx Klubbens hjemmeside" required></label>
+              <label>Type<select name="type">
+                <option value="mirror">RaceTimer-spejlserver (samme skærm online)</option>
+                <option value="webhook">Egen hjemmeside (JSON)</option>
+                <option value="ftp">FTP-upload til webhotel (færdig side)</option></select></label>
+              <label style="grid-column:1/-1">Adresse<input name="url" placeholder="https://resultater.example.dk" required></label>
+              <label class="ftpOnly">Brugernavn (FTP)<input name="username" autocomplete="off"></label>
+              <label><span class="keyLabel">Nøgle</span><input name="key" type="password" autocomplete="off"></label>
+              <label>Send automatisk<select name="interval_sec">
+                <option value="0">Kun manuelt</option><option value="10">Hvert 10. sek.</option><option value="30">Hvert 30. sek.</option>
+                <option value="60" selected>Hvert minut</option><option value="300">Hvert 5. minut</option>
+                <option value="900">Hvert 15. minut</option><option value="3600">Hver time</option></select></label>
+            </div>
+            <div class="row" style="margin-top:14px;gap:22px">
+              <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="on_finish" checked> Send endelige resultater, når løbet afsluttes</label>
+              <label class="hookOnly" style="flex-direction:row;align-items:center;gap:8px" title="Hjemmesiden viderestiller …/racetimer/admin til Pi'ens fjernadgang"><input type="checkbox" name="announce_admin"> Meld admin-adressen (fjernadgang)</label>
+              <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="enabled" checked> Aktiv</label>
+              <div style="flex:1"></div>
+              <button type="button" id="destCancel" hidden>Annullér</button>
+              <button class="primary" id="destSave">Tilføj</button>
+            </div>
+            <p class="muted small" id="destTypeHelp"></p>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="acc-grp">Udstyr</div>
+  <div class="acc" id="acc-readers">
+    <button class="acc-h" data-tab="readers" aria-expanded="false"><span>RFID-læsere</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-readers">
+            <p class="muted small">Én læser er nok – en backup giver ekstra sikkerhed. Sæt læserne i Pi'ens USB-porte og vælg dem her. Hold et armbånd mod en læser for at se, at den tæller op herunder.</p>
+        <div class="card pad" id="readerBox"></div>
+      </section>
+    </div>
+  </div>
+  <div class="acc" id="acc-modules">
+    <button class="acc-h" data-tab="modules" aria-expanded="false"><span>Moduler</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-modules">
+            <p class="muted small">Eksterne enheder på USB, der reagerer, når der scannes, fx en højttaler ved læseren. Sæt enheden i, så dukker den op herunder. Moduler påvirker aldrig tidtagningen.</p>
+        <div class="card pad" id="modFound"></div>
+        <h2>Dine moduler</h2>
+        <div id="modList"></div>
+      </section>
+    </div>
+  </div>
+  <div class="acc" id="acc-devtest">
+    <button class="acc-h" data-tab="devtest" aria-expanded="false"><span>Udstyrstest</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-devtest">
+            <p class="muted small">Gå alt tilsluttet udstyr igennem trin for trin, fx før et løb: læser 1, læser 2, højttalere og resultatskærmen. Scanninger under testen tæller ikke i noget løb.</p>
+        <div class="card pad" id="dtBox"></div>
+      </section>
+    </div>
+  </div>
+  <div class="acc-grp">Netværk</div>
+  <div class="acc" id="acc-wifi">
+    <button class="acc-h" data-tab="wifi" aria-expanded="false"><span>WiFi</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-wifi">
+            <p class="muted" style="margin-top:0">Skriv op til 5 netværk ind – fx klubhuset, hjemme og din mobils hotspot. Pi'en forbinder
+          automatisk til det første netværk i listen, der er inden for rækkevidde, og bliver ved med at prøve – også efter genstart.
+          Tidtagningen kører altid, også uden WiFi.</p>
+        <div class="card pad" id="wifiNow" style="margin-bottom:16px">Henter…</div>
+        <div class="card"><div class="tablewrap"><table>
+          <thead><tr><th style="width:44px">#</th><th>Netværk (SSID)</th><th style="width:170px">Sikkerhed</th><th>Login</th><th style="width:90px"></th><th style="width:230px"></th></tr></thead>
+          <tbody id="wifiRows"></tbody></table></div></div>
+        <datalist id="wifiVisible"></datalist>
+        <div class="row" style="margin-top:14px;justify-content:space-between">
+          <span class="muted small">Tom kode = behold den gemte kode. Rækkefølgen er prioriteten (1 vælges først). Eduroam o.l. = “Brugernavn + kode”.</span>
+          <button class="primary" id="wifiSave">Gem WiFi-netværk</button>
+        </div>
+        <h2>Netværk inden for rækkevidde</h2>
+        <div class="card"><div class="tablewrap" id="wifiScan"></div></div>
+      </section>
+    </div>
+  </div>
+  <div class="acc" id="acc-remote">
+    <button class="acc-h" data-tab="remote" aria-expanded="false"><span>Fjernadgang</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-remote">
+            <p class="muted" style="margin-top:0">Kom til Pi'en, når du ikke er på stævnets netværk. Alle tre løsninger åbner forbindelsen
+          <i>ud</i> fra Pi'en – der skal ikke åbnes porte i routeren, og det virker også på mobil-hotspot.</p>
+        <h2 style="font-size:17px">🔒 Tailscale – privat (anbefalet)</h2>
+        <div class="card pad" id="tsBox" style="margin-bottom:8px">Henter…</div>
+        <h2 style="font-size:17px">🖥️ Raspberry Pi Connect – skærm og terminal</h2>
+        <div class="card pad" id="rcBox" style="margin-bottom:8px">Henter…</div>
+        <h2 style="font-size:17px">🌍 Offentligt link via Cloudflare</h2>
+        <div class="card pad" id="remoteBox" style="margin-bottom:8px">Henter…</div>
+      </section>
+    </div>
+  </div>
+  <div class="acc-grp">System</div>
+  <div class="acc" id="acc-users">
+    <button class="acc-h" data-tab="users" aria-expanded="false"><span>Brugere</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-users">
+        <h2>Administratorer</h2>
+        <div class="card"><div class="tablewrap" id="users"></div></div>
+        <h2>Ny administrator</h2>
+        <div class="card pad">
+          <form id="userForm" class="row">
+            <label>Brugernavn<input name="username" required autocomplete="off"></label>
+            <label>Kode (min. 6 tegn)<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
+            <button class="primary">Opret</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="acc" id="acc-update">
+    <button class="acc-h" data-tab="update" aria-expanded="false"><span>Opdatering</span><span class="chev">▸</span></button>
+    <div class="acc-b">
+      <section class="tab" id="tab-update">
+            <div class="card pad" id="updBox">Henter…</div>
+        <h2 id="updLogTitle" hidden>Seneste opdatering</h2>
+        <div class="card pad" id="updLog" hidden></div>
+        <h2 id="updBackTitle" hidden>Tidligere versioner</h2>
+        <div class="card pad" id="updBack" hidden></div>
+      </section>
+    </div>
+  </div>
+</aside>
+</div>
 </div>
 <dialog id="timeDlg">
   <form id="timeForm" method="dialog" class="grid" style="grid-template-columns:1fr;gap:14px">
@@ -503,17 +556,12 @@ async function boot() {
 }
 
 // ------------------------------------------------ faner
-// Løbsfanerne ligger i hovedmenuen; resten samles under ⚙ Opsætning med en undermenu
-const SETUP_TABS = [...document.querySelectorAll("#subtabs button")].map(b => b.dataset.tab);
-let lastSetup = "look";
-function showTab(tab) {
-  if (tab === "setup") tab = lastSetup;
-  const setup = SETUP_TABS.includes(tab);
-  if (setup) lastSetup = tab;
-  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === (setup ? "setup" : tab)));
-  document.querySelectorAll("#subtabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === tab));
-  $("subtabs").hidden = !setup;
-  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + tab));
+// Løbsfanerne vises til venstre. ⚙ Opsætning er et accordion-panel i højre side på desktop
+// og en fane for sig på tablet/mobil (body.setup-view).
+const SETUP_TABS = [...document.querySelectorAll("#setup .acc-h")].map(b => b.dataset.tab);
+let lastSetup = null;
+const isDesktop = () => matchMedia("(min-width: 1100px)").matches;
+function loadTab(tab) {
   if (tab === "people") loadPeople();
   if (tab === "archive") loadArchive();
   if (tab === "look") loadLook();
@@ -524,8 +572,43 @@ function showTab(tab) {
   if (tab === "modules") loadModules();
   if (tab === "readers") loadReaders();
   if (tab === "devtest") loadDevtest();
+  if (tab === "users") loadUsers();
 }
-$("tabs").onclick = $("subtabs").onclick = e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); };
+function markNav(tab) { document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === tab)); }
+function openSetup(tab, toggle) {
+  const open = toggle && $("acc-" + tab)?.classList.contains("open") ? null : tab;  // klik på åben sektion lukker den
+  document.querySelectorAll("#setup .acc").forEach(a => {
+    a.classList.toggle("open", a.id === "acc-" + open);
+    a.querySelector(".acc-h").setAttribute("aria-expanded", a.id === "acc-" + open);
+  });
+  document.querySelectorAll("#setup section.tab").forEach(sec => sec.classList.toggle("on", sec.id === "tab-" + open));
+  if (!open) return;
+  lastSetup = open;
+  loadTab(open);
+  requestAnimationFrame(() => {  // vis den åbne sektion: på desktop ruller kun panelet, ikke siden
+    const acc = $("acc-" + open);
+    if (isDesktop()) $("setup").scrollTo({top: acc.offsetTop - $("setup").offsetTop - 8, behavior: "smooth"});
+    else window.scrollTo({top: acc.getBoundingClientRect().top + window.scrollY - 8, behavior: "smooth"});
+  });
+}
+function showTab(tab, toggle) {
+  if (tab === "setup" || SETUP_TABS.includes(tab)) {
+    if (!isDesktop()) { document.body.classList.add("setup-view"); markNav("setup"); window.scrollTo(0, 0); }
+    if (tab !== "setup") openSetup(tab, toggle);
+    else if (lastSetup) openSetup(lastSetup);
+    return;
+  }
+  document.body.classList.remove("setup-view");
+  markNav(tab);
+  document.querySelectorAll("main section.tab").forEach(sec => sec.classList.toggle("on", sec.id === "tab-" + tab));
+  loadTab(tab);
+}
+$("tabs").onclick = e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); };
+$("setup").onclick = e => { const b = e.target.closest(".acc-h"); if (b) showTab(b.dataset.tab, true); };
+// skift fra mobil til desktop (fx drejet tablet): vis løbsfanen igen ved siden af panelet
+matchMedia("(min-width: 1100px)").addEventListener("change", e => {
+  if (e.matches && document.body.classList.contains("setup-view")) showTab(document.querySelector("main section.tab.on")?.id.slice(4) || "active");
+});
 
 // ------------------------------------------------ konfig-felter (fælles for nyt/rediger)
 const CFG_LABELS = {
@@ -1029,11 +1112,11 @@ function renderStandings() {
   const by = type.startsWith("backyard") && !cur.info.continuous && cur.info.phase === "running";
   if (!rows.length) { $("standings").innerHTML = `<p class="muted" style="padding:16px">Ingen deltagere endnu – tilføj under “Deltagere”.</p>`; return; }
   $("standings").innerHTML = `<table><thead><tr><th>#</th><th>Nr</th><th>Navn</th><th>Status</th>${by ? `<th title="Læsning i afgangsvinduet i denne runde">Afgang</th>` : ""}<th>${tt ? "Tid" : "Omgange"}</th><th>${tt ? "Start" : "Sidste omg."}</th><th>Handling</th></tr></thead><tbody>` +
-    rows.map(r => `<tr class="st-${r.status}"><td>${r.place ?? "–"}</td><td>${r.bib ?? ""}</td><td>${esc(r.name)}</td>
-      <td style="white-space:nowrap"><i class="dot"></i>${esc(r.status_label)}${r.flags ? ` <span class="pill" style="background:var(--gold);color:#1b1e23">⚑ ${r.flags}</span>` : ""}</td>
-      ${by ? `<td>${r.started_current ? "✓" : ["active", "resting"].includes(r.status) ? '<span class="muted">–</span>' : ""}</td>` : ""}
-      <td class="num">${tt ? hms(r.total_time) : r.laps}</td><td class="num">${tt ? clock(r.start_ts) : hms(r.last_lap)}</td>
-      <td><div class="btns">
+    rows.map(r => `<tr class="st-${r.status}"><td class="c-pl">${r.place ?? "–"}</td><td class="c-bib">${r.bib ?? ""}</td><td class="c-name">${esc(r.name)}</td>
+      <td class="c-st" style="white-space:nowrap"><i class="dot"></i>${esc(r.status_label)}${r.flags ? ` <span class="pill" style="background:var(--gold);color:#1b1e23">⚑ ${r.flags}</span>` : ""}</td>
+      ${by ? `<td class="c-dep">${r.started_current ? "✓" : ["active", "resting"].includes(r.status) ? '<span class="muted">–</span>' : ""}</td>` : ""}
+      <td class="num c-main" data-l="${tt ? "" : "omg."}">${tt ? hms(r.total_time) : r.laps}</td><td class="num c-sub" data-l="${tt ? "start " : "sidste "}">${tt ? clock(r.start_ts) : hms(r.last_lap)}</td>
+      <td class="c-act"><div class="btns">
         ${cur.info.checkin && ["nocheckin", "waiting"].includes(r.status) ? `<button class="go" data-pid="${r.id}" data-a="checkin" title="Tjek løberen ind manuelt (fx glemt at scanne)">✓ Tjek ind</button>` : ""}
         <button data-pid="${r.id}" data-a="lap" title="Registrér passage nu (klokken lige nu)">+ Nu</button>
         <button data-pid="${r.id}" data-a="time" title="Indtast mellemtid eller sluttid manuelt">⏱ Tid</button>
