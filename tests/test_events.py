@@ -160,6 +160,15 @@ def test_countdown_and_start_signal_each_yard():
     assert got == [3, 2, 1, 0], got  # startsignalet kommer, selv om "næste start" er rykket til timen efter
     db.ex("DELETE FROM races WHERE id=?", (rid,))
 
+
+def test_address_only_on_pi_screen():
+    from types import SimpleNamespace as N
+    req = lambda ip, h=None: N(client=N(host=ip), headers=h or {})
+    assert "host" in app.live(req("127.0.0.1"))                      # Pi'ens egen kiosk-skærm
+    assert "host" not in app.live(req("192.168.1.50"))               # publikum på netværket
+    assert "host" not in app.live(req("100.84.51.64"))               # Tailscale
+    assert "host" not in app.live(req("127.0.0.1", {"cf-ray": "x"}))  # Cloudflare-tunnel
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

@@ -292,8 +292,14 @@ def race_public(race):
     return {k: race.get(k) for k in ("id", "name", "type", "status", "scheduled_start", "started_at", "finished_at", "test")}
 
 
+def on_pi_screen(request):
+    """Kommer forespørgslen fra Pi'ens egen skærm (kiosk-browseren på localhost)?"""
+    host = request.client.host if request.client else ""
+    return host in ("127.0.0.1", "::1") and not is_remote(request)
+
+
 @app.get("/api/live")
-def live():
+def live(request: Request):
     race = db.active_race()
     now = time.time()
     extra = {}
@@ -304,8 +310,10 @@ def live():
         extra["mirror"] = {"age": time.time() - last if last else None}
     extra["version"] = APP_VERSION
     extra["brand"] = branding.public()
-    if not MIRROR:  # den offentlige spejlserver skal ikke vise stævne-netværkets adresse
+    if not MIRROR and on_pi_screen(request):
+        # admin-adresse, IP og WiFi kun på Pi'ens egen skærm – ikke for publikum på mobiler eller via fjernadgang
         extra["host"] = host_info()
+    if not MIRROR:
         extra["clock"] = clock_info()
         extra["events"] = bus.recent()
     if not race:
