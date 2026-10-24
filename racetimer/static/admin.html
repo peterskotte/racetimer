@@ -137,6 +137,7 @@
   <button data-tab="look">Udseende</button>
   <button data-tab="sync">Synkronisering</button>
   <span class="grp">Udstyr</span>
+  <button data-tab="readers">RFID-læsere</button>
   <button data-tab="modules">Moduler</button>
   <span class="grp">Netværk</span>
   <button data-tab="wifi">WiFi</button>
@@ -173,7 +174,8 @@
       </div>
       <div>
         <h2>Læsere</h2>
-        <div class="card pad" id="readerBox"></div>
+        <div class="card pad"><div id="readerStatus"></div>
+          <button style="margin-top:8px" onclick="showTab('readers')">⚙ Vælg læsere</button></div>
         <h2>Test uden hardware</h2>
         <div class="card pad">
           <form id="simForm" class="row">
@@ -368,6 +370,13 @@
     <div class="card"><div class="tablewrap" id="archive"></div></div>
   </section>
 
+  <!-- ===================== RFID-LÆSERE -->
+  <section class="tab" id="tab-readers">
+    <h2>RFID-læsere</h2>
+    <p class="muted small">Én læser er nok – en backup giver ekstra sikkerhed. Sæt læserne i Pi'ens USB-porte og vælg dem her. Hold et armbånd mod en læser for at se, at den tæller op herunder.</p>
+    <div class="card pad" id="readerBox"></div>
+  </section>
+
   <!-- ===================== MODULER -->
   <section class="tab" id="tab-modules">
     <h2>Moduler</h2>
@@ -491,6 +500,7 @@ function showTab(tab) {
   if (tab === "remote") loadRemoteTab();
   if (tab === "update") loadUpdate(true);
   if (tab === "modules") loadModules();
+  if (tab === "readers") loadReaders();
 }
 $("tabs").onclick = $("subtabs").onclick = e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); };
 
@@ -670,9 +680,8 @@ async function loadRace(full) {
       ${cfgFields(r.type, r.effective_config, locked)}
       <div style="margin-top:14px"><button class="primary">Gem indstillinger</button></div>`;
     wireWaves($("editForm")); wireEndMode($("editForm"));
-    loadReaders();
   }
-  renderStandings(); loadReads();
+  renderStandings(); loadReads(); loadReaderStatus();
 }
 $("editForm").onsubmit = async e => {
   e.preventDefault();
@@ -905,15 +914,21 @@ async function loadReads() {
   $("reads").querySelectorAll("button[data-rid]").forEach(b => b.onclick = async () => { await api(`/api/reads/${b.dataset.rid}/toggle`, {body: {}}); loadRace(false); });
 }
 
+// status-prikker for læserne (deles af Aktivt løb og RFID-læsere)
+function readerDots(d) {
+  return d.status.map(s => `<div style="margin-bottom:6px"><i class="dot ${s.connected ? "active" : ""}" style="background:${s.connected ? "var(--green)" : "var(--red)"}"></i>
+    <b>${s.role === "primary" ? "Primær" : "Backup"}</b>: ${s.connected ? "forbundet" : (s.path ? "ikke forbundet" : "ikke valgt")}
+    ${s.reads ? ` · ${s.reads} læsninger` : ""}${s.last_read ? ` · senest ${new Date(s.last_read * 1000).toLocaleTimeString("da-DK")}` : ""}${s.error ? ` <span class="muted small">(${esc(s.error)})</span>` : ""}</div>`).join("");
+}
+async function loadReaderStatus() {
+  try { $("readerStatus").innerHTML = readerDots(await api("/api/readers")); } catch (_) {}
+}
 async function loadReaders() {
   const d = await api("/api/readers");
   const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("") +
     (sel && !d.devices.find(x => x.path === sel) ? `<option value="${esc(sel)}" selected>${esc(sel.split("/").pop())} ${(d.ambiguous || []).includes(sel) ? "– ⚠ to ens læsere, vælg igen" : "(ikke fundet)"}</option>` : "");
   const amb = ["primary", "backup"].some(r => (d.ambiguous || []).includes(d.config[r]));
-  const st = d.status.map(s => `<div style="margin-bottom:6px"><i class="dot ${s.connected ? "active" : ""}" style="background:${s.connected ? "var(--green)" : "var(--red)"}"></i>
-    <b>${s.role === "primary" ? "Primær" : "Backup"}</b>: ${s.connected ? "forbundet" : (s.path ? "ikke forbundet" : "ikke valgt")}
-    ${s.reads ? ` · ${s.reads} læsninger` : ""}${s.error ? ` <span class="muted small">(${esc(s.error)})</span>` : ""}</div>`).join("");
-  $("readerBox").innerHTML = st + (d.evdev ? "" : `<p class="muted small">python-evdev er ikke installeret (normalt på Mac). Brug simuleringen nedenfor.</p>`) +
+  $("readerBox").innerHTML = `<div id="readerDots">${readerDots(d)}</div>` + (d.evdev ? "" : `<p class="muted small">python-evdev er ikke installeret (normalt på Mac). Brug <i>Test uden hardware</i> under Aktivt løb.</p>`) +
     `<form id="readerForm" class="grid" style="grid-template-columns:1fr;margin-top:12px">
       ${amb ? `<div class="warnbox" style="margin:0">⚠ Der er sat to ens læsere i. De kendes nu på den <b>USB-port</b>, de sidder i. Vælg primær og backup igen herunder, og lad læserne blive siddende i de samme porte.</div>` : ""}
       ${d.devices.some(x => x.label.includes("· USB-port")) ? `<p class="muted small" style="margin:0">Ens læsere kendes på USB-porten. Bytter du rundt på stikkene, bytter primær og backup også plads.</p>` : ""}
@@ -1384,7 +1399,7 @@ async function wRender() {
     const d = await api("/api/readers");
     const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("");
     B.innerHTML = `<h2>RFID-læsere</h2><p class="muted">Sæt læserne i Pi'ens USB-porte og vælg dem her. Én læser er nok – en backup giver ekstra sikkerhed.</p>
-      ${d.devices.length ? "" : `<p style="color:var(--gold)">Ingen læsere fundet. Sæt dem i og tryk <b>Søg igen</b> – eller spring over og gør det senere under <i>Aktivt løb → Læsere</i>.</p>`}
+      ${d.devices.length ? "" : `<p style="color:var(--gold)">Ingen læsere fundet. Sæt dem i og tryk <b>Søg igen</b> – eller spring over og gør det senere under <i>⚙ Opsætning → RFID-læsere</i>.</p>`}
       <div class="grid" style="grid-template-columns:1fr 1fr"><label>Primær læser<select id="wPrim">${opt(d.config.primary)}</select></label>
       <label>Backup læser<select id="wBack2">${opt(d.config.backup)}</select></label></div>
       <div class="row" style="margin-top:12px"><button id="wRescan">Søg igen</button><button id="wTest">📡 Test: hold en chip mod læseren</button><span id="wTestRes" class="muted"></span></div>`;
@@ -1520,6 +1535,7 @@ $("userForm").onsubmit = async e => {
 // løbende opdatering af stilling + læsninger når fanen er åben
 setInterval(() => { if (!$("app").hidden && $("tab-active").classList.contains("on") && curId && !document.activeElement?.closest("#editForm, #readerForm, #simForm, #raceHead")) loadRace(false);
   if (!$("app").hidden && $("tab-sync").classList.contains("on")) loadDests();
+  if (!$("app").hidden && $("tab-readers").classList.contains("on") && $("readerDots")) api("/api/readers").then(d => { $("readerDots").innerHTML = readerDots(d); }).catch(() => {});
   if (!$("app").hidden && $("tab-remote").classList.contains("on") && !document.activeElement?.closest("#tab-remote")) loadRemoteTab();
 }, 3000);
 boot();

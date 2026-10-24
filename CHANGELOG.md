@@ -8,7 +8,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 - **Scan-besked:** stor grøn, gul eller rød bjælke på resultatskærmen, hver gang et armbånd scannes. Den viser, om scanningen talte, og hvorfor ikke. Slås til og fra under *Udseende*.
 - **Moduler** (*⚙ Opsætning → Moduler*): eksterne enheder på USB, der reagerer på scanninger og nedtælling. Første modul er **USB-højttaler** med valgfri lyd pr. hændelse, lydstyrke og læser. Moduler påvirker aldrig tidtagningen.
 - Hver læsning vurderes nu (talt, ignoreret med årsag, eller ukendt). Det bruges af scan-beskeden og modulerne.
-- Menuen i admin er samlet: løbsfanerne (*Aktivt løb, Nyt løb, Deltagere, Arkiv*) står forrest, og resten ligger under **⚙ Opsætning**, grupperet i *Skærm og web*, *Netværk* og *System*. Menuen og toppen af siden passer nu også på mobil.
+- Menuen i admin er samlet: løbsfanerne (*Aktivt løb, Nyt løb, Deltagere, Arkiv*) står forrest, og resten ligger under **⚙ Opsætning**, grupperet i *Skærm og web*, *Udstyr* (RFID-læsere og moduler), *Netværk* og *System*. Læserne vælges nu under *⚙ Opsætning → RFID-læsere*, og *Aktivt løb* viser deres status. Menuen og toppen af siden passer nu også på mobil.
 - Ur-tjek: admin viser, om Pi'ens ur er stillet via internettet, og om det passer med din mobil/computer. Går uret forkert, eller er det ikke stillet siden opstart, advares der tydeligt, når løbet startes.
 
 ## [1.1.0] – 2026-10-23

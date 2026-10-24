@@ -74,7 +74,7 @@ Scriptet:
 - giver brugeren adgang til `/dev/input`
 - starter Chromium i kiosk-tilstand på skærmen
 
-Bagefter vælger du læserne i **Admin → Aktivt løb → Læsere**. Listen viser stabile `/dev/input/by-id/...`-stier, så primær og backup ikke bytter plads efter en genstart. **To ens læsere** (samme model) kan Linux ikke skelne på navnet, så de vises med den USB-port, de sidder i (*· USB-port 1*, *· USB-port 2*). Lad dem blive siddende i de samme porte.
+Bagefter vælger du læserne i **Admin → ⚙ Opsætning → RFID-læsere**. Listen viser stabile `/dev/input/by-id/...`-stier, så primær og backup ikke bytter plads efter en genstart. **To ens læsere** (samme model) kan Linux ikke skelne på navnet, så de vises med den USB-port, de sidder i (*· USB-port 1*, *· USB-port 2*). Lad dem blive siddende i de samme porte.
 
 ## Opdateringer
 

@@ -62,16 +62,16 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 | 5. **RFID-læsere** | Vælg primær og evt. backup. Hold en chip mod læseren, og se den dukke op. |
 | 6. **Færdig** | Tjekker, at Pi'ens ur passer med jeres mobil/computer, og viser en opsummering. |
 
-Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende**, netværk under **⚙ Opsætning → WiFi** og læsere under **Aktivt løb → Læsere**.
+Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende**, netværk under **⚙ Opsætning → WiFi** og læsere under **⚙ Opsætning → RFID-læsere**.
 
 **Menuen i admin** er delt i to. Det, I bruger på løbsdagen, står forrest, og resten ligger under **⚙ Opsætning**:
 
 | Løb | ⚙ Opsætning |
 |---|---|
-| **Aktivt løb**: start, stilling, manuelle tider, læsere | *Skærm og web:* **Udseende**, **Synkronisering** |
-| **Nyt løb** | *Netværk:* **WiFi**, **Fjernadgang** |
-| **Deltagere**: import og chip-scanning | *System:* **Brugere**, **Opdatering** |
-| **Arkiv**: gamle løb | |
+| **Aktivt løb**: start, stilling, manuelle tider, læserstatus | *Skærm og web:* **Udseende**, **Synkronisering** |
+| **Nyt løb** | *Udstyr:* **RFID-læsere**, **Moduler** |
+| **Deltagere**: import og chip-scanning | *Netværk:* **WiFi**, **Fjernadgang** |
+| **Arkiv**: gamle løb | *System:* **Brugere**, **Opdatering** |
 
 > **Flere officials?** Opret en bruger til hver under **⚙ Opsætning → Brugere**, så ingen deler kode.
 
@@ -118,7 +118,7 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 **Før start**
 - [ ] Tænd Pi'en i god tid. Under **Aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
-- [ ] Tjek at læserne står som forbundet under **Aktivt løb → Læsere** (grøn prik).
+- [ ] Tjek at læserne står som forbundet under **Aktivt løb** (grøn prik). Læserne vælges under **⚙ Opsætning → RFID-læsere**.
 - [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2". Har I to ens læsere, kendes de på USB-porten, så sæt dem i de samme porte hver gang (mærk gerne portene).
 - [ ] Bed løberne scanne for at tjekke ind. Skærmen viser, hvor mange der er tjekket ind, fx 18/20.
 - [ ] Hav en mobil med admin åben, så I kan rette undervejs.
@@ -173,7 +173,7 @@ scp -r racetimer@racetimer.local:/var/lib/racetimer ./racetimer-backup
 |---|---|
 | **Jeg kan ikke finde Pi'ens adresse** | Den står nederst på resultatskærmen. Prøv også `http://racetimer.local:8000/admin`. Mobil og Pi skal være på samme netværk. |
 | **Sort skærm / resultatskærmen er lukket** | Genstart Pi'en, eller log ud og ind på skrivebordet. Kiosk-visningen starter af sig selv. |
-| **Læseren reagerer ikke** | Tjek at den er valgt under *Læsere*, og at prikken er grøn. Prøv en anden USB-port. Bipper læseren, men intet sker, så hold chippen mod læseren under **📡 Scan** for at se, om den læses. |
+| **Læseren reagerer ikke** | Tjek at den er valgt under *⚙ Opsætning → RFID-læsere*, og at prikken er grøn. Prøv en anden USB-port. Bipper læseren, men intet sker, så hold chippen mod læseren under **📡 Scan** for at se, om den læses. |
 | **En løbers omgange tæller ikke** | Er løberen tjekket ind? Har løberen den rigtige chip? Er omgangen hurtigere end minimumstiden? Se loggen under *Seneste læsninger*. |
 | **Uret går forkert** | Pi'en stiller selv uret, så snart den har internet. Pi 3/4 og Pi 5 uden RTC-batteri skal derfor have net et par minutter, *inden* løbet startes (mobil-hotspot er nok). Får den først net midt i løbet, hopper uret, og tiderne bliver forkerte. Admin advarer ved start. |
 | **WiFi vil ikke forbinde** | Tjek koden. Fejlbeskeden står under **⚙ Opsætning → WiFi**. Mobil-hotspots skal være synlige, og iPhone skal have "Maksimer kompatibilitet" slået til. |
