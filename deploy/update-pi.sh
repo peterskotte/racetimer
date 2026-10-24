@@ -12,15 +12,21 @@ cd "$(dirname "$0")/.."
 SSH_OPTS="-o ControlMaster=auto -o ControlPath=/tmp/racetimer-ssh-%r@%h -o ControlPersist=60"
 
 echo "→ Kopierer filer til $PI_USER@$HOST …"
-rsync -az --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r -e "ssh $SSH_OPTS" \
-  --exclude .git --exclude .venv --exclude .deps --exclude data --exclude data-mirror \
-  --exclude image --exclude __pycache__ --exclude .claude --exclude '*.pyc' --exclude '*.command' \
-  ./ "$PI_USER@$HOST:/tmp/racetimer-ny/"
+# tar over SSH i stedet for rsync: macOS 26 har skiftet rsync ud med openrsync, der fejler
+# ("unexpected end of file") mod den rigtige rsync på Pi'en. På Pi'en bruges rsync som før.
+# signing/ (den private nøgle) og dist/ må aldrig forlade udviklerens computer.
+COPYFILE_DISABLE=1 tar -czf - \
+  --exclude ./.git --exclude ./.venv --exclude ./.deps --exclude ./data --exclude ./data-mirror \
+  --exclude ./image --exclude ./signing --exclude ./dist --exclude ./.claude --exclude ./.github \
+  --exclude '__pycache__' --exclude '*.pyc' --exclude '*.command' --exclude '.DS_Store' --exclude '._*' \
+  . | ssh $SSH_OPTS "$PI_USER@$HOST" \
+  'rm -rf /tmp/racetimer-ny && mkdir -p /tmp/racetimer-ny && tar -xzf - -C /tmp/racetimer-ny --no-same-owner --warning=no-unknown-keyword'
 
 echo "→ Lægger filerne på plads og genstarter RaceTimer …"
 ssh -t $SSH_OPTS "$PI_USER@$HOST" '
   set -e
   sudo rsync -a --chmod=Dgo+rx,Fgo+r --exclude data --exclude .venv /tmp/racetimer-ny/ /opt/racetimer/
+  sudo rm -rf /opt/racetimer/signing /opt/racetimer/dist /tmp/racetimer-ny  # rester fra ældre versioner af scriptet
   sudo sh /opt/racetimer/deploy/post-update.sh
   sudo systemctl restart racetimer
   sleep 2
