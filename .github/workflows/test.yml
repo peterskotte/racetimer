@@ -17,6 +17,8 @@ jobs:
         run: python tests/test_engine.py
       - name: Hændelser og moduler
         run: python tests/test_events.py
+      - name: Læserlisten
+        run: python tests/test_readers.py
       - name: Appen kan starte
         run: RACETIMER_DATA=$(mktemp -d) python -c "import racetimer.app"
       - name: Scripts

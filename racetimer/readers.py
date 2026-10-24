@@ -11,8 +11,10 @@ Hver læser kører i sin egen tråd og genforbinder automatisk hvis kablet
 rives ud. Begge læsere sender til samme callback – dubletter (samme chip set
 af begge læsere) frasorteres i app.handle_read.
 """
+import collections
 import glob
 import os
+import re
 import threading
 import time
 
@@ -28,6 +30,7 @@ except ImportError:
     serial = None
 
 ROLES = ("primary", "backup")
+ROOT = os.environ.get("RACETIMER_DEV_ROOT", "")  # kun til test: falsk /dev og /sys
 
 _KEYS = {}
 if evdev:
@@ -45,12 +48,61 @@ def normalize(uid):
     return "".join(c for c in str(uid).strip().upper() if c.isalnum())
 
 
+def _name(path):
+    """Enhedens navn fra kernen, fx "Sycreader RFID Technology USB Reader"."""
+    ev = os.path.basename(os.path.realpath(path))
+    try:
+        with open(f"{ROOT}/sys/class/input/{ev}/device/name") as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def _port(path):
+    """USB-porten i en by-path-sti, fx '...-usb-0:1.3:1.0-event-kbd' → '1.3'."""
+    m = re.search(r"-usb-\d+:([\d.]+):", os.path.basename(path))
+    return m.group(1) if m else None
+
+
+def _keyboards():
+    """(by-id-stier, by-path-stier, navn pr. fysisk enhed) for tastatur-læsere."""
+    byid = {os.path.realpath(p): p for p in sorted(glob.glob(f"{ROOT}/dev/input/by-id/*-event-kbd"))}
+    bypath = sorted(glob.glob(f"{ROOT}/dev/input/by-path/*-event-kbd"))
+    names = {os.path.realpath(p): _name(p) or os.path.basename(p) for p in bypath}
+    for real, p in byid.items():
+        names.setdefault(real, _name(p) or os.path.basename(p))
+    return byid, bypath, names
+
+
+def ambiguous_paths():
+    """by-id-stier, der deles af flere ens læsere (samme model uden serienummer) – peger på en tilfældig af dem."""
+    byid, _, names = _keyboards()
+    count = collections.Counter(names.values())
+    return [p for real, p in byid.items() if count[names[real]] > 1]
+
+
 def list_devices():
-    """Mulige læsere til admin-dropdown: stabile /dev/input/by-id-stier + serielle porte."""
+    """Mulige læsere til admin-dropdown.
+
+    En læser vises med sin by-id-sti (følger læseren, uanset USB-port). Har man to ens læsere,
+    får de samme by-id-navn, og Linux laver kun ét link – så ens læsere vises i stedet med
+    deres USB-port (by-path), og de skal blive siddende i samme port.
+    """
     out = []
-    for path in sorted(glob.glob("/dev/input/by-id/*-event-kbd")):
-        out.append({"path": path, "label": os.path.basename(path)})
-    for path in sorted(glob.glob("/dev/serial/by-id/*")):
+    byid, bypath, names = _keyboards()
+    count = collections.Counter(names.values())
+    seen = set()
+    for p in bypath:
+        real = os.path.realpath(p)
+        seen.add(real)
+        if count[names[real]] == 1 and real in byid:
+            out.append({"path": byid[real], "label": os.path.basename(byid[real])})
+        else:
+            out.append({"path": p, "label": f"{names[real]} · USB-port {_port(p) or os.path.basename(p)}"})
+    for real, p in byid.items():  # by-id uden by-path (sjældent)
+        if real not in seen:
+            out.append({"path": p, "label": os.path.basename(p)})
+    for path in sorted(glob.glob(f"{ROOT}/dev/serial/by-id/*")):
         out.append({"path": "serial:" + path, "label": "Seriel: " + os.path.basename(path)})
     if evdev and not out:
         for path in evdev.list_devices():

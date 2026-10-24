@@ -908,12 +908,15 @@ async function loadReads() {
 async function loadReaders() {
   const d = await api("/api/readers");
   const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("") +
-    (sel && !d.devices.find(x => x.path === sel) ? `<option value="${esc(sel)}" selected>${esc(sel)} (ikke fundet)</option>` : "");
+    (sel && !d.devices.find(x => x.path === sel) ? `<option value="${esc(sel)}" selected>${esc(sel.split("/").pop())} ${(d.ambiguous || []).includes(sel) ? "– ⚠ to ens læsere, vælg igen" : "(ikke fundet)"}</option>` : "");
+  const amb = ["primary", "backup"].some(r => (d.ambiguous || []).includes(d.config[r]));
   const st = d.status.map(s => `<div style="margin-bottom:6px"><i class="dot ${s.connected ? "active" : ""}" style="background:${s.connected ? "var(--green)" : "var(--red)"}"></i>
     <b>${s.role === "primary" ? "Primær" : "Backup"}</b>: ${s.connected ? "forbundet" : (s.path ? "ikke forbundet" : "ikke valgt")}
     ${s.reads ? ` · ${s.reads} læsninger` : ""}${s.error ? ` <span class="muted small">(${esc(s.error)})</span>` : ""}</div>`).join("");
   $("readerBox").innerHTML = st + (d.evdev ? "" : `<p class="muted small">python-evdev er ikke installeret (normalt på Mac). Brug simuleringen nedenfor.</p>`) +
     `<form id="readerForm" class="grid" style="grid-template-columns:1fr;margin-top:12px">
+      ${amb ? `<div class="warnbox" style="margin:0">⚠ Der er sat to ens læsere i. De kendes nu på den <b>USB-port</b>, de sidder i. Vælg primær og backup igen herunder, og lad læserne blive siddende i de samme porte.</div>` : ""}
+      ${d.devices.some(x => x.label.includes("· USB-port")) ? `<p class="muted small" style="margin:0">Ens læsere kendes på USB-porten. Bytter du rundt på stikkene, bytter primær og backup også plads.</p>` : ""}
       <label>Primær læser<select name="primary">${opt(d.config.primary)}</select></label>
       <label>Backup læser<select name="backup">${opt(d.config.backup)}</select></label>
       <label>Dublet-vindue (sek) – samme chip inden for dette ignoreres<input name="dedup_sec" type="number" step="any" value="${d.dedup_sec}"></label>

@@ -898,7 +898,7 @@ async def sim_read(request: Request, u=Depends(admin)):
 
 @app.get("/api/readers")
 def reader_status(u=Depends(admin)):
-    return {"status": reader_mgr.status(), "devices": readers.list_devices(),
+    return {"status": reader_mgr.status(), "devices": readers.list_devices(), "ambiguous": readers.ambiguous_paths(),
             "config": db.setting("readers", {}), "dedup_sec": db.setting("dedup_sec", 30),
             "evdev": readers.evdev is not None}
 
@@ -907,6 +907,9 @@ def reader_status(u=Depends(admin)):
 async def set_readers(request: Request, u=Depends(admin)):
     b = await request.json()
     paths = {r: (b.get(r) or None) for r in readers.ROLES}
+    if paths["primary"] and paths["backup"] and \
+            os.path.realpath(paths["primary"]) == os.path.realpath(paths["backup"]):
+        raise HTTPException(400, "Primær og backup er den samme læser – vælg to forskellige")
     db.set_setting("readers", paths)
     if b.get("dedup_sec") is not None:
         db.set_setting("dedup_sec", float(b["dedup_sec"]))
