@@ -102,6 +102,20 @@ def test_speaker_module():
         pass
 
 
+
+def test_devtest_reads_do_not_count():
+    import time
+    race("timed")
+    before = db.q1("SELECT COUNT(*) n FROM reads")["n"]
+    app._devtest.update(until=time.time() + 60, reads=[])
+    try:
+        assert app.handle_read("CHIP1", "backup") == {"test": True}
+        assert app._devtest["reads"][0]["reader"] == "backup" and app._devtest["reads"][0]["chip"] == "CHIP1"
+        assert db.q1("SELECT COUNT(*) n FROM reads")["n"] == before  # intet gemt som læsning
+    finally:
+        app._devtest.update(until=0)
+    assert "id" in app.handle_read("CHIP1", "backup")  # efter testen tæller læsninger igen
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

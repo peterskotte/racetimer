@@ -130,6 +130,13 @@ Den slås til og fra under *⚙ Opsætning → Udseende*.
 |---|---|---|
 | **Højttaler** | En almindelig USB-højttaler (eller Pi'ens egen lydudgang) | Forskellige lyde for talt, afvist, ukendt armbånd, chip tildelt, nedtælling 3-2-1 og start. Lydstyrke og lyd pr. hændelse kan vælges, og den kan knyttes til læser 1, læser 2 eller begge. |
 
+**Udstyrstest** (*⚙ Opsætning → Udstyrstest*) går alt tilsluttet udstyr igennem trin for trin, fx før et løb:
+1. *Hold et armbånd mod Læser 1*, derefter *Læser 2*. Bliver armbåndet læst af den forkerte læser, advarer testen om, at USB-stikkene måske er byttet om.
+2. Hver højttaler spiller et klokkespil: *Hørte du det?*
+3. Resultatskærmen viser en blå test-besked: *Kom den frem?*
+
+Scanninger under testen tæller ikke i noget løb. Resultatet gemmes og vises næste gang (*Seneste test: … ✅ alt virkede*).
+
 LED-ring, signallampe og display via Raspberry Pi Pico er planlagt. Se [docs/moduler-udkast.md](docs/moduler-udkast.md).
 
 ## Driftssikkerhed

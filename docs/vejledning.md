@@ -69,7 +69,7 @@ Alt kan ændres senere: navn, logo og splash under **⚙ Opsætning → Udseende
 | Løb | ⚙ Opsætning |
 |---|---|
 | **Aktivt løb**: start, stilling, manuelle tider, læserstatus | *Skærm og web:* **Udseende**, **Synkronisering** |
-| **Nyt løb** | *Udstyr:* **RFID-læsere**, **Moduler** |
+| **Nyt løb** | *Udstyr:* **RFID-læsere**, **Moduler**, **Udstyrstest** |
 | **Deltagere**: import og chip-scanning | *Netværk:* **WiFi**, **Fjernadgang** |
 | **Arkiv**: gamle løb | *System:* **Brugere**, **Opdatering** |
 
@@ -118,7 +118,7 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 **Før start**
 - [ ] Tænd Pi'en i god tid. Under **Aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
-- [ ] Tjek at læserne står som forbundet under **Aktivt løb** (grøn prik). Læserne vælges under **⚙ Opsætning → RFID-læsere**.
+- [ ] Kør **⚙ Opsætning → Udstyrstest**. Den beder dig holde et armbånd mod læser 1 og læser 2, og den tester højttalere og resultatskærm. Scanninger under testen tæller ikke. Læserne vælges under **⚙ Opsætning → RFID-læsere**.
 - [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2". Har I to ens læsere, kendes de på USB-porten, så sæt dem i de samme porte hver gang (mærk gerne portene).
 - [ ] Bed løberne scanne for at tjekke ind. Skærmen viser, hvor mange der er tjekket ind, fx 18/20.
 - [ ] Hav en mobil med admin åben, så I kan rette undervejs.

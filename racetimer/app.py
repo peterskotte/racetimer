@@ -125,6 +125,7 @@ async def _no_stale_pages(request: Request, call_next):
 bus = events.EventBus()  # hændelser til moduler og skærmens scan-besked
 _capture = {"until": 0, "chip": None}
 _cap_lock = threading.Lock()
+_devtest = {"until": 0, "reads": []}  # udstyrstest: scanninger opsamles her og tæller ikke i løbet
 
 
 # ------------------------------------------------------------------ chip-læsninger
@@ -142,6 +143,9 @@ def handle_read(chip, reader, ts=None):
             _capture.update(chip=chip, until=0)
             bus.publish({"type": "chip.registered", "reader": reader})
             return {"captured": chip}
+        if _devtest["until"] > ts:
+            _devtest["reads"] = (_devtest["reads"] + [{"reader": reader, "chip": chip, "ts": ts}])[-50:]
+            return {"test": True}
 
     race = db.active_race()
     race_id = race["id"] if race else None
@@ -804,6 +808,50 @@ def capture_cancel(u=Depends(admin)):
     with _cap_lock:
         _capture.update(until=0, chip=None)
     return {"ok": True}
+
+
+# ------------------------------------------------------------------ udstyrstest
+
+@app.post("/api/devtest/start")
+def devtest_start(u=Depends(admin)):
+    """Lyt efter scanninger i 2 min. De gemmes ikke som læsninger og tæller ikke i noget løb."""
+    with _cap_lock:
+        _devtest.update(until=time.time() + 120, reads=[])
+    return {"ok": True, "now": time.time()}
+
+
+@app.get("/api/devtest")
+def devtest_poll(u=Depends(admin)):
+    with _cap_lock:
+        active = _devtest["until"] > time.time()
+        reads = list(_devtest["reads"])
+    return {"active": active, "reads": reads, "now": time.time(), "readers": reader_mgr.status(),
+            "last": db.setting("devtest_last")}
+
+
+@app.post("/api/devtest/stop")
+def devtest_stop(u=Depends(admin)):
+    with _cap_lock:
+        _devtest.update(until=0)
+    return {"ok": True}
+
+
+@app.post("/api/devtest/screen")
+def devtest_screen(u=Depends(admin)):
+    """Vis en test-besked på alle åbne resultatskærme."""
+    bus.publish({"type": "test.screen"})
+    return {"ok": True}
+
+
+@app.post("/api/devtest/result")
+async def devtest_result(request: Request, u=Depends(admin)):
+    """Gem resultatet af den seneste udstyrstest (vises næste gang fanen åbnes)."""
+    b = await request.json()
+    items = [{"name": str(i.get("name", ""))[:80], "ok": i.get("ok"), "note": str(i.get("note") or "")[:160]}
+             for i in (b.get("items") or [])[:20]]
+    last = {"ts": time.time(), "by": u["username"], "items": items}
+    db.set_setting("devtest_last", last)
+    return last
 
 
 @app.get("/api/capture")

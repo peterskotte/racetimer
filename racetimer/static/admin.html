@@ -58,7 +58,14 @@
   .mod .mname { font-weight: 700; font-size: 17px; }
   .mod .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; margin-top: 12px; }
   .pill.ok { background: var(--green); color: #06170c; } .pill.missing { background: var(--gold); color: #1b1e23; }
-  .pill.error { background: var(--red); color: #fff; } .pill.off { background: var(--card-head); color: var(--muted); }
+  .pill.error { background: var(--red); color: #fff; }
+  .dtsteps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .dtsteps span { border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
+  .dtsteps span.cur { border-color: var(--accent); color: var(--text); }
+  .dtsteps span.ok { border-color: var(--green); color: var(--green); } .dtsteps span.bad { border-color: var(--red); color: var(--red); }
+  .dtbig { font-size: clamp(20px, 2.6vw, 30px); font-weight: 700; margin: 6px 0 10px; }
+  .dtwait { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); animation: dtpulse 1s ease-in-out infinite alternate; margin-right: 8px; vertical-align: middle; }
+  @keyframes dtpulse { from { opacity: .25; transform: scale(.7); } to { opacity: 1; transform: scale(1.1); } } .pill.off { background: var(--card-head); color: var(--muted); }
   .warnbox { background: #3a2f0f; border: 1px solid var(--gold); color: var(--gold); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
   .okbox { background: #0f2a18; border: 1px solid var(--green); border-radius: 10px; padding: 12px 16px; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -139,6 +146,7 @@
   <span class="grp">Udstyr</span>
   <button data-tab="readers">RFID-læsere</button>
   <button data-tab="modules">Moduler</button>
+  <button data-tab="devtest">Udstyrstest</button>
   <span class="grp">Netværk</span>
   <button data-tab="wifi">WiFi</button>
   <button data-tab="remote">Fjernadgang</button>
@@ -386,6 +394,13 @@
     <div id="modList"></div>
   </section>
 
+  <!-- ===================== UDSTYRSTEST -->
+  <section class="tab" id="tab-devtest">
+    <h2>Udstyrstest</h2>
+    <p class="muted small">Gå alt tilsluttet udstyr igennem trin for trin, fx før et løb: læser 1, læser 2, højttalere og resultatskærmen. Scanninger under testen tæller ikke i noget løb.</p>
+    <div class="card pad" id="dtBox"></div>
+  </section>
+
   <!-- ===================== BRUGERE -->
   <section class="tab" id="tab-users">
     <h2>Administratorer</h2>
@@ -501,6 +516,7 @@ function showTab(tab) {
   if (tab === "update") loadUpdate(true);
   if (tab === "modules") loadModules();
   if (tab === "readers") loadReaders();
+  if (tab === "devtest") loadDevtest();
 }
 $("tabs").onclick = $("subtabs").onclick = e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); };
 
@@ -795,6 +811,111 @@ function renderModules() {
   });
 }
 setInterval(() => { if (!$("app").hidden && $("tab-modules").classList.contains("on") && !document.activeElement?.closest("#modList")) loadModules(); }, 5000);
+
+// ------------------------------------------------ udstyrstest
+let DT = null;  // {steps, i, run}
+const ROLE_NAME = {primary: "Læser 1 (primær)", backup: "Læser 2 (backup)"};
+async function loadDevtest() {
+  if (DT && DT.i < DT.steps.length) return renderDevtest();
+  const d = await api("/api/devtest");
+  const last = d.last ? `<p class="muted small" style="margin-top:0">Seneste test: ${clock(d.last.ts)} af ${esc(d.last.by)} –
+      ${d.last.items.every(x => x.ok) ? "✅ alt virkede" : `⚠ ${d.last.items.filter(x => !x.ok).length} problem(er)`}</p>` : "";
+  const running = races.some(r => r.status === "running");
+  $("dtBox").innerHTML = last + (running ? `<div class="warnbox">Et løb kører. Under testen tæller scanninger ikke – kør helst testen før eller efter løbet.</div>` : "") +
+    `<button class="primary" id="dtStart">▶ Start udstyrstest</button>`;
+  $("dtStart").onclick = startDevtest;
+}
+async function startDevtest() {
+  const [rd, mods] = await Promise.all([api("/api/readers"), api("/api/modules")]);
+  const steps = ["primary", "backup"].filter(r => rd.config[r]).map(r => ({kind: "rfid", role: r, name: ROLE_NAME[r]}));
+  if (!steps.length) steps.push({kind: "none", name: "RFID-læsere", ok: false, note: "Ingen læser valgt – vælg under RFID-læsere"});
+  mods.modules.filter(m => m.enabled).forEach(m => steps.push({kind: "module", id: m.id, name: m.name, icon: mods.kinds[m.kind]?.icon || "🔌"}));
+  steps.push({kind: "screen", name: "Resultatskærm"});
+  DT = {steps, i: 0, run: 0};
+  runStep();
+}
+function dtDone(ok, note) {
+  const st = DT.steps[DT.i];
+  st.ok = ok; st.note = note;
+  DT.i++; DT.run++;
+  runStep();
+}
+async function runStep() {
+  const run = ++DT.run;
+  if (DT.i >= DT.steps.length) return finishDevtest();
+  const st = DT.steps[DT.i];
+  st.ok = undefined; st.msg = "";
+  if (st.kind === "none") { DT.i++; return runStep(); }
+  renderDevtest();
+  if (st.kind === "rfid") {
+    const start = await api("/api/devtest/start", {body: {}});
+    st.t0 = start.now; st.deadline = Date.now() + 30000;
+    while (run === DT.run) {
+      let d;
+      try { d = await api("/api/devtest"); } catch (_) { break; }
+      if (run !== DT.run) return;
+      const mine = d.reads.filter(x => x.ts >= st.t0);
+      const hit = mine.find(x => x.reader === st.role);
+      const other = mine.find(x => x.reader !== st.role && ROLE_NAME[x.reader]);
+      const rs = d.readers.find(x => x.role === st.role);
+      if (hit) return dtDone(true, `Chip ${hit.chip} læst på ${(hit.ts - st.t0).toFixed(1)} sek.`);
+      st.msg = other ? `⚠ Armbåndet blev læst af <b>${ROLE_NAME[other.reader]}</b>. Hold det mod ${st.name}. Sidder USB-stikkene byttet om?`
+        : rs && !rs.connected ? `⚠ ${st.name} er ikke forbundet${rs.error ? ` (${esc(rs.error)})` : ""}. Tjek kablet.` : "";
+      st.left = Math.max(0, Math.ceil((st.deadline - Date.now()) / 1000));
+      if (!st.left) { st.ok = false; st.note = other ? `Læst af ${ROLE_NAME[other.reader]} i stedet – stikkene er måske byttet om` : "Ingen scanning inden for 30 sek."; return renderDevtest(true); }
+      renderDevtest();
+      await new Promise(r => setTimeout(r, 400));
+    }
+  } else if (st.kind === "module") {
+    try { const r = await api(`/api/modules/${st.id}/test`, {body: {}}); st.msg = esc(r.text); }
+    catch (e) { st.ok = false; st.note = e.message; return renderDevtest(true); }
+    renderDevtest();
+  } else if (st.kind === "screen") {
+    await api("/api/devtest/screen", {body: {}});
+    renderDevtest();
+  }
+}
+function renderDevtest(failed) {
+  const st = DT.steps[DT.i];
+  const pills = `<div class="dtsteps">${DT.steps.map((x, i) => `<span class="${i === DT.i ? "cur" : x.ok === true ? "ok" : x.ok === false ? "bad" : ""}">${x.ok === true ? "✓" : x.ok === false ? "✗" : i + 1} ${esc(x.name)}</span>`).join("")}</div>`;
+  let body = "", btns = "";
+  if (failed) {
+    body = `<div class="dtbig" style="color:var(--red)">✗ ${esc(st.name)}</div><p>${esc(st.note)}</p>`;
+    btns = `<button class="primary" data-dt="retry">Prøv igen</button><button data-dt="next">Fortsæt</button>`;
+  } else if (st.kind === "rfid") {
+    body = `<div class="dtbig"><span class="dtwait"></span>Hold et armbånd mod ${esc(st.name)}</div>
+      <p class="muted">Venter … ${st.left ?? 30} sek.</p>${st.msg ? `<p>${st.msg}</p>` : ""}`;
+    btns = `<button data-dt="skip">Spring over</button>`;
+  } else if (st.kind === "module") {
+    body = `<div class="dtbig">${st.icon} Hørte du et klokkespil fra ${esc(st.name)}?</div><p class="muted small">${st.msg || "Afspiller …"}</p>`;
+    btns = `<button class="go" data-dt="yes">✓ Ja</button><button class="danger" data-dt="no">✗ Nej</button><button data-dt="retry">Afspil igen</button>`;
+  } else if (st.kind === "screen") {
+    body = `<div class="dtbig">🖥️ Kom der en test-besked på resultatskærmen?</div>
+      <p class="muted small">Den står nederst i 4 sekunder. Har du ikke skærmen ved hånden, så åbn <a href="/" target="_blank">resultatskærmen</a> i et nyt vindue og send igen.</p>`;
+    btns = `<button class="go" data-dt="yes">✓ Ja</button><button class="danger" data-dt="no">✗ Nej</button><button data-dt="retry">Send igen</button>`;
+  }
+  $("dtBox").innerHTML = pills + body + `<div class="btns" style="margin-top:12px">${btns}<button data-dt="stop" style="margin-left:auto">Afbryd test</button></div>`;
+  $("dtBox").querySelectorAll("[data-dt]").forEach(b => b.onclick = () => {
+    const a = b.dataset.dt;
+    if (a === "retry") { DT.run++; return runStep(); }
+    if (a === "next") { DT.i++; DT.run++; return runStep(); }
+    if (a === "skip") return dtDone(false, "Sprunget over");
+    if (a === "yes") return dtDone(true, "");
+    if (a === "no") return dtDone(false, st.kind === "screen" ? "Ingen besked på skærmen" : "Ingen lyd hørt");
+    if (a === "stop") { DT.run++; DT = null; api("/api/devtest/stop", {body: {}}); loadDevtest(); }
+  });
+}
+async function finishDevtest() {
+  await api("/api/devtest/stop", {body: {}});
+  const items = DT.steps.map(x => ({name: x.name, ok: !!x.ok, note: x.note || ""}));
+  await api("/api/devtest/result", {body: {items}});
+  const allOk = items.every(x => x.ok);
+  $("dtBox").innerHTML = `<div class="dtbig">${allOk ? "✅ Alt udstyr virker" : "⚠ Der er problemer med noget af udstyret"}</div>
+    <table><tbody>${items.map(x => `<tr><td style="width:28px">${x.ok ? "✅" : "❌"}</td><td><b>${esc(x.name)}</b></td><td class="muted">${esc(x.note)}</td></tr>`).join("")}</tbody></table>
+    <div class="btns" style="margin-top:14px"><button class="primary" id="dtAgain">Kør testen igen</button></div>`;
+  $("dtAgain").onclick = startDevtest;
+  DT = null;
+}
 
 // ------------------------------------------------ arkiv
 let archived = [], archCur = null;
