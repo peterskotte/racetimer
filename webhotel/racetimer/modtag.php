@@ -14,9 +14,9 @@ $RACETIMER_KEY = 'SKIFT-MIG-TIL-EN-LANG-HEMMELIG-NOEGLE';
 
 header('Content-Type: application/json; charset=utf-8');
 
-function svar($kode, $tekst) {
+function svar($kode, $tekst, $ekstra = []) {
     http_response_code($kode);
-    echo json_encode(['ok' => $kode === 200, 'besked' => $tekst], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => $kode === 200, 'besked' => $tekst] + $ekstra, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -66,9 +66,13 @@ if ($data['event'] === 'tunnel') {
     svar(200, 'Adresse gemt');
 }
 
-// Udseende fra Pi'en: logo og splash-billede sendes kun, når de er ændret
+// Udseende fra Pi'en: logo og splash-billede sendes kun, når de er ændret.
+// udseende.json husker, hvilken version vi har – svaret fortæller Pi'en det, så den sender
+// billederne igen, hvis de mangler (fx efter en udskiftning af denne fil).
 $udseende = $data['branding'] ?? null;
+$har_v = is_file("$mappe/udseende.json") ? (json_decode(file_get_contents("$mappe/udseende.json"), true)['v'] ?? null) : null;
 if (is_array($udseende)) {
+    $gemt = [];
     foreach (($udseende['images'] ?? []) as $slags => $billede) {
         if (!in_array($slags, ['logo', 'splash'], true) || !is_array($billede)) continue;
         $ext = strtolower($billede['ext'] ?? '');
@@ -76,7 +80,15 @@ if (is_array($udseende)) {
         if (!in_array($ext, ['.png', '.jpg', '.jpeg', '.webp'], true) || $bytes === false
             || strlen($bytes) > 4 * 1024 * 1024 || !@getimagesizefromstring($bytes)) continue;
         foreach (glob("$mappe/$slags.*") ?: [] as $gammel) @unlink($gammel);
-        if (file_put_contents("$mappe/$slags.tmp", $bytes) !== false) rename("$mappe/$slags.tmp", "$mappe/$slags$ext");
+        if (file_put_contents("$mappe/$slags.tmp", $bytes) !== false && rename("$mappe/$slags.tmp", "$mappe/$slags$ext")) {
+            $gemt[$slags] = true;
+        }
+    }
+    $komplet = (!empty($gemt['splash']) || ($udseende['splash'] ?? '') === 'plain')
+            && (!empty($gemt['logo']) || empty($udseende['logo']));
+    if ($komplet && isset($udseende['v'])) {
+        $har_v = $udseende['v'];
+        file_put_contents("$mappe/udseende.json", json_encode(['v' => $har_v]));
     }
     if (empty($udseende['logo'])) {
         foreach (glob("$mappe/logo.*") ?: [] as $gammel) @unlink($gammel);
@@ -95,4 +107,4 @@ if ($data['event'] === 'final' && !empty($data['race']['id'])) {
     gem("$mappe/slut-$dato-$navn.json", $data);
 }
 
-svar(200, 'Gemt');
+svar(200, 'Gemt', ['brand_v' => $har_v]);

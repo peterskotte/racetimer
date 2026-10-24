@@ -128,9 +128,10 @@ class SyncManager(threading.Thread):
         interval_due = interval > 0 and now >= st["next_due"]
         if not (final_due or interval_due or st.get("force")) or now < st.get("retry_at", 0):
             return
-        ok = self.send(d, final=final_due)
-        if ok:
-            st["force"] = False
+        force, st["force"] = st.get("force"), False
+        ok = self.send(d, final=final_due)  # send() kan selv bede om en ny afsendelse (manglende billeder)
+        if not ok and force:
+            st["force"] = True
         if interval:
             st["next_due"] = now + interval
         st["retry_at"] = 0 if ok else now + 30  # ingen forbindelse → prøv igen om 30 sek.
@@ -147,9 +148,14 @@ class SyncManager(threading.Thread):
             from . import branding
             brand_v = branding.get()["v"]
             new_brand = st.get("brand_v") != brand_v  # billeder sendes kun, når udseendet er ændret
+            brand_ok = True
             try:
                 if d["type"] == "webhook":
-                    _post(d["url"], self._results_payload(race, final, images=new_brand), d.get("key"), gz=False)
+                    resp = _post(d["url"], self._results_payload(race, final, images=new_brand), d.get("key"), gz=False)
+                    if isinstance(resp, dict) and "brand_v" in resp and resp["brand_v"] != brand_v:
+                        brand_ok = False  # hjemmesiden mangler billederne – send dem igen
+                        if not new_brand:
+                            st["force"] = True  # med det samme (én gang – næste afsendelse har billederne med)
                 elif d["type"] == "ftp":
                     ftpupload.upload(d, self._results_payload(race, final), splash_file=new_brand)
                 else:
@@ -157,7 +163,7 @@ class SyncManager(threading.Thread):
             except Exception as e:  # noqa: BLE001
                 st["last_error"] = str(e)
                 return False
-            st["brand_v"] = brand_v
+            st["brand_v"] = brand_v if brand_ok else None
             st.update(last_ok=time.time(), last_error=None,
                       last_event="Endelige resultater" if final else ("Manuel" if manual else "Interval"))
             if final and fk:
