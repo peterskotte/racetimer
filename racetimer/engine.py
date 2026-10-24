@@ -53,6 +53,44 @@ def merged_config(race_type, cfg):
     return base
 
 
+TEST_SPEEDS = (1, 10, 60, 120)
+_SCALE_MIN = ("checkin_min", "interval_min", "start_window_min", "goal_window_min", "min_lap_min", "min_time_min")
+
+
+def test_config(cfg, opts):
+    """Testløb: kør hurtigere end virkeligheden og/eller slå begrænsninger fra.
+
+    speed 60 → alle tider ÷ 60 (en backyard-time varer 1 minut). Distancer er uændrede.
+    """
+    cfg = dict(cfg)
+    speed = opts.get("speed") if opts.get("speed") in TEST_SPEEDS else 1
+    if speed != 1:
+        for k in _SCALE_MIN:
+            if cfg.get(k):
+                cfg[k] = cfg[k] / speed
+        for k in ("total_h", "duration_h", "interval_sec"):
+            if cfg.get(k):
+                cfg[k] = cfg[k] / speed
+        if cfg.get("warnings_min"):
+            cfg["_warn_labels"] = list(cfg["warnings_min"])  # skærmen viser stadig "3-2-1"
+            cfg["warnings_min"] = [m / speed for m in cfg["warnings_min"]]
+        if cfg.get("waves"):
+            cfg["waves"] = [{**w, "offset_sec": w.get("offset_sec", 0) / speed} for w in cfg["waves"]]
+    if opts.get("no_minimum"):
+        cfg.update(min_lap_min=0, min_time_min=0)
+        if "goal_window_min" in cfg:  # backyard: ingen flagzone – første læsning i runden tæller
+            cfg.update(goal_window_min=0, start_window_min=0)
+    if opts.get("no_checkin"):
+        cfg["checkin_min"] = 0
+    return cfg
+
+
+def effective_config(race):
+    """Den konfiguration, motoren regner med (inkl. testløbets indstillinger)."""
+    cfg = merged_config(race["type"], race["config"])
+    return test_config(cfg, race["test"]) if race.get("test") else cfg
+
+
 def _manual(p):
     """Manuel status sat af admin (RTC/DSQ/DNS) → lille bogstav-nøgle, ellers None."""
     return (p.get("status") or "").lower() or None
@@ -159,7 +197,8 @@ def compute_backyard(race, cfg, parts, reads, now):
     start = race.get("started_at")
     I = cfg["interval_min"] * 60
     loop = cfg["loop_km"]
-    info = {"interval_sec": I, "warnings_min": cfg.get("warnings_min", [3, 2, 1]), "loop_km": loop}
+    info = {"interval_sec": I, "warnings_min": cfg.get("warnings_min", [3, 2, 1]), "loop_km": loop,
+            "warnings_labels": cfg.get("_warn_labels") or cfg.get("warnings_min", [3, 2, 1])}
     if not start:
         info.update(phase="before", next_start=race.get("scheduled_start"))
         return [_row(p, status="dns" if _manual(p) == "dns" else "waiting") for p in parts], info
@@ -450,7 +489,7 @@ def checked_in(race, cfg, reads, now):
 
 
 def compute(race, parts, reads, now):
-    cfg = merged_config(race["type"], race["config"])
+    cfg = effective_config(race)
     w = checkin_window(race, cfg)
     ok = checked_in(race, cfg, reads, now) if w else set()
     started = bool(race.get("started_at"))
@@ -483,6 +522,8 @@ def compute(race, parts, reads, now):
         rows.sort(key=lambda r: (r["bib"] is None, r["bib"] or 0, r["name"]))
         for r in rows:
             r["place"] = None
+    if race.get("test"):
+        info["test"] = race["test"]
     info["type"] = race["type"]
     info["type_label"] = RACE_TYPES[race["type"]]["label"]
     return rows, info

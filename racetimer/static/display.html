@@ -378,7 +378,7 @@ function render() {
     return;
   }
   const {race, info, rows} = data;
-  $("raceName").textContent = race.name + " · " + info.type_label;
+  $("raceName").textContent = (race.test ? "🧪 TEST · " : "") + race.name + " · " + info.type_label;
   $("readers").innerHTML = (data.readers || []).map(r => `<span class="${r.connected ? "on" : ""}"><i class="dot"></i>${r.role === "primary" ? "Primær" : "Backup"}</span>`).join("");
   const age = data.mirror?.age;
   const solo = info.solo && info.phase === "running"
@@ -439,14 +439,15 @@ function tick() {
   let show = false;
   if (info.type.startsWith("backyard") && info.phase === "running" && !info.continuous) {
     const left = info.next_start - t;
-    for (const m of info.warnings_min || []) {
-      const key = `${info.yard}-${m}`;
-      if (left <= m * 60 && left > m * 60 - 8) {
+    (info.warnings_min || []).forEach((m, i) => {
+      const label = (info.warnings_labels || [])[i] ?? m;  // testløb: kortere tid, men samme "3-2-1"
+      const key = `${info.yard}-${label}`;
+      if (left <= m * 60 && left > m * 60 - Math.min(8, m * 20)) {
         show = true; alert.className = "show";
-        $("alertBig").textContent = m; $("alertTxt").textContent = m === 1 ? "MINUT TIL START" : "MINUTTER TIL START";
-        if (!fired.has(key)) { fired.add(key); beep(880, .3, m); }
+        $("alertBig").textContent = label; $("alertTxt").textContent = label === 1 ? "MINUT TIL START" : "MINUTTER TIL START";
+        if (!fired.has(key)) { fired.add(key); beep(880, .3, label); }
       }
-    }
+    });
     // startklokken: vis "START" i 6 sek. efter hver hel time
     const since = t - info.block_start;
     if (since >= 0 && since < 6 && info.yard > 0) {

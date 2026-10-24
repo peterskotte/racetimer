@@ -4,6 +4,8 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+- **Testløb (simulering):** alle løbstyper kan oprettes som testløb med hurtigere tid (10×, 60×, 120×) og med minimumstid, indtjekning og dublet-filter slået fra. Testløb mærkes 🧪 og sendes aldrig til hjemmesiden.
+- **Rettet:** højttalerens startsignal spillede ikke ved hver ny backyard-time, kun ved selve løbsstarten.
 - **Udstyrstest** (*⚙ Opsætning → Udstyrstest*): guide, der tester læser 1 og læser 2 med et armbånd (og advarer om byttede USB-stik), hver højttaler og resultatskærmen. Scanninger under testen tæller ikke, og resultatet gemmes.
 - Linjen med Pi'ens adresse (splash-skærmen og kiosk-toppen) viser nu også, hvilket WiFi Pi'en er forbundet til.
 - **Rettet:** med to ens læsere (samme model) blev kun den ene vist i læserlisten. Ens læsere vises nu med deres USB-port, og samme læser kan ikke vælges som både primær og backup.

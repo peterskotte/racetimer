@@ -154,8 +154,8 @@ def handle_read(chip, reader, ts=None):
     race = db.active_race()
     race_id = race["id"] if race else None
     p = db.q1("SELECT id FROM participants WHERE race_id=? AND chip=?", (race_id, chip)) if race else None
-    window = db.setting("dedup_sec", 30)
-    dup = db.q1("SELECT id FROM reads WHERE race_id IS ? AND chip=? AND duplicate=0 AND deleted=0 AND ABS(ts-?)<?",
+    window = 0 if (race or {}).get("test", {}) and race["test"].get("no_dedup") else db.setting("dedup_sec", 30)
+    dup = window and db.q1("SELECT id FROM reads WHERE race_id IS ? AND chip=? AND duplicate=0 AND deleted=0 AND ABS(ts-?)<?",
                 (race_id, chip, ts, window))
     rid = db.ex("INSERT INTO reads(race_id, chip, reader, ts, participant_id, duplicate) VALUES (?,?,?,?,?,?)",
                 (race_id, chip, reader, ts, p["id"] if p else None, 1 if dup else 0))
@@ -289,7 +289,7 @@ sync_mgr = sync.SyncManager(standings)
 
 
 def race_public(race):
-    return {k: race[k] for k in ("id", "name", "type", "status", "scheduled_start", "started_at", "finished_at")}
+    return {k: race.get(k) for k in ("id", "name", "type", "status", "scheduled_start", "started_at", "finished_at", "test")}
 
 
 @app.get("/api/live")
@@ -478,6 +478,7 @@ def races(u=Depends(admin)):
                 "FROM races r ORDER BY r.created_at DESC")
     for r in rows:
         r["config"] = json.loads(r["config"])
+        r["test"] = json.loads(r["test"]) if r.get("test") else None
     return rows
 
 
@@ -499,8 +500,10 @@ async def create_race(request: Request, u=Depends(admin)):
     if b.get("type") not in engine.RACE_TYPES:
         raise HTTPException(400, "Ukendt løbstype")
     cfg = engine.merged_config(b["type"], b.get("config"))
-    rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at) VALUES (?,?,?,?,?)",
-                (b.get("name") or "Nyt løb", b["type"], json.dumps(cfg), b.get("scheduled_start"), time.time()))
+    test = _test_opts(b.get("test"))
+    rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at, test) VALUES (?,?,?,?,?,?)",
+                (b.get("name") or "Nyt løb", b["type"], json.dumps(cfg), b.get("scheduled_start"), time.time(),
+                 json.dumps(test) if test else None))
     if b.get("activate") or not db.active_race():
         _activate(rid)
     return {"id": rid}
@@ -513,7 +516,18 @@ async def update_race(rid: int, request: Request, u=Depends(admin)):
     cfg = engine.merged_config(race["type"], {**race["config"], **(b.get("config") or {})})
     db.ex("UPDATE races SET name=?, config=?, scheduled_start=? WHERE id=?",
           (b.get("name", race["name"]), json.dumps(cfg), b.get("scheduled_start", race["scheduled_start"]), rid))
+    if race.get("test") and b.get("test"):  # et testløb forbliver et testløb – kun indstillingerne kan ændres
+        db.ex("UPDATE races SET test=? WHERE id=?", (json.dumps(_test_opts(b["test"]) or {"speed": 1}), rid))
     return {"ok": True}
+
+
+def _test_opts(t):
+    """Testløbets indstillinger (None = rigtigt løb)."""
+    if not t:
+        return None
+    speed = int(t.get("speed") or 1)
+    return {"speed": speed if speed in engine.TEST_SPEEDS else 1, "no_minimum": bool(t.get("no_minimum")),
+            "no_checkin": bool(t.get("no_checkin")), "no_dedup": bool(t.get("no_dedup"))}
 
 
 @app.delete("/api/races/{rid}")
@@ -924,7 +938,7 @@ async def manual_read(rid: int, request: Request, u=Depends(admin)):
     if kind == "final":
         # sluttiden skal være den, der tæller: andre læsninger efter løberens start ignoreres
         # (soft delete – kan gendannes i loggen over læsninger)
-        cfg = engine.merged_config(race["type"], race["config"])
+        cfg = engine.effective_config(race)
         after = (row.get("start_ts") or race["started_at"] or 0) + cfg.get("min_time_min", 0) * 60
         if race["type"] in ("p2p", "timetrial"):
             db.ex("UPDATE reads SET deleted=1 WHERE race_id=? AND participant_id=? AND ts>=? AND deleted=0",

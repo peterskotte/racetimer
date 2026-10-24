@@ -113,6 +113,8 @@ def _migrate(c):
     rcols = [r[1] for r in c.execute("PRAGMA table_info(races)")]
     if "archived_at" not in rcols:  # arkiverede løb skjules i løbslisten, men kan gendannes
         c.execute("ALTER TABLE races ADD COLUMN archived_at REAL")
+    if "test" not in rcols:  # testløb: JSON med {speed, no_minimum, no_checkin, no_dedup}, NULL = rigtigt løb
+        c.execute("ALTER TABLE races ADD COLUMN test TEXT")
     c.executescript("""
         CREATE INDEX IF NOT EXISTS reads_rev ON reads(race_id, rev);
         CREATE TRIGGER IF NOT EXISTS reads_rev_ins AFTER INSERT ON reads BEGIN
@@ -193,6 +195,7 @@ def race(race_id):
     r = q1("SELECT * FROM races WHERE id=?", (race_id,))
     if r:
         r["config"] = json.loads(r["config"])
+        r["test"] = json.loads(r["test"]) if r.get("test") else None
     return r
 
 

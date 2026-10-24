@@ -59,6 +59,8 @@
   .mod .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; margin-top: 12px; }
   .pill.ok { background: var(--green); color: #06170c; } .pill.missing { background: var(--gold); color: #1b1e23; }
   .pill.error { background: var(--red); color: #fff; }
+  .testbox { border: 1px dashed #2f6fd6; border-radius: 12px; padding: 12px 14px; }
+  .pill.test { background: #2f6fd6; color: #fff; }
   .dtsteps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .dtsteps span { border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
   .dtsteps span.cur { border-color: var(--accent); color: var(--text); }
@@ -187,7 +189,8 @@
         <h2>Test uden hardware</h2>
         <div class="card pad">
           <form id="simForm" class="row">
-            <label style="flex:1">Chip-ID<input name="chip" placeholder="fx 04A1B2C3" required></label>
+            <label style="flex:1">Chip-ID<input name="chip" placeholder="fx 04A1B2C3 – eller vælg løber" list="chipList" required autocomplete="off"></label>
+            <datalist id="chipList"></datalist>
             <label>Læser<select name="reader"><option value="primary">Primær</option><option value="backup">Backup</option></select></label>
             <button>Simulér læsning</button>
           </form>
@@ -208,6 +211,10 @@
         </div>
         <p class="muted small" id="newTypeHelp"></p>
         <div id="newConfig"></div>
+        <div class="testbox" style="margin-top:14px">
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="is_test" id="newIsTest"> 🧪 <b>Testløb (simulering)</b> – til at prøve løbstypen og udstyret af</label>
+          <div id="newTestOpts" hidden></div>
+        </div>
         <div class="row" style="margin-top:16px">
           <label style="flex-direction:row;align-items:center"><input type="checkbox" name="activate" checked> Gør til aktivt løb</label>
           <div style="flex:1"></div>
@@ -633,12 +640,32 @@ function renderNewCfg() {
   $("newConfig").innerHTML = cfgFields(t, TYPES[t].config, TYPES[t].locked);
   wireWaves($("newForm")); wireEndMode($("newForm"));
 }
+// ------------------------------------------------ testløb: hurtigere tid og begrænsninger slået fra
+function testFields(t) {
+  t = t || {speed: 60, no_minimum: false, no_checkin: true, no_dedup: false};
+  return `<div class="grid" style="margin-top:10px">
+    <label>Tid<select name="t.speed">${[[1, "Normal tid"], [10, "10× hurtigere"], [60, "60× hurtigere (1 time = 1 min)"], [120, "120× hurtigere (1 time = 30 sek)"]]
+      .map(([v, l]) => `<option value="${v}" ${+t.speed === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_minimum" ${t.no_minimum ? "checked" : ""}> Ingen minimumstid – hver scanning tæller med det samme (backyard: ingen flagzone)</label>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_checkin" ${t.no_checkin ? "checked" : ""}> Ingen indtjekning før start</label>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_dedup" ${t.no_dedup ? "checked" : ""}> Intet dublet-filter – samme armbånd kan scannes igen med det samme</label>
+    </div>
+    <p class="muted small" style="margin:8px 0 0">Testløb vises med 🧪 på skærmen og sendes aldrig til hjemmesiden. Distancer er uændrede.</p>`;
+}
+function readTest(f) {
+  return {speed: +f.querySelector("[name='t.speed']").value, no_minimum: f.querySelector("[name='t.no_minimum']").checked,
+          no_checkin: f.querySelector("[name='t.no_checkin']").checked, no_dedup: f.querySelector("[name='t.no_dedup']").checked};
+}
+$("newIsTest").onchange = e => { $("newTestOpts").hidden = !e.target.checked; if (e.target.checked && !$("newTestOpts").innerHTML) $("newTestOpts").innerHTML = testFields(); };
+
 $("newForm").onsubmit = async e => {
   e.preventDefault();
   const f = e.target, fd = new FormData(f);
   const r = await api("/api/races", {body: {name: fd.get("name"), type: fd.get("type"), config: readCfg(f),
-    scheduled_start: fromLocalInput(fd.get("scheduled_start")), activate: !!fd.get("activate")}});
-  toast("Løbet er oprettet"); f.reset(); renderNewCfg();
+    scheduled_start: fromLocalInput(fd.get("scheduled_start")), activate: !!fd.get("activate"),
+    test: $("newIsTest").checked ? readTest(f) : null}});
+  toast("Løbet er oprettet"); f.reset(); renderNewCfg(); $("newTestOpts").hidden = true; $("newTestOpts").innerHTML = "";
   curId = r.id; await loadRaces();
   showTab("people");
 };
@@ -648,7 +675,7 @@ async function loadRaces() {
   races = (await api("/api/races")).filter(r => !r.archived_at);
   checkClock();
   if (!races.find(r => r.id === curId)) curId = (races.find(r => r.is_active) || races[0])?.id ?? null;
-  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${esc(r.name)} – ${esc(TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
+  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${r.test ? "🧪 " : ""}${esc(r.name)} – ${esc(TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
     : `<option>Ingen løb – opret et under “Nyt løb”</option>`;
   await loadRace(true);
 }
@@ -676,7 +703,8 @@ async function loadRace(full) {
     ? ` · ${hms(i.remaining)} tilbage · ${i.on_course} på ruten` : ` · ${i.finishers} færdige · ${i.on_course} på ruten`;
   if (i.continuous && i.phase === "ended") extra = i.leader ? ` · 🏁 Vinder: ${esc(i.leader)}` : " · Slut";
   $("raceHead").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center">
-    <div><div style="font-size:20px;font-weight:700">${esc(r.name)} ${r.is_active ? '<span class="pill">PÅ SKÆRMEN</span>' : ""}</div>
+    <div><div style="font-size:20px;font-weight:700">${esc(r.name)} ${r.is_active ? '<span class="pill">PÅ SKÆRMEN</span>' : ""}
+      ${r.test ? `<span class="pill test" title="Sendes ikke til hjemmesiden">🧪 TESTLØB${r.test.speed > 1 ? ` · ${r.test.speed}× tid` : ""}${r.test.no_minimum ? " · ingen minimumstid" : ""}${r.test.no_checkin ? " · ingen indtjekning" : ""}${r.test.no_dedup ? " · intet dublet-filter" : ""}</span>` : ""}</div>
       <div class="muted small" style="margin-top:4px"><span class="pill ${r.status}">${status}</span> ${esc(TYPES[r.type].label)}
       · Start: ${clock(r.started_at || r.scheduled_start)}${r.finished_at ? " · Slut: " + clock(r.finished_at) : ""}${extra}</div></div>
     <div class="btns">
@@ -694,15 +722,21 @@ async function loadRace(full) {
       <label>Planlagt start<input name="scheduled_start" type="datetime-local" value="${toLocalInput(r.scheduled_start)}"></label></div>
       ${locked ? `<p class="muted small">Officielle backyard-parametre er låst. Vælg “Backyard Ultra (custom)” for at justere.</p>` : ""}
       ${cfgFields(r.type, r.effective_config, locked)}
+      ${r.test ? `<div class="testbox" style="margin-top:14px"><b>🧪 Testløb</b>${testFields(r.test)}</div>` : ""}
       <div style="margin-top:14px"><button class="primary">Gem indstillinger</button></div>`;
     wireWaves($("editForm")); wireEndMode($("editForm"));
+    // test uden hardware: vælg en løbers armbånd i stedet for at skrive chip-ID'et
+    api(`/api/races/${curId}/participants`).then(ps => {
+      $("chipList").innerHTML = ps.filter(p => p.chip).map(p => `<option value="${esc(p.chip)}">${p.bib != null ? "#" + p.bib + " " : ""}${esc(p.name)}</option>`).join("");
+    }).catch(() => {});
   }
   renderStandings(); loadReads(); loadReaderStatus();
 }
 $("editForm").onsubmit = async e => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  await api(`/api/races/${curId}`, {method: "PUT", body: {name: fd.get("name"), scheduled_start: fromLocalInput(fd.get("scheduled_start")), config: readCfg(e.target)}});
+  await api(`/api/races/${curId}`, {method: "PUT", body: {name: fd.get("name"), scheduled_start: fromLocalInput(fd.get("scheduled_start")), config: readCfg(e.target),
+    test: cur.race.test ? readTest(e.target) : undefined}});
   toast("Gemt"); loadRaces();
 };
 

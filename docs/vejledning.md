@@ -84,6 +84,8 @@ En ny installation har ét demoløb, *Demoløb (kan slettes)*, med tre testløbe
 3. Prøv også jeres rigtige læser: tildel jeres egen chip til en testløber under **Deltagere → 📡 Scan**, og hold den mod læseren.
 4. Afslut demoløbet, og slet det, når I er trygge ved systemet.
 
+> **Prøv løbstypen først:** sæt flueben i **🧪 Testløb** under *Nyt løb*, og vælg fx *60× hurtigere*. Så varer en backyard-time 1 minut, og du kan øve hele forløbet med rigtige armbånd på få minutter. Testløb sendes ikke til hjemmesiden.
+
 ## 5. Opret jeres eget løb
 
 Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.

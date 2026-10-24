@@ -1,7 +1,7 @@
 #!/bin/sh
 # Dobbeltklik for at opdatere RaceTimer på Pi'en med koden i denne mappe.
 # Ret adressen/brugernavnet herunder, hvis din Pi får en anden adresse.
-PI_ADRESSE=racetimer.local
+PI_ADRESSE=racetimer
 PI_BRUGER=racetimer
 
 cd "$(dirname "$0")"

@@ -128,6 +128,38 @@ def test_wifi_name_on_danish_pi():
     finally:
         del os.environ["RACETIMER_NMCLI"]
 
+
+def test_testrace_dedup_and_not_published():
+    from racetimer import sync
+    rid = race("timed", {"min_lap_min": 0})
+    db.ex("UPDATE races SET test=? WHERE id=?", (json.dumps({"speed": 1, "no_dedup": True, "no_checkin": True}), rid))
+    assert not app.handle_read("CHIP1", "primary", S + 1)["duplicate"]
+    assert not app.handle_read("CHIP1", "primary", S + 2)["duplicate"]  # intet dublet-filter i testløbet
+    assert sync.public_race() is None  # testløb sendes aldrig til hjemmesiden
+    db.ex("UPDATE races SET test=NULL WHERE id=?", (rid,))
+    assert sync.public_race()["id"] == rid
+
+
+
+def test_countdown_and_start_signal_each_yard():
+    from racetimer import events
+    rid = race("backyard", started=S)
+    clock = {"t": S + 60 - 3}  # 3 sek. før næste start (60× testløb: 3-2-1 min = 3-2-1 sek.)
+    info = {"phase": "running", "warnings_min": [3 / 60, 2 / 60, 1 / 60], "warnings_labels": [3, 2, 1]}
+    got = []
+    bus = type("B", (), {"publish": lambda self, ev: got.append(ev.get("min"))})()
+    t = events.Ticker(bus, lambda r: ([], {**info, "next_start": S + 60 if clock["t"] < S + 60 else S + 120}), lambda: [])
+    real = events.time.time
+    events.time.time = lambda: clock["t"]
+    try:
+        for dt in (0, 1, 2, 3.2, 4):
+            clock["t"] = S + 57 + dt
+            t._countdown()
+    finally:
+        events.time.time = real
+    assert got == [3, 2, 1, 0], got  # startsignalet kommer, selv om "næste start" er rykket til timen efter
+    db.ex("DELETE FROM races WHERE id=?", (rid,))
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

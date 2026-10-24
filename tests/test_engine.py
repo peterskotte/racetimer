@@ -258,6 +258,26 @@ def test_timetrial_chip_start():
     assert rows[0]["total_time"] == 1200
 
 
+
+def test_testrace_speed_backyard():
+    # 60× hurtigere: en backyard-time varer 1 minut – målvinduet starter efter 25 sek.
+    race = {"type": "backyard", "config": {}, "started_at": S, "test": {"speed": 60}}
+    reads = [{"participant_id": p, "ts": S + t} for p, t in ((1, -10), (2, -10), (1, 30), (2, 30), (1, 90), (2, 70))]
+    rows, info = engine.compute(race, [P(1), P(2)], reads, S + 100)  # indtjekning 10 sek. før (vinduet er 30 sek.)
+    assert info["interval_sec"] == 60 and info["warnings_labels"] == [3, 2, 1] and info["warnings_min"][0] == 3 / 60
+    assert by(rows)["L1"]["laps"] == 2 and by(rows)["L1"]["status"] == "resting"
+    assert by(rows)["L2"]["laps"] == 1 and by(rows)["L2"]["status"] == "active"  # læsning efter 10 sek. = flagzone
+    assert info["test"]["speed"] == 60
+
+
+def test_testrace_no_minimum_and_checkin():
+    race = {"type": "p2p", "config": {"min_time_min": 5}, "started_at": S, "test": {"no_minimum": True, "no_checkin": True}}
+    rows, info = engine.compute(race, [P(1)], [{"participant_id": 1, "ts": S + 3}], S + 10)
+    assert rows[0]["status"] == "finished" and rows[0]["total_time"] == 3 and "checkin" not in info
+    cfg = engine.test_config({"interval_min": 60, "goal_window_min": 25, "start_window_min": 3, "min_lap_min": 10,
+                              "checkin_min": 30, "waves": [{"offset_sec": 120}]}, {"speed": 10, "no_minimum": True})
+    assert cfg["interval_min"] == 6 and cfg["goal_window_min"] == 0 and cfg["checkin_min"] == 3 and cfg["waves"][0]["offset_sec"] == 12
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

@@ -51,6 +51,12 @@ def save_destinations(dests):
     db.set_setting("destinations", dests)
 
 
+def public_race():
+    """Det aktive løb, som det må vises på hjemmesiden – testløb sendes aldrig ud."""
+    race = db.active_race()
+    return None if race and race.get("test") else race
+
+
 class SyncManager(threading.Thread):
     def __init__(self, standings):
         super().__init__(daemon=True, name="sync")
@@ -115,7 +121,7 @@ class SyncManager(threading.Thread):
     def _tick(self, d):
         st = self._st(d)
         now = time.time()
-        race = db.active_race()
+        race = public_race()
         fk = self._final_key(race)
         final_due = bool(d.get("on_finish") and fk and fk not in (db.setting("final_sent", {}) or {}).get(d["id"], []))
         interval = float(d.get("interval_sec") or 0)
@@ -136,7 +142,7 @@ class SyncManager(threading.Thread):
         lock = self._locks.setdefault(d["id"], threading.Lock())
         st = self._st(d)
         with lock:
-            race = db.active_race()
+            race = public_race()
             fk = self._final_key(race)
             from . import branding
             brand_v = branding.get()["v"]
@@ -213,7 +219,7 @@ class SyncManager(threading.Thread):
 
     def pending(self, d):
         """Læsninger i det aktive løb, som en spejl-destination endnu ikke har fået."""
-        race = db.active_race()
+        race = public_race()
         if not race or d["type"] != "mirror":
             return 0
         since = ((db.setting("mirror_state", {}) or {}).get(d["id"], {})).get(str(race["id"]), 0)

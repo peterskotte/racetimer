@@ -72,6 +72,7 @@ class Ticker(threading.Thread):
         self.bus, self.standings, self.reader_status = bus, standings, reader_status
         self._fired = set()
         self._readers = None
+        self._target = None
 
     def run(self):
         while True:
@@ -86,21 +87,30 @@ class Ticker(threading.Thread):
         race = db.active_race()
         if not race:
             return
-        target = None
+        target, warn, labels = None, [3, 2, 1], [3, 2, 1]
         if not race.get("started_at") and race.get("scheduled_start"):
             target = race["scheduled_start"]
         elif race["status"] == "running" and race["type"].startswith("backyard"):
             _, info = self.standings(race)
             if info.get("phase") == "running" and not info.get("continuous"):
                 target = info.get("next_start")
+                warn, labels = info.get("warnings_min") or warn, info.get("warnings_labels") or labels  # testløb: kortere
+        # ved hver ny backyard-time skifter "næste start" straks til timen efter – så startsignalet
+        # gives for den start, vi lige er passeret
+        prev, self._target = self._target, (race["id"], target)
+        if target and prev and prev[0] == race["id"] and prev[1] != target and 0 <= time.time() - prev[1] < 5:
+            key = (race["id"], round(prev[1]), 0)
+            if key not in self._fired:
+                self._fired.add(key)
+                self.bus.publish({"type": "race.countdown", "min": 0, "race": race["name"]})
         if not target:
             return
         rem = target - time.time()
-        for m in (3, 2, 1, 0):
-            key = (race["id"], round(target), m)
-            if key not in self._fired and m * 60 - 5 < rem <= m * 60:
+        for m, label in list(zip(warn, labels)) + [(0, 0)]:
+            key = (race["id"], round(target), label)
+            if key not in self._fired and m * 60 - min(5, m * 20 or 5) < rem <= m * 60:
                 self._fired.add(key)
-                self.bus.publish({"type": "race.countdown", "min": m, "race": race["name"]})
+                self.bus.publish({"type": "race.countdown", "min": label, "race": race["name"]})
 
     def _readers_changed(self):
         now = {r["role"]: r["connected"] for r in self.reader_status() if r.get("path")}

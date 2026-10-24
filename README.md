@@ -115,6 +115,19 @@ En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`�
    - **Resultater (CSV)** henter resultatlisten.
 4. **Arkivér** løbet bagefter med **🗄 Arkivér**, så løbslisten ikke bliver lang. Under fanen **Arkiv** kan gamle løb søges frem, ses, hentes som CSV eller gendannes. Intet slettes ved arkivering.
 
+## Testløb (simulering)
+
+Under **Nyt løb** kan et løb af en hvilken som helst type markeres som **🧪 Testløb**. Så kan du prøve løbstypen, læserne og skærmen af uden at vente på rigtig tid:
+
+| Indstilling | Virkning |
+|---|---|
+| **Tid** | Normal, 10×, 60× (en backyard-time varer 1 minut) eller 120× hurtigere. Alle tider skaleres: runder, tidsvinduer, nedtælling, minimumstid, indtjekning, intervalstart og samlet tid. Distancer er uændrede. |
+| **Ingen minimumstid** | Hver scanning tæller med det samme. I backyard er der ingen flagzone. |
+| **Ingen indtjekning** | Løberne behøver ikke scanne før start. |
+| **Intet dublet-filter** | Samme armbånd kan scannes igen med det samme. |
+
+Testløb vises med *🧪 TEST* på resultatskærmen og i admin, og de **sendes aldrig til hjemmesiden**. Mens et testløb er aktivt, viser hjemmesiden splash. Indstillingerne kan ændres undervejs under *Aktivt løb → Indstillinger*. Under *Test uden hardware* kan du vælge en løbers armbånd i stedet for at skrive chip-ID'et.
+
 ## Scan-besked og moduler
 
 **Scan-besked:** hver gang et armbånd scannes, vises en stor bjælke nederst på resultatskærmen i 4 sekunder:
