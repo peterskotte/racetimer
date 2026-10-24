@@ -116,6 +116,18 @@ def test_devtest_reads_do_not_count():
         app._devtest.update(until=0)
     assert "id" in app.handle_read("CHIP1", "backup")  # efter testen tæller læsninger igen
 
+
+def test_wifi_name_on_danish_pi():
+    fake = os.path.join(TMP, "nmcli")
+    with open(fake, "w") as f:  # som nmcli: oversætter yes/no, medmindre LC_ALL=C
+        f.write('#!/bin/sh\n[ "$LC_ALL" = C ] && A=yes || A=ja\necho "no:Naboen"\necho "$A:Klubhus\\\\:5G"\n')
+    os.chmod(fake, 0o755)
+    os.environ["RACETIMER_NMCLI"] = fake
+    try:
+        assert app.wifi_ssid() == "Klubhus:5G"
+    finally:
+        del os.environ["RACETIMER_NMCLI"]
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

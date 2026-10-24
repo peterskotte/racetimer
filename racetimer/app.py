@@ -72,16 +72,20 @@ def wifi_ssid():
     """Navnet på det WiFi, Pi'en er forbundet til (None ved kabel eller uden NetworkManager)."""
     import re
     import subprocess
+    env = dict(os.environ, LC_ALL="C")  # på en dansk Pi skriver nmcli ellers "ja" i stedet for "yes"
     try:
         out = subprocess.run([os.environ.get("RACETIMER_NMCLI", "nmcli"), "-t", "-f", "ACTIVE,SSID", "device", "wifi",
-                              "list", "--rescan", "no"], capture_output=True, text=True, timeout=3).stdout
+                              "list", "--rescan", "no"], capture_output=True, text=True, timeout=3, env=env).stdout
     except (OSError, subprocess.SubprocessError):
-        return None
+        out = ""
     for line in out.splitlines():
         active, _, ssid = line.partition(":")  # nmcli -t escaper ':' i navnet som '\:'
-        if active == "yes" and ssid:
+        if active in ("yes", "ja") and ssid:
             return re.sub(r"\\(.)", r"\1", ssid)
-    return None
+    try:  # reserve uden NetworkManager
+        return subprocess.run(["iwgetid", "-r"], capture_output=True, text=True, timeout=2, env=env).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 _clock_cache = {"t": 0, "v": None}
