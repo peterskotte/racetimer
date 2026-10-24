@@ -2,19 +2,21 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
-## [Ikke udgivet]
+## [1.2.0] – 2026-10-24
 
-- **Ny admin-opbygning:** på computer ligger ⚙ Opsætning som panel i højre side med sektioner, der klappes ud (accordion), mens løbet vises til venstre. Admin er gjort mobilvenlig: på mobil og tablet er Opsætning en fane, og stillingen vises som kompakte kort med knapperne under hver løber.
-- **Testløb (simulering):** alle løbstyper kan oprettes som testløb med hurtigere tid (10×, 60×, 120×) og med minimumstid, indtjekning og dublet-filter slået fra. Testløb vises med orange ramme og 🧪 TESTLØB på skærmen og sendes aldrig til hjemmesiden.
-- **Rettet:** højttalerens startsignal spillede ikke ved hver ny backyard-time, kun ved selve løbsstarten.
-- **Udstyrstest** (*⚙ Opsætning → Udstyrstest*): guide, der tester læser 1 og læser 2 med et armbånd (og advarer om byttede USB-stik), hver højttaler og resultatskærmen. Scanninger under testen tæller ikke, og resultatet gemmes.
-- Linjen med Pi'ens adresse (splash-skærmen og kiosk-toppen) viser nu også, hvilket WiFi Pi'en er forbundet til.
-- **Rettet:** med to ens læsere (samme model) blev kun den ene vist i læserlisten. Ens læsere vises nu med deres USB-port, og samme læser kan ikke vælges som både primær og backup.
-- **Scan-besked:** stor grøn, gul eller rød bjælke på resultatskærmen, hver gang et armbånd scannes. Den viser, om scanningen talte, og hvorfor ikke. Slås til og fra under *Udseende*.
-- **Moduler** (*⚙ Opsætning → Moduler*): eksterne enheder på USB, der reagerer på scanninger og nedtælling. Første modul er **USB-højttaler** med valgfri lyd pr. hændelse, lydstyrke og læser. Moduler påvirker aldrig tidtagningen.
-- Hver læsning vurderes nu (talt, ignoreret med årsag, eller ukendt). Det bruges af scan-beskeden og modulerne.
-- Menuen i admin er samlet: løbsfanerne (*Aktivt løb, Nyt løb, Deltagere, Arkiv*) står forrest, og resten ligger under **⚙ Opsætning**, grupperet i *Skærm og web*, *Udstyr* (RFID-læsere og moduler), *Netværk* og *System*. Læserne vælges nu under *⚙ Opsætning → RFID-læsere*, og *Aktivt løb* viser deres status. Menuen og toppen af siden passer nu også på mobil.
-- Ur-tjek: admin viser, om Pi'ens ur er stillet via internettet, og om det passer med din mobil/computer. Går uret forkert, eller er det ikke stillet siden opstart, advares der tydeligt, når løbet startes.
+**Nyt**
+- **Ny admin:** på computer ligger ⚙ Opsætning som panel i højre side med sektioner, der klappes ud, mens løbet vises til venstre. Admin er gjort mobilvenlig: på mobil og tablet er Opsætning en fane, og stillingen vises som kompakte kort.
+- **Scan-besked:** stor grøn, gul eller rød bjælke på resultatskærmen, hver gang et armbånd scannes. Den viser, om scanningen talte, og hvorfor ikke (fx dublet, for tidligt, ikke tjekket ind). Slås til og fra under *Udseende*.
+- **Moduler** (*⚙ Opsætning → Moduler*): eksterne enheder på USB, der reagerer på scanninger og nedtælling. Første modul er **USB-højttaler** med valgfri lyd pr. hændelse, lydstyrke og læser.
+- **Udstyrstest** (*⚙ Opsætning → Udstyrstest*): beder om et armbånd mod læser 1 og læser 2 (og advarer om byttede USB-stik) og tester højttalere og resultatskærm. Scanninger under testen tæller ikke.
+- **Testløb:** alle løbstyper kan køres som test med hurtigere tid (10×, 60×, 120×) og uden minimumstid, indtjekning eller dublet-filter. Testløb får orange ramme på skærmen og sendes aldrig til hjemmesiden.
+- **Ur-tjek:** admin viser, om Pi'ens ur er stillet og passer med din mobil, og advarer, før løbet startes.
+- RFID-læsere vælges nu under *⚙ Opsætning → RFID-læsere*, og *Aktivt løb* viser deres status.
+- Linjen med Pi'ens adresse viser også, hvilket WiFi Pi'en er forbundet til.
+
+**Rettet**
+- Med to ens læsere (samme model) blev kun den ene vist. Ens læsere vises nu med deres USB-port. **Har du to ens læsere, så vælg primær og backup igen efter opdateringen.**
+- Højttalerens startsignal spillede ikke ved hver ny backyard-time.
 
 ## [1.1.0] – 2026-10-23
 
