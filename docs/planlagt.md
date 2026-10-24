@@ -17,17 +17,19 @@ Idéer:
 - Farven skifter mod slutningen, fx orange de sidste 10 % og rød det sidste kvarter.
 - Samme visning på hjemmesiden (PHP/FTP/spejl) og i admin.
 
-## 2. Webbaseret udgave til små løb (uden Pi og RFID)
+## 2. Browser-udgave til små løb (uden Pi og RFID)
 
-En enkel udgave til klubber og enkeltpersoner, der ikke har en Raspberry Pi med RFID-læsere.
+En **billig udgave, der kun kræver en browser**: ingen Raspberry Pi, ingen RFID-læsere eller andet hardware. Til klubber og enkeltpersoner med små løb.
 
-- **Op til 12 deltagere**, der hver har et **stort felt/knap** på race director-siden.
-- RD **trykker på løberens felt**, hver gang løberen passerer. Det registrerer en omgang eller målpassage.
-- Fortryd-knap og mulighed for at rette en tid.
-- Samme løbstyper og regler som den rigtige RaceTimer, hvor det giver mening, fx backyard, tidsløb og A til B.
+**Besluttet (Peter, 24.10.2026):**
+- **Kun en browser-version.** Den åbnes som en almindelig hjemmeside på en bærbar, tablet eller mobil. Der skal ikke installeres noget.
+- **Kun race director tager tid, manuelt:** op til **12 deltagere**, hver med et **stort felt/knap**. RD trykker på feltet, hver gang løberen passerer. Fortryd-knap og mulighed for at rette en tid.
+- **Resten er som i den rigtige RaceTimer:** løbstyper og regler, resultatskærm (dark mode, top 4, scan-besked), splash med egen tekst, udseende/logo, testløb, arkiv og resultater til hjemmesiden.
 
-Åbne spørgsmål:
-- **Hvor skal den køre?** Kun i browseren, så den også virker offline (fx som en side på GitHub Pages), eller på klubbens webhotel (PHP)?
-- **Flere enheder:** skal en tilskuerskærm eller mobil kunne følge med live, eller er én enhed nok?
-- **Resultater:** eksport som CSV og/eller upload til hjemmesiden som i den rigtige udgave?
-- **Genbrug:** løbsmotoren findes i Python på Pi'en. Den webbaserede udgave skal enten have sin egen JavaScript-version eller køre en server.
+**Konsekvenser, der skal løses ved bygningen:**
+- **Løbsmotoren skal også findes i JavaScript.** Den kører i dag i Python på Pi'en, og de samme tests skal køres mod begge versioner, så reglerne ikke glider fra hinanden.
+- **Data gemmes i browseren** (IndexedDB) og overlever genindlæsning og strømsvigt. Der skal være eksport/import af en sikkerhedskopi, og en advarsel om ikke at rydde browserdata midt i et løb.
+- **Resultatskærm:** et ekstra vindue på samme enhed (fx på en ekstern skærm eller et TV via HDMI), som opdateres live fra RD-vinduet.
+- **Resultater til hjemmesiden:** via den eksisterende `modtag.php` (JSON), som så skal tillade kald fra browseren (CORS). FTP kan ikke bruges fra en browser.
+- **Hosting:** en statisk side, fx på GitHub Pages eller klubbens eget webhotel, der også virker offline, når den først er åbnet (PWA).
+- **Ikke med:** RFID-læsere, moduler/højttaler, WiFi, fjernadgang og opdateringsknap, som alle kræver Pi'en.
