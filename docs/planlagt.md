@@ -12,6 +12,7 @@ Gælder:
 - Evt. en lille ring om hver backyard-yard (tid til næste start)
 
 Idéer:
+- **Stor nedtæller (countdown) `00:00:00`**, der tæller ned til løbet slutter. Kan stå alene eller sammen med ringen/baren.
 - Stor fremskridtsring eller -bar ved siden af *Tid tilbage* i toppen af resultatskærmen.
 - Farven skifter mod slutningen, fx orange de sidste 10 % og rød det sidste kvarter.
 - Samme visning på hjemmesiden (PHP/FTP/spejl) og i admin.
