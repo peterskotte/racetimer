@@ -126,7 +126,7 @@ Under **Nyt løb** kan et løb af en hvilken som helst type markeres som **🧪 
 | **Ingen indtjekning** | Løberne behøver ikke scanne før start. |
 | **Intet dublet-filter** | Samme armbånd kan scannes igen med det samme. |
 
-Testløb vises med *🧪 TEST* på resultatskærmen og i admin, og de **sendes aldrig til hjemmesiden**. Mens et testløb er aktivt, viser hjemmesiden splash. Indstillingerne kan ændres undervejs under *Aktivt løb → Indstillinger*. Under *Test uden hardware* kan du vælge en løbers armbånd i stedet for at skrive chip-ID'et.
+Testløb vises med en **orange ramme** om resultatskærmen og *🧪 TESTLØB* øverst (også i admin), og de **sendes aldrig til hjemmesiden**. Mens et testløb er aktivt, viser hjemmesiden splash. Indstillingerne kan ændres undervejs under *Aktivt løb → Indstillinger*. Under *Test uden hardware* kan du vælge en løbers armbånd i stedet for at skrive chip-ID'et.
 
 ## Scan-besked og moduler
 
