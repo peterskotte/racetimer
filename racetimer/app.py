@@ -6,6 +6,7 @@ Normalt kører alt på Pi'en. Med RACETIMER_MODE=mirror kører den i stedet som
 offentlig spejlserver på en webserver: ingen læsere, ingen admin – den viser kun
 det, Pi'en sender til /api/mirror/push (se sync.py).
 """
+import asyncio
 import csv
 import gzip
 import hashlib
@@ -197,8 +198,19 @@ def admin(request: Request):
 
 
 def is_remote(request):
-    """Kom forespørgslen ind via Cloudflare-tunnelen (fjernadgang fra internettet)?"""
+    """Kom forespørgslen ind via Cloudflare-tunnelen (fjernadgang fra internettet)?
+
+    Headerne kan forfalskes på det lokale net – men så behandles forespørgslen bare strengere.
+    """
     return bool(request.headers.get("cf-ray") or request.headers.get("cf-connecting-ip"))
+
+
+def client_ip(request):
+    """Afsenderens IP. Cloudflares header stoles kun på, når den kommer fra cloudflared på Pi'en selv –
+    ellers kunne man på det lokale net omgå spærringen efter forkerte login ved at skifte header."""
+    ip = request.client.host if request.client else "?"
+    cf = request.headers.get("cf-connecting-ip")
+    return cf if cf and ip in ("127.0.0.1", "::1") else ip
 
 
 def is_https(request):
@@ -213,7 +225,7 @@ _login_fails = {}  # ip -> (antal fejl, spærret til)
 async def login(request: Request, response: Response):
     if MIRROR:
         raise HTTPException(403, "Dette er en spejlserver – administrér løbet på Pi'en")
-    ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
+    ip = client_ip(request)
     fails, until = _login_fails.get(ip, (0, 0))
     if until > time.time():
         raise HTTPException(429, f"For mange forkerte forsøg – prøv igen om {int((until - time.time()) / 60) + 1} min")
@@ -225,7 +237,7 @@ async def login(request: Request, response: Response):
     if not token:
         fails += 1
         _login_fails[ip] = (fails, time.time() + 15 * 60 if fails >= 5 else 0)
-        time.sleep(1)
+        await asyncio.sleep(1)  # ikke time.sleep: den ville fryse hele serveren (også resultatskærmen)
         raise HTTPException(401, "Forkert brugernavn eller kode")
     _login_fails.pop(ip, None)
     response.set_cookie("rt_session", token, httponly=True, samesite="strict", max_age=12 * 3600,

@@ -2,6 +2,13 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
+## [Ikke udgivet]
+
+**Sikkerhed**
+- Spærringen efter 5 forkerte login kunne omgås på det lokale net med en falsk Cloudflare-header. Headeren bruges nu kun, når den kommer fra tunnelen på Pi'en selv.
+- Et forkert login frøs hele serveren i 1 sekund (også resultatskærmen), så mange forsøg kunne lamme den. Ventetiden blokerer nu kun det ene login-forsøg.
+- Udviklerens signeringsnøgle kan ikke længere komme med i et lokalt bygget image, og rester af den fjernes fra Pi'en og dens gemte backups ved opdatering.
+
 ## [1.2.1] – 2026-10-24
 
 **Rettet**

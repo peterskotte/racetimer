@@ -169,6 +169,14 @@ def test_address_only_on_pi_screen():
     assert "host" not in app.live(req("100.84.51.64"))               # Tailscale
     assert "host" not in app.live(req("127.0.0.1", {"cf-ray": "x"}))  # Cloudflare-tunnel
 
+
+def test_login_lockout_cannot_be_bypassed_with_fake_header():
+    from types import SimpleNamespace as N
+    req = lambda ip, h=None: N(client=N(host=ip), headers=h or {})
+    assert app.client_ip(req("192.168.1.50", {"cf-connecting-ip": "1.2.3.4"})) == "192.168.1.50"  # forfalsket på LAN
+    assert app.client_ip(req("127.0.0.1", {"cf-connecting-ip": "1.2.3.4"})) == "1.2.3.4"          # via cloudflared
+    assert app.client_ip(req("192.168.1.50")) == "192.168.1.50"
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

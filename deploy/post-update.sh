@@ -27,6 +27,10 @@ echo "$SVC_USER ALL=(root) NOPASSWD: /usr/local/sbin/racetimer-wifi, /usr/local/
 chmod 440 /etc/sudoers.d/racetimer-wifi
 visudo -cf /etc/sudoers.d/racetimer-wifi >/dev/null || rm -f /etc/sudoers.d/racetimer-wifi
 
+# Udviklerens private signeringsnøgle må aldrig ligge på en Pi. Ældre versioner af
+# update-pi.sh kopierede den med – fjern den, også fra gemte backups af tidligere versioner.
+rm -rf "$APP/signing" "$APP/dist" /var/lib/racetimer-update/backup/*/signing /var/lib/racetimer-update/backup/*/dist
+
 # Moduler: lyd via USB-højttaler (ALSA) – servicebrugeren skal i gruppen audio, og aplay skal findes
 [ "$SVC_USER" = root ] || usermod -aG audio "$SVC_USER" 2>/dev/null || true
 command -v aplay >/dev/null || apt-get install -y -qq alsa-utils >/dev/null 2>&1 \

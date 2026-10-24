@@ -19,7 +19,7 @@ mkdir -p "$APP"
 rsync -a --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
   --exclude .git --exclude .venv --exclude .deps --exclude data --exclude data-mirror \
   --exclude __pycache__ --exclude .claude --exclude image --exclude '*.pyc' \
-  --exclude branding-local --exclude '*.command' \
+  --exclude branding-local --exclude '*.command' --exclude signing --exclude dist \
   ../ "$APP/"
 
 cd pi-gen
