@@ -1627,6 +1627,8 @@ async function loadSignup() {
         ${chk("public_list", s.public_list, "Vis tilmeldte på hjemmesiden (navn, klub, distance)")}
         ${chk("auto_bib", s.auto_bib, "Startnummer gives ved tilmeldingen (vises på kvitteringen)")}
         <label>Første startnummer<input type="number" name="bib_from" min="1" value="${s.bib_from}"></label>
+        ${chk("confirm_email", s.confirm_email, "Send bekræftelse på e-mail (med startnummer)")}
+        <label>Svar-adresse <span class="muted small">(klubbens e-mail – svar på bekræftelsen går hertil)</span><input type="email" name="reply_to" value="${esc(s.reply_to)}" placeholder="fx loeb@klubben.dk"></label>
       </div>
       <label style="margin-top:10px">Tekst på tilmeldingssiden <span class="muted small">(fx pris, betaling, praktisk info)</span><textarea name="note" rows="3" maxlength="500">${esc(s.note)}</textarea></label>
       <div class="grid" style="margin-top:10px">
@@ -1642,7 +1644,8 @@ async function loadSignup() {
     const f = e.target, fd = new FormData(f);
     await api(`/api/races/${curId}/signup`, {method: "PUT", body: {open: f.open.checked, deadline: fromLocalInput(fd.get("deadline")),
       birth_year: fd.get("birth_year"), delete_days: fd.get("delete_days"), public_list: f.public_list.checked, auto_bib: f.auto_bib.checked,
-      bib_from: fd.get("bib_from"), note: fd.get("note"), age_step: fd.get("age_step"), age_from: fd.get("age_from")}});
+      bib_from: fd.get("bib_from"), note: fd.get("note"), age_step: fd.get("age_step"), age_from: fd.get("age_from"),
+      confirm_email: f.confirm_email.checked, reply_to: fd.get("reply_to")}});
     toast("Tilmelding gemt"); loadSignup(); loadRace(false);
   };
   if ($("signupFetch")) $("signupFetch").onclick = async () => {

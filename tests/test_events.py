@@ -284,10 +284,12 @@ def test_signup_import_and_age_classes():
                        "distances": [{"id": "d1", "name": "5 km", "routes": ["r1"]}, {"id": "d2", "name": "10 km", "routes": ["r1"]}]})
     db.ex("UPDATE races SET scheduled_start=? WHERE id=?", (__import__("time").mktime((2026, 12, 31, 12, 0, 0, 0, 0, -1)), rid))
     st = asyncio.run(app.put_signup(rid, req({"open": True, "age_step": 5, "age_from": 35, "bib_from": 100, "delete_days": 7}), u={}))
-    assert st["open"] and st["age_step"] == 5
+    assert st["open"] and st["age_step"] == 5 and st["confirm_email"]
+    assert signup.clean({"reply_to": "loeb@klubben.dk"}, {})["reply_to"] == "loeb@klubben.dk"
+    assert signup.clean({"reply_to": "x@y.dk\r\nBcc: a@b.dk"}, {})["reply_to"] == ""  # ingen header-injektion
     pub = signup.public_list()
     one = next(x for x in pub if x["id"] == rid)
-    assert one["open"] and [d["name"] for d in one["distances"]] == ["5 km", "10 km"] and "email" not in json.dumps(pub)
+    assert one["open"] and [d["name"] for d in one["distances"]] == ["5 km", "10 km"] and not any(k == "email" for x in pub for k in x)
     race_ = db.race(rid)
     entries = [{"id": 1, "name": "Ida Holm", "sex": "Kvinde", "birth_year": 1984, "club": "RTT", "email": "ida@example.dk", "distance": "d2"},
                {"id": 2, "name": "Ole Bo", "sex": "Mand", "birth_year": 2010, "email": "o@example.dk", "distance": "x"}]
@@ -305,6 +307,7 @@ def test_signup_import_and_age_classes():
     assert db.q1("SELECT bib FROM participants WHERE race_id=? AND name='Web Nr'", (rid,))["bib"] == 150
     assert db.q1("SELECT bib FROM participants WHERE race_id=? AND name='Dublet'", (rid,))["bib"] == 151
     assert "Dublet: nr. 1 var optaget" in signup.settings(db.race(rid))["bib_conflicts"][0]
+    assert "ida@example.dk" not in json.dumps(signup.public_list())  # deltagernes e-mail sendes aldrig ud
     s = signup.settings(db.race(rid))
     assert signup.age_class(ida, db.race(rid), s) == "K40"  # 42 år på løbsdagen → 40-44
     assert signup.age_class(ole, db.race(rid), s) == "M Junior"

@@ -6,12 +6,14 @@ webhotellet, hvor de ikke kan hentes udefra. Pi'en henter nye tilmeldinger med n
 dem som deltagere. Hjemmesiden sletter tilmeldingerne selv, når fristen for sletning er nået.
 """
 import json
+import re
 import time
 
 from . import db, engine
 
 DEFAULTS = {"open": False, "deadline": None, "birth_year": "required", "public_list": True, "auto_bib": True,
-            "bib_from": 1, "delete_days": 30, "note": "", "age_step": 0, "age_from": 35}
+            "bib_from": 1, "delete_days": 30, "note": "", "age_step": 0, "age_from": 35,
+            "confirm_email": True, "reply_to": ""}
 FETCH_EVERY = 60  # sek. mellem hentninger, mens der er tilmeldinger på hjemmesiden
 
 
@@ -23,7 +25,7 @@ def settings(race):
 def clean(b, old):
     """Indstillinger fra admin → gemt form. Hentestatus (fetched, count …) bevares."""
     out = dict(old)
-    for k in ("open", "public_list", "auto_bib"):
+    for k in ("open", "public_list", "auto_bib", "confirm_email"):
         if k in b:
             out[k] = bool(b[k])
     if "birth_year" in b:
@@ -38,6 +40,9 @@ def clean(b, old):
                 pass
     if "age_step" in b:
         out["age_step"] = int(b["age_step"]) if str(b["age_step"]) in ("0", "5", "10") else 0
+    if "reply_to" in b:  # klubbens adresse – svar på bekræftelsen går hertil
+        r = str(b["reply_to"] or "").strip()[:200]
+        out["reply_to"] = r if re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[a-zA-Z]{2,}", r) else ""
     if "note" in b:
         out["note"] = str(b["note"] or "").strip()[:500]
     return out
@@ -85,7 +90,8 @@ def public_list(now=None):
                     "deadline": s["deadline"], "distances": [{"id": d["id"], "name": d["name"]} for d in ds],
                     "birth_year": s["birth_year"], "public_list": s["public_list"], "note": s["note"],
                     "delete_days": s["delete_days"], "purge_at": pa,
-                    "auto_bib": s["auto_bib"], "bib_from": s["bib_from"], "taken_bibs": taken})
+                    "auto_bib": s["auto_bib"], "bib_from": s["bib_from"], "taken_bibs": taken,
+                    "confirm_email": s["confirm_email"], "reply_to": s["reply_to"]})
     return out
 
 

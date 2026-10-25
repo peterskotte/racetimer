@@ -4,6 +4,9 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Nyt**
+- **Bekræftelse på e-mail:** tilmeldte får en mail med løb, distance, startnummer og jeres tekst (fx pris og betaling). Mailen sendes fra webhotellet (`noreply@` jeres domæne), og svar går til klubbens adresse, som vælges i RaceTimer. Kvitteringen på siden fortæller, om mailen blev sendt. Kan slås fra.
+
 **Ændret**
 - **Startnummer ved online tilmelding:** hjemmesiden giver startnummeret i selve tilmeldingen og viser det på kvitteringen og deltagerlisten. Pi'en sender de numre, den allerede har brugt, så de ikke gives igen, og beholder hjemmesidens nummer, når tilmeldingen hentes. Er nummeret alligevel optaget (fx givet manuelt på Pi'en i samme minut), får løberen et nyt, og admin får en advarsel. Upload den nye `tilmeld.php`.
 

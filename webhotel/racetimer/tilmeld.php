@@ -40,6 +40,31 @@ function distnavn($l, $id) {
     return '';
 }
 
+// Bekræftelse på mail med startnummer. Afsenderen er noreply@<hjemmesidens domæne> (webhoteller kræver
+// typisk en afsender på eget domæne); svar går til klubbens adresse fra RaceTimer. Returnerer true ved succes.
+function send_bekraeftelse($lob, $t, $brand) {
+    $enlinje = function ($s) { return trim(preg_replace('/[\r\n]+/', ' ', (string)$s)); };  // mod header-injektion
+    $vaert = preg_replace('/^www\./', '', strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? 'localhost')));
+    if (!preg_match('/^[a-z0-9.-]+$/', $vaert)) $vaert = 'localhost';
+    $dist = $t['distance'] ? distnavn($lob, $t['distance']) : '';
+    $emne = 'Tilmeldt: ' . $enlinje($lob['name']) . ($t['bib'] ? ' – startnummer ' . (int)$t['bib'] : '');
+    $side = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? $vaert)
+          . strtok($_SERVER['REQUEST_URI'] ?? '/tilmeld.php', '?') . '?lob=' . (int)$lob['id'];
+    $tekst = "Hej " . $enlinje($t['name']) . "\n\n"
+        . "Du er tilmeldt " . $enlinje($lob['name']) . ($dist !== '' ? ", $dist" : '') . ".\n"
+        . "Dato: " . dato($lob['date'], true) . "\n"
+        . ($t['bib'] ? "\nDit startnummer er: " . (int)$t['bib'] . "\n" : '')
+        . (trim($lob['note'] ?? '') !== '' ? "\n" . trim($lob['note']) . "\n" : '')
+        . "\nTilmeldingen: $side\n"
+        . "\nHar du ikke selv tilmeldt dig, så svar på denne mail.\n\nVenlig hilsen\n" . $enlinje($brand) . "\n";
+    $hoved = ['From: ' . mb_encode_mimeheader($enlinje($brand), 'UTF-8', 'Q') . " <noreply@$vaert>",
+              'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit',
+              'Auto-Submitted: auto-generated'];
+    $svar = $enlinje($lob['reply_to'] ?? '');
+    if ($svar !== '' && filter_var($svar, FILTER_VALIDATE_EMAIL)) $hoved[] = "Reply-To: $svar";
+    return @mail($t['email'], mb_encode_mimeheader($emne, 'UTF-8', 'Q'), $tekst, implode("\r\n", $hoved), "-fnoreply@$vaert");
+}
+
 // Spam-værn: højst $MAKS_PR_TIME tilmeldinger pr. IP pr. time (IP gemmes kun som hash og kun i en time)
 function for_mange($mappe, $maks) {
     $fil = "$mappe/tilmeld-ip.php";
@@ -67,6 +92,7 @@ if (!$lob_id && count($alle) === 1) $lob_id = array_key_first($alle);
 $lob = $alle[$lob_id] ?? null;
 $fejl = [];
 $tak = null;
+$mail = null;  // null = ingen bekræftelse, true = sendt, false = fejlede
 $v = ['name' => '', 'sex' => '', 'birth_year' => '', 'club' => '', 'email' => '', 'distance' => ''];
 
 if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
@@ -123,6 +149,7 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             fwrite($fp, json_encode($t, JSON_UNESCAPED_UNICODE) . "\n");
             fflush($fp); flock($fp, LOCK_UN); fclose($fp);
             $tak = $t;
+            $mail = !empty($lob['confirm_email']) ? send_bekraeftelse($lob, $t, $brand) : null;
         }
     }
 }
@@ -172,7 +199,9 @@ a{color:var(--text)}ul.loeb{list-style:none;padding:0}ul.loeb li{margin:10px 0}
   <?php if ($tak): ?>
     <div class="ok"><b>Tak, <?= e($tak['name']) ?> – du er tilmeldt<?= $tak['distance'] ? ' ' . e(distnavn($lob, $tak['distance'])) : '' ?>.</b>
       <?php if ($tak['bib']): ?><div class="bib">Dit startnummer er <b><?= (int)$tak['bib'] ?></b></div><?php endif; ?>
-      <span class="muted">Du får ikke en bekræftelse på mail<?= $tak['bib'] ? ', så skriv nummeret ned eller tag et billede af siden' : '' ?>.</span></div>
+      <span class="muted"><?= $mail === true ? 'Vi har sendt en bekræftelse til ' . e($tak['email']) . '. Kig evt. i spam-mappen.'
+        : ($mail === false ? 'Bekræftelsen kunne ikke sendes på mail' : 'Du får ikke en bekræftelse på mail')
+          . ($tak['bib'] ? ', så skriv nummeret ned eller tag et billede af siden.' : '.') ?></span></div>
   <?php elseif (!aaben($lob)): ?>
     <div class="card">Tilmeldingen er lukket.</div>
   <?php else: ?>
@@ -201,7 +230,7 @@ a{color:var(--text)}ul.loeb{list-style:none;padding:0}ul.loeb li{margin:10px 0}
       <label class="chk"><input type="checkbox" name="samtykke" value="1" required>
         <span>Jeg giver samtykke til, at mine oplysninger bruges til tidtagning og resultater for dette løb. Navn, køn, klub og
         <?= !empty($lob['distances']) ? 'distance' : 'resultat' ?> vises i resultatlisten<?= $vis_liste ? ' og på deltagerlisten herunder' : '' ?>.
-        E-mail og fødselsår vises aldrig offentligt og slettes fra hjemmesiden senest <?= (int)($lob['delete_days'] ?? 30) ?> dage efter løbet.</span></label>
+        <?= !empty($lob['confirm_email']) ? 'Du får en bekræftelse på e-mail. ' : '' ?>E-mail og fødselsår vises aldrig offentligt og slettes fra hjemmesiden senest <?= (int)($lob['delete_days'] ?? 30) ?> dage efter løbet.</span></label>
       <button>Tilmeld</button>
     </form>
   <?php endif; ?>

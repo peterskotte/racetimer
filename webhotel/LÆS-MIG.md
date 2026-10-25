@@ -56,14 +56,15 @@ Med `tilmeld.php` kan løbere tilmelde sig direkte på hjemmesiden:
 2. I RaceTimer: **Deltagere → 🌐 Tilmelding på hjemmesiden** → sæt flueben i *Åben for tilmelding*, vælg frist m.m. og tryk **Gem tilmelding**. Pi'en sender med det samme løbets navn, dato, frist og distancer til hjemmesiden.
 3. Tilmeldingssiden er `https://ditdomæne.dk/racetimer/tilmeld.php` (adressen står også i RaceTimer). `index.php` viser et link, så længe tilmeldingen er åben.
 4. Er *Startnummer gives ved tilmeldingen* valgt, får løberen sit startnummer med det samme på kvitteringen. Numre, der allerede er brugt på Pi'en, springes over.
-5. Pi'en henter nye tilmeldinger hvert minut, når den er på nettet, og opretter dem som deltagere med det samme startnummer.
+5. Er *Send bekræftelse på e-mail* valgt (standard), får løberen en mail med løb, distance, startnummer og jeres tekst. Mailen sendes med webhotellets egen mailfunktion (PHP `mail()`) fra `noreply@ditdomæne.dk`; skriv klubbens adresse som *Svar-adresse* i RaceTimer, så svar kommer frem. Lander mailen i spam, så tjek hos webhotellet, at domænet har SPF/DKIM for webserveren.
+6. Pi'en henter nye tilmeldinger hvert minut, når den er på nettet, og opretter dem som deltagere med det samme startnummer.
 
 **Persondata:**
 - Tilmeldingerne gemmes i `data/tilmeld-<løb>.php`. Filen starter med en PHP-linje, så webserveren svarer *404* og viser intet, hvis nogen prøver at åbne den. Den kan kun hentes af Pi'en med nøglen.
 - E-mail og fødselsår vises aldrig på hjemmesiden. Deltagerlisten på tilmeldingssiden (kan slås fra) viser kun navn, klub og distance.
 - Tilmeldingerne slettes automatisk fra webhotellet det valgte antal dage efter løbet (standard 30), og med det samme, hvis løbet slettes i RaceTimer.
 - Formularen kræver samtykke og har værn mod spam: et skjult felt for robotter og højst 10 tilmeldinger i timen pr. forbindelse (IP-adresser gemmes kun som hash og kun i en time).
-- Siden sender ikke mails. Hold hjemmesiden på **https**, så oplysningerne er krypteret undervejs.
+- E-mailen bruges kun til bekræftelsen og til arrangøren. Hold hjemmesiden på **https**, så oplysningerne er krypteret undervejs.
 
 Vil du vise resultaterne inde på en eksisterende side (fx i WordPress), kan du indsætte dem med en iframe:
 
