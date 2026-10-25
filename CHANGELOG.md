@@ -4,6 +4,10 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+## [1.4.0] – 2026-10-25
+
+**Til eksisterende installationer:** upload `tilmeld.php` og de nye `index.php` og `modtag.php` til webhotellet (husk jeres nøgle i `modtag.php`). Uden dem virker resultaterne som før, men hjemmesiden viser ikke distancer, nedtæller og tilmelding.
+
 **Nyt**
 - **Tilmelding på hjemmesiden:** åbn et løb for tilmelding under *Deltagere*. Den nye `tilmeld.php` på webhotellet viser formularen (navn, køn, fødselsår, klub, e-mail, distance og samtykke) og en valgfri liste over tilmeldte. Pi'en henter nye tilmeldinger hvert minut og opretter dem som deltagere, evt. med startnummer. Persondata kan ikke læses udefra på webhotellet, e-mail og fødselsår vises aldrig offentligt, og tilmeldingerne slettes automatisk efter løbet. **Upload `tilmeld.php` og de nye `modtag.php` og `index.php`** (husk nøglen i `modtag.php`).
 - **Aldersklasser:** 5- eller 10-års klasser ud fra køn og fødselsår, i resultater og CSV. Deltagere har fået felterne fødselsår og e-mail (også i Excel-importen).
@@ -15,6 +19,10 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 - `modtag.php` tillader afsendelse fra browser-udgaven (CORS). Nøglen kræves stadig.
 - Resultatskærmen kan få sine data fra et andet browservindue (`display.html?local=1`).
 - **Nedtæller med ring:** tidsløb og custom backyard med samlet tid viser *Tid tilbage* som en stor `00:00:00`-nedtæller med en ring, der tømmes. Backyard viser det samme for tiden til næste start. Ringen bliver orange de sidste 10 % og rød det sidste kvarter. Nedtælleren vises også på hjemmesiden (PHP og FTP) og spejlserveren. Upload den nye `index.php` til webhotellet.
+
+**Rettet**
+- Teksten under *Offentligt link* nævnte stadig admin/admin. Den siger nu, at login udefra kræver en kode på mindst 10 tegn.
+- Løbsmotoren lægger tider og km sammen ens i alle Python-versioner og i browser-udgaven (testene fejlede på Python 3.11).
 
 ## [1.3.0] – 2026-10-24
 
