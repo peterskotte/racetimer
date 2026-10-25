@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import db, ftpupload
+from . import db, ftpupload, signup
 
 BATCH = 5000
 TYPES = ("mirror", "webhook", "ftp")
@@ -66,6 +66,7 @@ class SyncManager(threading.Thread):
         self._announced = {}        # dest_id -> (adresse, tidspunkt) for sidst meldte admin-adresse
         self._locks = {}
         self._wake = threading.Event()
+        self._fetched = {}          # dest_id -> tidspunkt for sidste hentning af tilmeldinger
 
     # ------------------------------------------------------------ planlægning
 
@@ -77,6 +78,8 @@ class SyncManager(threading.Thread):
                         self._tick(d)
                         if d["type"] == "webhook" and d.get("announce_admin"):
                             self._announce(d)
+                        if d["type"] == "webhook":
+                            self.fetch_signups(d)
                     except Exception as e:  # noqa: BLE001 – tråden må aldrig dø
                         self._st(d)["last_error"] = str(e)
             self._wake.wait(1)
@@ -108,6 +111,23 @@ class SyncManager(threading.Thread):
         except RuntimeError as e:
             self._announced[d["id"]] = ("fejl", now)
             self._st(d)["admin_error"] = str(e)
+
+    def fetch_signups(self, d, force=False):
+        """Hent nye tilmeldinger fra hjemmesiden (højst hvert minut, med mindre force)."""
+        now = time.time()
+        if not force and now - self._fetched.get(d["id"], 0) < signup.FETCH_EVERY:
+            return None
+        self._fetched[d["id"]] = now
+        st = self._st(d)
+        try:
+            n = signup.fetch(d, _post, now)
+            st["signup_error"] = None
+            return n
+        except RuntimeError as e:
+            st["signup_error"] = str(e)
+            if force:
+                raise
+            return None
 
     def _st(self, d):
         return self.status.setdefault(d["id"], {"last_ok": None, "last_error": None, "last_event": None,
@@ -176,6 +196,7 @@ class SyncManager(threading.Thread):
         """race=None betyder intet aktivt løb → hjemmesiden viser splash med den valgte tekst."""
         from . import branding
         payload = {"event": "final" if final else "update", "sent_at": time.time(), "race": None,
+                   "signups": signup.public_list(),  # løb med tilmelding (ingen persondata)
                    "brand": branding.get()["name"], "branding": branding.web_export(images),
                    "archived": [r["id"] for r in db.q("SELECT id FROM races WHERE archived_at IS NOT NULL")]}
         if race:
@@ -186,7 +207,7 @@ class SyncManager(threading.Thread):
                 info=info,
                 results=[{k: r.get(k) for k in ("place", "bib", "name", "sex", "club", "status", "status_label",
                                                  "laps", "distance_km", "total_time", "last_lap", "best_lap", "dogs",
-                                                 "distance", "distance_name")}
+                                                 "distance", "distance_name", "class")}
                          for r in rows])
         return payload
 
@@ -202,7 +223,7 @@ class SyncManager(threading.Thread):
         state = allstate.setdefault(d["id"], {})
         for _ in range(100):  # flere portioner, hvis der er meget at indhente
             since = state.get(str(rid), 0)
-            parts = db.q("SELECT id, bib, name, sex, club, status, status_at, start_offset, dogs, dog1, dog2, distance "
+            parts = db.q("SELECT id, bib, name, sex, club, status, status_at, start_offset, dogs, dog1, dog2, distance, birth_year "
                          "FROM participants "
                          "WHERE race_id=?", (rid,))
             reads = db.q("SELECT id, participant_id, ts, reader, duplicate, deleted, approved, rev FROM reads "
@@ -210,8 +231,9 @@ class SyncManager(threading.Thread):
             payload = {
                 "pi_now": time.time(),
                 "branding": brand,
-                "race": {k: race[k] for k in ("id", "name", "type", "config", "status", "scheduled_start",
-                                              "started_at", "finished_at")},
+                "race": {**{k: race[k] for k in ("id", "name", "type", "config", "status", "scheduled_start",
+                                                 "started_at", "finished_at")},
+                         **{k: signup.settings(race)[k] for k in ("age_step", "age_from")}},  # aldersklasser
                 "participants": parts,  # lille liste – sendes altid, så rettelser altid kommer med
                 "reads": [[r["id"], r["participant_id"], r["ts"], r["reader"], r["duplicate"], r["deleted"],
                            r["approved"]] for r in reads],

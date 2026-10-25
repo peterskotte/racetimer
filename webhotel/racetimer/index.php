@@ -47,6 +47,15 @@ $logo = $logofil
     : '<span class="brand">' . e($brand) . '</span>';
 $splashfil = ($udseende['splash'] ?? 'image') === 'image' ? datafil('splash') : null;
 $splashtekst = trim($udseende['splash_text'] ?? '');
+// Løb med åben tilmelding (tilmeld.php) – vises som et link øverst
+$tilm = is_file("$mappe/tilmelding.json") ? json_decode(file_get_contents("$mappe/tilmelding.json"), true) : null;
+$aabne = array_filter($tilm['loeb'] ?? [], function ($l) {
+    return !empty($l['open']) && (empty($l['deadline']) || time() <= $l['deadline']);
+});
+$tilmlink = $aabne ? '<div class="tilm">📝 Tilmelding er åben: ' . implode(' · ', array_map(function ($l) {
+    return '<a href="tilmeld.php?lob=' . (int)$l['id'] . '">' . e($l['name']) . '</a>'
+        . (!empty($l['deadline']) ? ' <span>(senest ' . date('d.m', (int)$l['deadline']) . ')</span>' : '');
+}, $aabne)) . '</div>' : '';
 function hms($sek, $tvungen = false) {
     if ($sek === null) return '–';
     $sek = max(0, (int)$sek);
@@ -109,7 +118,7 @@ if ($cd): ?>
 <tr class="<?= $ude ? 'ude' : '' ?>">
   <td><?= $r['place'] !== null ? (int)$r['place'] : '–' ?></td>
   <td class="navn"><?= $r['bib'] !== null ? '<span class="nr">' . (int)$r['bib'] . '</span>' : '' ?><?= e($r['name']) ?><?= !empty($r['club']) ? '<span class="klub">' . e($r['club']) . '</span>' : '' ?><?= !empty($r['dogs']) ? '<span class="klub" style="color:var(--orange)">🐕 ' . e(implode(' & ', $r['dogs'])) . '</span>' : '' ?></td>
-  <td><?= e($r['sex'] ?? '') ?></td>
+  <td><?= e($r['sex'] ?? '') ?><?= !empty($r['class']) ? ' <span class="nr">' . e($r['class']) . '</span>' : '' ?></td>
   <td style="white-space:nowrap"><i class="dot <?= e($r['status']) ?>"></i><?= e($r['status_label']) ?></td>
 <?php if ($omgang): ?>
   <td class="r"><?= (int)$r['laps'] ?></td><td class="r"><?= km($r['distance_km']) ?> km</td><td class="r"><?= hms($r['last_lap']) ?></td>
@@ -146,6 +155,7 @@ td{padding:11px 14px;border-top:1px solid var(--line);font-variant-numeric:tabul
 td.navn{font-weight:600}.nr{color:var(--muted);font-weight:500;font-size:.85em;margin-right:.45em}.klub{display:block;color:var(--muted);font-weight:400;font-size:.8em}
 tr.ude td{color:var(--dim)}.dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;margin-right:.5em;background:#8a9099}
 .active{background:#3fc56b}.resting{background:#2bb3a3}.winner{background:#f2c14e}.finished{background:#5aa3ff}.rtc,.dsq{background:#ef5b5b}
+.tilm{background:var(--orange);color:#fff;padding:10px 20px;font-weight:600}.tilm a{color:#fff}.tilm span{font-weight:400;opacity:.85}
 .arkiv{margin-top:22px}.arkiv a{color:var(--text)}.arkiv li{margin:6px 0}
 footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text-align:center;color:var(--muted)}
 .cd{display:flex;align-items:center;gap:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 18px;margin-bottom:14px}
@@ -162,7 +172,7 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 </head>
 <body>
 <?php if ($splash): ?>
-<header><?= $logo ?></header>
+<header><?= $logo ?></header><?= $tilmlink ?>
 <?php if ($splashfil): ?>
 <div class="splash" style="background-image:url('<?= e($splashfil) ?>')"><?php if ($splashtekst !== ''): ?><div class="txt"><?= e($splashtekst) ?></div><?php endif; ?></div>
 <?php else: ?>
@@ -170,7 +180,7 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 <?php endif; ?>
 <main>
 <?php else: ?>
-<header><?= $logo ?></header>
+<header><?= $logo ?></header><?= $tilmlink ?>
 <main>
   <h1><?= e($race['name']) ?></h1>
   <div class="sub">

@@ -148,6 +148,10 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 **Manuelt:** Tilføj enkelte deltagere med formularen, fx eftertilmeldinger på dagen.
 
+**Tilmelding på hjemmesiden:** Har I `modtag.php` og `tilmeld.php` på webhotellet (se [webhotel/LÆS-MIG.md](../webhotel/LÆS-MIG.md)), kan løberne tilmelde sig selv. Under **Deltagere → 🌐 Tilmelding på hjemmesiden** åbner I tilmeldingen og vælger frist, om fødselsår skal udfyldes, om de tilmeldte vises på siden, automatiske startnumre og en tekst til siden (fx pris og betaling). Pi'en henter nye tilmeldinger hvert minut, mens den er på nettet, og de står som deltagere med en orange kant. **⟳ Hent nu** henter med det samme. E-mail og fødselsår vises aldrig offentligt, og tilmeldingerne slettes fra webhotellet automatisk efter løbet.
+
+**Aldersklasser:** Vælg 5- eller 10-års klasser i samme boks. Klassen (fx *M40*, *K45*, *K Senior*, *M Junior*) beregnes ud fra køn og fødselsår på løbsdagen og vises i resultaterne på hjemmesiden og i CSV-filen. Fødselsår kan også komme fra Excel (kolonnen *Fødselsår*).
+
 ## 7. På løbsdagen
 
 **Før start**

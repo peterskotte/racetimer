@@ -6,6 +6,7 @@ Mappen `racetimer/` her lægges op på webhotellet. Den indeholder to filer:
 |---|---|
 | `modtag.php` | Tager imod resultater fra Pi'en og gemmer dem i `data/` |
 | `index.php` | Viser resultaterne som en side, med arkiv over tidligere løb |
+| `tilmeld.php` | Tilmelding til løb, som er åbnet for tilmelding i RaceTimer (se nedenfor) |
 | `logo.png` *(valgfri)* | Reserve-logo. Normalt sender Pi'en selv logoet fra **Admin → ⚙ Opsætning → Udseende** |
 | `admin/index.php` | Gør, at `…/racetimer/admin` viderestiller til Pi'ens admin via fjernadgang (se nedenfor) |
 
@@ -46,6 +47,22 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 > **Browser-udgaven** af RaceTimer (uden Pi) sender til den samme `modtag.php`. Det kræver den nyeste version, som tillader afsendelse fra en browser.
 
 > Har du en ældre version af `modtag.php` og `index.php` på webhotellet, så upload de nye. Ellers vises arkiverede løb stadig, og splash mangler. Husk at sætte din nøgle i den nye `modtag.php`.
+
+## Tilmelding på hjemmesiden
+
+Med `tilmeld.php` kan løbere tilmelde sig direkte på hjemmesiden:
+
+1. Læg `tilmeld.php` i samme mappe som `modtag.php`. Der skal ikke sættes noget op i filen.
+2. I RaceTimer: **Deltagere → 🌐 Tilmelding på hjemmesiden** → sæt flueben i *Åben for tilmelding*, vælg frist m.m. og tryk **Gem tilmelding**. Pi'en sender med det samme løbets navn, dato, frist og distancer til hjemmesiden.
+3. Tilmeldingssiden er `https://ditdomæne.dk/racetimer/tilmeld.php` (adressen står også i RaceTimer). `index.php` viser et link, så længe tilmeldingen er åben.
+4. Pi'en henter nye tilmeldinger hvert minut, når den er på nettet, og opretter dem som deltagere (med startnummer, hvis det er valgt).
+
+**Persondata:**
+- Tilmeldingerne gemmes i `data/tilmeld-<løb>.php`. Filen starter med en PHP-linje, så webserveren svarer *404* og viser intet, hvis nogen prøver at åbne den. Den kan kun hentes af Pi'en med nøglen.
+- E-mail og fødselsår vises aldrig på hjemmesiden. Deltagerlisten på tilmeldingssiden (kan slås fra) viser kun navn, klub og distance.
+- Tilmeldingerne slettes automatisk fra webhotellet det valgte antal dage efter løbet (standard 30), og med det samme, hvis løbet slettes i RaceTimer.
+- Formularen kræver samtykke og har værn mod spam: et skjult felt for robotter og højst 10 tilmeldinger i timen pr. forbindelse (IP-adresser gemmes kun som hash og kun i en time).
+- Siden sender ikke mails. Hold hjemmesiden på **https**, så oplysningerne er krypteret undervejs.
 
 Vil du vise resultaterne inde på en eksisterende side (fx i WordPress), kan du indsætte dem med en iframe:
 

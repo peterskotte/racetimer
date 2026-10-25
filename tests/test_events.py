@@ -270,6 +270,43 @@ def test_templates():
     app.delete_template(t["id"], u={})
     assert app.templates(u={})["own"] == []
 
+
+def test_signup_import_and_age_classes():
+    import asyncio
+    from types import SimpleNamespace as N
+    from racetimer import signup
+
+    def req(body):
+        async def j():
+            return body
+        return N(json=j)
+    rid = race("p2p", {"routes": [{"id": "r1", "name": "A", "km": 5, "min_min": 1}],
+                       "distances": [{"id": "d1", "name": "5 km", "routes": ["r1"]}, {"id": "d2", "name": "10 km", "routes": ["r1"]}]})
+    db.ex("UPDATE races SET scheduled_start=? WHERE id=?", (__import__("time").mktime((2026, 12, 31, 12, 0, 0, 0, 0, -1)), rid))
+    st = asyncio.run(app.put_signup(rid, req({"open": True, "age_step": 5, "age_from": 35, "bib_from": 100, "delete_days": 7}), u={}))
+    assert st["open"] and st["age_step"] == 5
+    pub = signup.public_list()
+    one = next(x for x in pub if x["id"] == rid)
+    assert one["open"] and [d["name"] for d in one["distances"]] == ["5 km", "10 km"] and "email" not in json.dumps(pub)
+    race_ = db.race(rid)
+    entries = [{"id": 1, "name": "Ida Holm", "sex": "Kvinde", "birth_year": 1984, "club": "RTT", "email": "ida@example.dk", "distance": "d2"},
+               {"id": 2, "name": "Ole Bo", "sex": "Mand", "birth_year": 2010, "email": "o@example.dk", "distance": "x"}]
+    assert signup.import_entries(race_, entries) == 2
+    assert signup.import_entries(db.race(rid), entries) == 0  # allerede hentet
+    ida = db.q1("SELECT * FROM participants WHERE race_id=? AND name='Ida Holm'", (rid,))
+    ole = db.q1("SELECT * FROM participants WHERE race_id=? AND name='Ole Bo'", (rid,))
+    assert ida["bib"] == 100 and ida["distance"] == "d2" and ida["email"] == "ida@example.dk" and ole["bib"] == 101
+    assert ole["distance"] is None and signup.settings(db.race(rid))["fetched"] == 2
+    s = signup.settings(db.race(rid))
+    assert signup.age_class(ida, db.race(rid), s) == "K40"  # 42 år på løbsdagen → 40-44
+    assert signup.age_class(ole, db.race(rid), s) == "M Junior"
+    assert signup.age_class({"sex": "Mand", "birth_year": 1996}, db.race(rid), s) == "M Senior"
+    rows, _ = app.standings(db.race(rid))
+    assert next(r for r in rows if r["name"] == "Ida Holm")["class"] == "K40"
+    # afsluttet løb: hjemmesiden skal slette tilmeldingerne efter 7 dage
+    db.ex("UPDATE races SET status='finished', finished_at=? WHERE id=?", (__import__("time").time() - 8 * 86400, rid))
+    assert not any(x["id"] == rid for x in signup.public_list())
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

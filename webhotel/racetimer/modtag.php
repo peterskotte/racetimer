@@ -9,6 +9,10 @@
  *
  * Pi'en sender også klubbens logo, splash-billede og -tekst samt hvilke løb der er arkiveret.
  * index.php viser splash, når der ikke er et aktivt løb, og skjuler arkiverede løb.
+ *
+ * Tilmelding: Pi'en fortæller, hvilke løb man kan tilmelde sig (data/tilmelding.json – ingen persondata).
+ * tilmeld.php gemmer tilmeldingerne i data/tilmeld-<løb>.php, som ikke kan læses udefra, og Pi'en
+ * henter dem her med nøglen. Filerne slettes, når Pi'en siger det, eller når slettefristen er nået.
  */
 $RACETIMER_KEY = 'SKIFT-MIG-TIL-EN-LANG-HEMMELIG-NOEGLE';
 
@@ -58,11 +62,45 @@ if (!file_exists("$mappe/index.html")) {
     @file_put_contents("$mappe/index.html", '');
 }
 
+// Tilmeldinger: én JSON-linje pr. tilmelding efter en PHP-linje, der stopper visning via webserveren
+function tilmeldinger($mappe, $lob) {
+    $fil = "$mappe/tilmeld-" . (int)$lob . '.php';
+    if (!is_file($fil)) return [];
+    $ud = [];
+    foreach (array_slice(file($fil, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES), 1) as $linje) {
+        $t = json_decode($linje, true);
+        if (is_array($t)) $ud[] = $t;
+    }
+    return $ud;
+}
+
+// Slet tilmeldinger til løb, som Pi'en ikke længere nævner, eller hvis slettefrist er nået
+function ryd_tilmeldinger($mappe, $lob) {
+    $behold = [];
+    foreach ($lob as $l) {
+        if (empty($l['purge_at']) || $l['purge_at'] > time()) $behold[] = (int)($l['id'] ?? 0);
+    }
+    foreach (glob("$mappe/tilmeld-*.php") ?: [] as $fil) {
+        if (preg_match('/tilmeld-(\d+)\.php$/', $fil, $m) && !in_array((int)$m[1], $behold, true)) @unlink($fil);
+    }
+}
+
 function gem($fil, $data) {
     $tmp = $fil . '.tmp';
     if (file_put_contents($tmp, json_encode($data, JSON_UNESCAPED_UNICODE)) === false || !rename($tmp, $fil)) {
         svar(500, 'Kunne ikke gemme ' . basename($fil) . ' – tjek skriveadgang til data/.');
     }
+}
+
+// Pi'en henter nye tilmeldinger: {"loeb": {"<løb-id>": <sidste hentede id>}}
+if ($data['event'] === 'hent_tilmeldinger') {
+    $ud = [];
+    foreach (($data['loeb'] ?? []) as $lob => $siden) {
+        if ((int)$lob <= 0) continue;
+        $ud[(int)$lob] = array_values(array_filter(tilmeldinger($mappe, $lob),
+            function ($t) use ($siden) { return (int)($t['id'] ?? 0) > (int)$siden; }));
+    }
+    svar(200, 'Tilmeldinger', ['tilmeldinger' => (object)$ud]);
 }
 
 // Pi'en melder sin fjernadgangs-adresse (bruges af admin/index.php) – rører ikke resultaterne
@@ -103,6 +141,13 @@ if (is_array($udseende)) {
         foreach (glob("$mappe/logo.*") ?: [] as $gammel) @unlink($gammel);
     }
     unset($data['branding']['images']);  // billederne ligger nu som filer
+}
+
+// Løb med tilmelding (kun fra Pi'en – browser-udgaven sender ikke "signups" og rører dem ikke)
+if (isset($data['signups']) && is_array($data['signups'])) {
+    gem("$mappe/tilmelding.json", ['loeb' => $data['signups'], 'brand' => $data['brand'] ?? '', 'modtaget' => time()]);
+    ryd_tilmeldinger($mappe, $data['signups']);
+    unset($data['signups']);
 }
 
 gem("$mappe/resultater.json", $data);

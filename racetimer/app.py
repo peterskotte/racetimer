@@ -14,6 +14,7 @@ import secrets
 import io
 import json
 import os
+import re
 import threading
 import time
 
@@ -21,7 +22,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Up
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import branding, db, engine, events, modules, outcome, readers, sync, updater
+from . import branding, db, engine, events, modules, outcome, readers, signup, sync, updater
 
 HERE = os.path.dirname(__file__)
 STATIC = os.path.join(HERE, "static")
@@ -293,6 +294,11 @@ def standings(race, now=None):
     reads = db.q("SELECT id, participant_id, ts, approved FROM reads WHERE race_id=? AND duplicate=0 AND deleted=0 "
                  "AND participant_id IS NOT NULL", (race["id"],))
     rows, info = engine.compute(race, parts, reads, now)
+    s = signup.settings(race)
+    if s["age_step"]:  # aldersklasser ud fra køn og fødselsår
+        cls = {p["id"]: signup.age_class(p, race, s) for p in parts}
+        for r in rows:
+            r["class"] = cls.get(r["id"])
     # Afslut løbet automatisk når motoren siger det er afgjort
     if not MIRROR and race["status"] == "running" and info.get("phase") == "ended" and not race.get("finished_at"):
         fin = info.get("resolved_at") or info.get("end_at") or now
@@ -381,21 +387,23 @@ async def mirror_push(request: Request):
         c.execute("BEGIN")
         try:
             c.execute("INSERT INTO races(id, name, type, config, status, scheduled_start, started_at, finished_at, "
-                      "created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, "
+                      "created_at, signup) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, "
                       "type=excluded.type, config=excluded.config, status=excluded.status, "
                       "scheduled_start=excluded.scheduled_start, started_at=excluded.started_at, "
-                      "finished_at=excluded.finished_at",
+                      "finished_at=excluded.finished_at, signup=excluded.signup",
                       (rid, race["name"], race["type"], json.dumps(race["config"]), race["status"],
-                       race["scheduled_start"], race["started_at"], race["finished_at"], now))
+                       race["scheduled_start"], race["started_at"], race["finished_at"], now,
+                       json.dumps({"age_step": race.get("age_step") or 0, "age_from": race.get("age_from") or 35})))
             c.execute("UPDATE races SET is_active=(id=?)", (rid,))
             if b["since"] == 0:
                 c.execute("DELETE FROM reads WHERE race_id=?", (rid,))
             if b.get("participants") is not None:
                 c.execute("DELETE FROM participants WHERE race_id=?", (rid,))
                 c.executemany("INSERT INTO participants(id, race_id, bib, name, sex, club, status, status_at, "
-                              "start_offset, dogs, dog1, dog2, distance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                              "start_offset, dogs, dog1, dog2, distance, birth_year) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                               [(p["id"], rid, p["bib"], p["name"], p["sex"], p["club"], p["status"], p["status_at"],
-                                p["start_offset"], p.get("dogs"), p.get("dog1"), p.get("dog2"), p.get("distance"))
+                                p["start_offset"], p.get("dogs"), p.get("dog1"), p.get("dog2"), p.get("distance"),
+                                p.get("birth_year"))
                                for p in b["participants"]])
             c.executemany("INSERT OR REPLACE INTO reads(id, race_id, chip, reader, ts, participant_id, duplicate, "
                           "deleted, approved) VALUES (?,?,'',?,?,?,?,?,?)",
@@ -717,6 +725,51 @@ def tap_undo(rid: int, u=Depends(admin)):
     return {"ok": True, **last}
 
 
+# ------------------------------------------------------------------ tilmelding på hjemmesiden
+
+def _signup_dests():
+    return [d for d in sync.destinations() if d.get("type") == "webhook" and d.get("enabled") and d.get("url")]
+
+
+@app.get("/api/races/{rid}/signup")
+def get_signup(rid: int, u=Depends(admin)):
+    race = db.race(rid) or _404()
+    s = signup.settings(race)
+    dests = _signup_dests()
+    online = db.q1("SELECT COUNT(*) n FROM participants WHERE race_id=? AND signup_id IS NOT NULL", (rid,))["n"]
+    return {**s, "is_open": signup.is_open(race, s), "online": online, "test": bool(race.get("test")),
+            "purge_at": signup.purge_at(race, s),
+            "forms": [re.sub(r"modtag\.php(\?.*)?$", "tilmeld.php", d["url"]) + f"?lob={rid}" for d in dests],
+            "errors": [sync_mgr.status.get(d["id"], {}).get("signup_error") for d in dests if
+                       sync_mgr.status.get(d["id"], {}).get("signup_error")]}
+
+
+@app.put("/api/races/{rid}/signup")
+async def put_signup(rid: int, request: Request, u=Depends(admin)):
+    race = db.race(rid) or _404()
+    s = signup.clean(await request.json(), signup.settings(race))
+    if s["open"] and race.get("test"):
+        raise HTTPException(400, "Testløb kan ikke åbnes for tilmelding")
+    signup.save(rid, s)
+    sync_mgr.poke_state()  # hjemmesiden får besked med det samme
+    return get_signup(rid, u)
+
+
+@app.post("/api/races/{rid}/signup/fetch")
+def fetch_signup(rid: int, u=Depends(admin)):
+    db.race(rid) or _404()
+    dests = _signup_dests()
+    if not dests:
+        raise HTTPException(400, "Opret først en destination af typen “Egen hjemmeside (JSON)” under ⚙ Opsætning → Synkronisering")
+    added = 0
+    for d in dests:
+        try:
+            added += sync_mgr.fetch_signups(d, force=True) or 0
+        except RuntimeError as e:
+            raise HTTPException(502, f"Kunne ikke hente fra {d.get('name') or d['url']}: {e}") from None
+    return {"added": added}
+
+
 @app.post("/api/races/{rid}/archive")
 def archive_race(rid: int, u=Depends(admin)):
     """Flyt et afsluttet løb til arkivet. Intet slettes, og det kan gendannes."""
@@ -753,10 +806,13 @@ def results_csv(rid: int, u=Depends(admin)):
     w = csv.writer(buf, delimiter=";")
     cfg = engine.merged_config(race["type"], race["config"])
     cc, multi = bool(cfg.get("canicross")), bool(engine.distances(race["type"], cfg))
-    w.writerow((["Distance"] if multi else []) + ["Placering", "Startnr", "Navn", "Køn", "Klub"] + (["Hunde"] if cc else []) +
+    ages = bool(signup.settings(race)["age_step"])
+    w.writerow((["Distance"] if multi else []) + ["Placering", "Startnr", "Navn", "Køn"] + (["Klasse"] if ages else []) + ["Klub"] +
+               (["Hunde"] if cc else []) +
                ["Status", "Omgange", "Distance km", "Tid (s)", "Sidste omgang (s)", "Bedste omgang (s)"])
     for r in rows:
-        w.writerow(([r.get("distance_name")] if multi else []) + [r["place"], r["bib"], r["name"], r["sex"], r["club"]] +
+        w.writerow(([r.get("distance_name")] if multi else []) + [r["place"], r["bib"], r["name"], r["sex"]] +
+                   ([r.get("class") or ""] if ages else []) + [r["club"]] +
                    ([" & ".join(r["dogs"])] if cc else []) +
                    [r["status_label"], r["laps"], r["distance_km"], r["total_time"] and round(r["total_time"], 1),
                     r["last_lap"] and round(r["last_lap"], 1), r["best_lap"] and round(r["best_lap"], 1)])
@@ -788,7 +844,14 @@ def _participant_fields(b):
         "dog1": (b.get("dog1") or "").strip() or None,
         "dog2": (b.get("dog2") or "").strip() or None,
         "distance": str(b.get("distance") or "").strip() or None,
+        "birth_year": _birth_year(b.get("birth_year")),
+        "email": (str(b.get("email") or "").strip()[:200] or None),
     }
+
+
+def _birth_year(v):
+    v = str(v or "").strip().removesuffix(".0")
+    return int(v) if v.isdigit() and 1900 <= int(v) <= time.localtime().tm_year else None
 
 
 def _distance_id(rid, value):
@@ -841,9 +904,10 @@ async def add_participant(rid: int, request: Request, u=Depends(admin)):
     _check_chip(rid, f["chip"])
     _check_dogs(rid, f)
     f["distance"] = _distance_id(rid, f["distance"])
-    pid = db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2, distance) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"]))
+    pid = db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2, distance, birth_year, email) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"],
+                 f["birth_year"], f["email"]))
     _relink(rid)
     return {"id": pid}
 
@@ -858,10 +922,10 @@ async def update_participant(pid: int, request: Request, u=Depends(admin)):
         _check_dogs(p["race_id"], f)
     so = b.get("start_offset", p["start_offset"])
     f["distance"] = _distance_id(p["race_id"], f["distance"])
-    db.ex("UPDATE participants SET bib=?, name=?, sex=?, club=?, chip=?, start_offset=?, dogs=?, dog1=?, dog2=?, distance=? "
-          "WHERE id=?",
+    db.ex("UPDATE participants SET bib=?, name=?, sex=?, club=?, chip=?, start_offset=?, dogs=?, dog1=?, dog2=?, distance=?, "
+          "birth_year=?, email=? WHERE id=?",
           (f["bib"], f["name"], f["sex"], f["club"], f["chip"], None if so in ("", None) else float(so),
-           f["dogs"], f["dog1"], f["dog2"], f["distance"], pid))
+           f["dogs"], f["dog1"], f["dog2"], f["distance"], f["birth_year"], f["email"], pid))
     _relink(p["race_id"])
     return {"ok": True}
 
@@ -900,6 +964,8 @@ HEADERS = {
     "dog1": ("hund 1", "hund1", "hund", "hundenavn", "dog 1", "dog1", "dog"),
     "dog2": ("hund 2", "hund2", "dog 2", "dog2"),
     "distance": ("distance", "distancer", "løb", "rute"),
+    "birth_year": ("fødselsår", "født", "årgang", "birth year", "year of birth"),
+    "email": ("e-mail", "email", "mail"),
 }
 
 
@@ -933,7 +999,8 @@ async def import_participants(rid: int, file: UploadFile = File(...), u=Depends(
             row[col["chip"]] = get("chip")[:-2]
         f = _participant_fields({"name": name, "sex": get("sex"), "bib": get("bib"), "club": get("club"),
                                  "chip": get("chip"), "dogs": get("dogs").replace(".0", ""),
-                                 "dog1": get("dog1"), "dog2": get("dog2"), "distance": get("distance")})
+                                 "dog1": get("dog1"), "dog2": get("dog2"), "distance": get("distance"),
+                                 "birth_year": get("birth_year"), "email": get("email")})
         existing = None
         if f["bib"] is not None:
             existing = db.q1("SELECT id FROM participants WHERE race_id=? AND bib=?", (rid, f["bib"]))
@@ -946,13 +1013,16 @@ async def import_participants(rid: int, file: UploadFile = File(...), u=Depends(
             continue
         if existing:
             db.ex("UPDATE participants SET name=?, sex=?, club=?, chip=COALESCE(?, chip), dogs=COALESCE(?, dogs), "
-                  "dog1=COALESCE(?, dog1), dog2=COALESCE(?, dog2), distance=COALESCE(?, distance) WHERE id=?",
-                  (f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"], existing["id"]))
+                  "dog1=COALESCE(?, dog1), dog2=COALESCE(?, dog2), distance=COALESCE(?, distance), "
+                  "birth_year=COALESCE(?, birth_year), email=COALESCE(?, email) WHERE id=?",
+                  (f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"],
+                   f["birth_year"], f["email"], existing["id"]))
             updated += 1
         else:
-            db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2, distance) "
-                  "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                  (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"]))
+            db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2, distance, birth_year, email) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"],
+                   f["birth_year"], f["email"]))
             added += 1
     _relink(rid)
     return {"added": added, "updated": updated, "errors": errors}
@@ -964,9 +1034,9 @@ def import_template(u=Depends(admin)):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Deltagere"
-    ws.append(["Startnr", "Navn", "Køn", "Klub", "Chip", "Distance", "Hunde", "Hund 1", "Hund 2"])
-    ws.append([1, "Kenneth Risom", "Mand", "Aalborg Løbeklub", "", "", 1, "Bella", ""])
-    ws.append([2, "Mette Hansen", "Kvinde", "", "", "", 2, "Max", "Luna"])
+    ws.append(["Startnr", "Navn", "Køn", "Fødselsår", "Klub", "E-mail", "Chip", "Distance", "Hunde", "Hund 1", "Hund 2"])
+    ws.append([1, "Kenneth Risom", "Mand", 1978, "Aalborg Løbeklub", "", "", "", 1, "Bella", ""])
+    ws.append([2, "Mette Hansen", "Kvinde", 1990, "", "", "", "", 2, "Max", "Luna"])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

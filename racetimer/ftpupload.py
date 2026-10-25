@@ -207,7 +207,7 @@ def _section(race, info, rows, final):
             name += f'<span class="club">{e(r["club"])}</span>'
         if r.get("dogs"):
             name += f'<span class="club" style="color:var(--orange)">🐕 {" & ".join(e(d) for d in r["dogs"])}</span>'
-        cells = [str(r["place"]) if r.get("place") is not None else "–", name, e(r.get("sex") or ""), f'<i class="dot {r["status"]}"></i>{e(r["status_label"])}']
+        cells = [str(r["place"]) if r.get("place") is not None else "–", name, e(r.get("sex") or "") + (f' <span class="bib">{e(r["class"])}</span>' if r.get("class") else ""), f'<i class="dot {r["status"]}"></i>{e(r["status_label"])}']
         total = _hms(r.get("total_time"), True) if r.get("total_time") is not None else "–"
         cells += ([str(r["laps"]), f'{_km(r["distance_km"])} km', _hms(r.get("last_lap"))] + ([total] if cont else [])
                   if lap else [total])

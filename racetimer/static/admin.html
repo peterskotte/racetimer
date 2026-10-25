@@ -103,6 +103,9 @@
   .ttile .tmain { font-size: max(24px, min(calc(var(--th) * .28), calc(var(--tw) * .2), 130px)); font-weight: 800; line-height: 1.05; margin-top: auto; }
   .ttile .tmain small { font-size: .45em; color: var(--muted); font-weight: 600; }
   .ttile .tsub { font-size: max(11px, min(calc(var(--th) * .08), 17px)); color: var(--muted); }
+  #people { overflow-x: auto; } #people input[data-f=name] { min-width: 150px; }
+  #people input[data-f=club], #people input[data-f=email] { min-width: 120px; } #people input[data-f=birth_year], #people input[data-f=bib] { min-width: 56px; } #people input[data-f=chip] { min-width: 110px; }
+  details.signup { margin-bottom: 16px; } details.signup summary { cursor: pointer; }
   .startfrom { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
   .build { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-head); }
   .build .q { margin-bottom: 12px; } .build .q > b { display: block; margin-bottom: 6px; }
@@ -311,6 +314,8 @@
   <!-- ===================== DELTAGERE -->
   <section class="tab" id="tab-people">
     <p class="muted">Deltagere tilføjes til løbet: <b id="peopleRace"></b> (vælg et andet under “Aktivt løb”).</p>
+    <details class="card pad signup" id="signupBox"><summary><b>🌐 Tilmelding på hjemmesiden og aldersklasser</b> <span class="muted small" id="signupSum"></span></summary>
+      <div id="signupBody" style="margin-top:12px"></div></details>
     <div class="two">
       <div>
         <h2>Tilføj manuelt</h2>
@@ -320,6 +325,8 @@
             <label style="grid-column:span 2">Navn<input name="name" required></label>
             <label>Køn<select name="sex"><option>Mand</option><option>Kvinde</option><option value="">–</option></select></label>
             <label>Klub<input name="club"></label>
+            <label>Fødselsår<input name="birth_year" inputmode="numeric" maxlength="4" placeholder="fx 1985"></label>
+            <label>E-mail<input name="email" type="email"></label>
             <label>Chip<input name="chip" id="addChip" placeholder="Scan eller skriv"></label>
             <label id="addDistL" hidden>Distance<select name="distance" id="addDist"></select></label>
             <label class="dogf" hidden>Hunde<select name="dogs" id="addDogs"><option value="">Vælg</option><option value="1">1 hund</option><option value="2">2 hunde</option></select></label>
@@ -630,7 +637,7 @@ const SETUP_TABS = [...document.querySelectorAll("#setup .acc-h")].map(b => b.da
 let lastSetup = null;
 const isDesktop = () => matchMedia("(min-width: 1100px)").matches;
 function loadTab(tab) {
-  if (tab === "people") loadPeople();
+  if (tab === "people") { loadPeople(); loadSignup(); }
   if (tab === "archive") loadArchive();
   if (tab === "look") loadLook();
   if (tab === "sync") loadDests();
@@ -1595,6 +1602,54 @@ $("addScan").onclick = () => {
   scanChip(chip => { $("addChip").value = chip; toast("Chip " + chip); }).finally(() => $("addScan").textContent = "📡 Scan chip");
 };
 
+// ------------------------------------------------ tilmelding på hjemmesiden
+async function loadSignup() {
+  if (!curId) return;
+  let s;
+  try { s = await api(`/api/races/${curId}/signup`); } catch (_) { return; }
+  const dt = ts => ts ? new Date(ts * 1000).toLocaleString("da-DK", {day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"}) : "";
+  $("signupSum").textContent = s.is_open ? `· åben · ${s.online} tilmeldt online` : s.online ? `· lukket · ${s.online} tilmeldt online` : "";
+  const sel = (n, opts, v) => `<select name="${n}">${opts.map(([o, l]) => `<option value="${o}" ${String(v) === String(o) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+  const chk = (n, v, l) => `<label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="${n}" ${v ? "checked" : ""}> ${l}</label>`;
+  $("signupBody").innerHTML = `
+    ${s.test ? `<div class="warnbox">Testløb kan ikke åbnes for tilmelding.</div>` : !s.forms.length ? `<div class="warnbox">Tilmelding kræver en aktiv destination af typen <b>Egen hjemmeside (JSON)</b> under ⚙ Opsætning → Synkronisering, og at <code>tilmeld.php</code> er lagt op ved siden af <code>modtag.php</code>.</div>` : ""}
+    ${s.forms.length ? `<p style="margin-top:0">${s.is_open ? "🟢 <b>Åben</b>" : "⚪ <b>Lukket</b>"} · ${s.online} tilmeldt online${s.fetched_at ? ` · hentet ${dt(s.fetched_at)}` : ""}
+      <button type="button" id="signupFetch" style="margin-left:6px">⟳ Hent nu</button><br>
+      <span class="muted small">Tilmeldingsside: ${s.forms.map(f => `<a href="${esc(f)}" target="_blank" rel="noopener">${esc(f)}</a>`).join(" · ")} – nye tilmeldinger hentes automatisk hvert minut og bliver til deltagere.</span></p>` : ""}
+    ${s.errors.length ? `<div class="warnbox">⚠ ${s.errors.map(esc).join("<br>")}</div>` : ""}
+    <form id="signupForm">
+      <div class="grid">
+        ${chk("open", s.open, "<b>Åben for tilmelding</b>")}
+        <label>Frist<input type="datetime-local" name="deadline" value="${toLocalInput(s.deadline)}"></label>
+        <label>Fødselsår${sel("birth_year", [["required", "Skal udfyldes"], ["optional", "Valgfrit"], ["off", "Spørg ikke"]], s.birth_year)}</label>
+        <label>Slet tilmeldinger på hjemmesiden (dage efter løbet)<input type="number" name="delete_days" min="1" max="365" value="${s.delete_days}"></label>
+        ${chk("public_list", s.public_list, "Vis tilmeldte på hjemmesiden (navn, klub, distance)")}
+        ${chk("auto_bib", s.auto_bib, "Giv startnumre automatisk")}
+        <label>Første startnummer<input type="number" name="bib_from" min="1" value="${s.bib_from}"></label>
+      </div>
+      <label style="margin-top:10px">Tekst på tilmeldingssiden <span class="muted small">(fx pris, betaling, praktisk info)</span><textarea name="note" rows="3" maxlength="500">${esc(s.note)}</textarea></label>
+      <div class="grid" style="margin-top:10px">
+        <label>Aldersklasser i resultater${sel("age_step", [[0, "Ingen"], [5, "5-års klasser (M35, M40, M45 …)"], [10, "10-års klasser (M40, M50 …)"]], s.age_step)}</label>
+        <label>Første aldersklasse fra (år)<input type="number" name="age_from" min="20" max="90" value="${s.age_from}"></label>
+      </div>
+      <p class="muted small">Under 18 år = Junior, derunder Senior. Klassen beregnes ud fra fødselsår og løbsdatoen og vises i resultater og CSV.
+        <b>Persondata:</b> e-mail og fødselsår vises aldrig offentligt. På webhotellet kan tilmeldingerne ikke hentes uden nøglen, og de slettes automatisk efter løbet.</p>
+      <button class="primary">Gem tilmelding</button>
+    </form>`;
+  $("signupForm").onsubmit = async e => {
+    e.preventDefault();
+    const f = e.target, fd = new FormData(f);
+    await api(`/api/races/${curId}/signup`, {method: "PUT", body: {open: f.open.checked, deadline: fromLocalInput(fd.get("deadline")),
+      birth_year: fd.get("birth_year"), delete_days: fd.get("delete_days"), public_list: f.public_list.checked, auto_bib: f.auto_bib.checked,
+      bib_from: fd.get("bib_from"), note: fd.get("note"), age_step: fd.get("age_step"), age_from: fd.get("age_from")}});
+    toast("Tilmelding gemt"); loadSignup(); loadRace(false);
+  };
+  if ($("signupFetch")) $("signupFetch").onclick = async () => {
+    const r = await api(`/api/races/${curId}/signup/fetch`, {body: {}});
+    toast(r.added ? `${r.added} nye tilmeldinger` : "Ingen nye tilmeldinger"); loadSignup(); loadPeople();
+  };
+}
+
 // ------------------------------------------------ deltagere
 async function loadPeople() {
   if (!curId) { $("people").innerHTML = `<p class="muted" style="padding:16px">Opret først et løb.</p>`; return; }
@@ -1609,11 +1664,12 @@ async function loadPeople() {
   $("addDogs").required = cc; $("addForm").dog1.required = cc;
   $("addDog2").hidden = !cc || $("addDogs").value !== "2";
   $("peopleCount").innerHTML = `(${ps.length}, ${ps.filter(p => p.chip).length} med chip${cc ? `, <span style="color:${noDogs.length ? "var(--gold)" : "inherit"}">${noDogs.length} mangler hunde</span>` : ""})`;
-  $("people").innerHTML = ps.length ? `<table><thead><tr><th style="width:80px">Nr</th><th>Navn</th><th style="width:110px">Køn</th><th>Klub</th><th style="width:170px">Chip</th>${ds.length ? '<th style="width:130px">Distance</th>' : ""}${cc ? '<th style="width:110px">Hunde</th><th>Hund 1</th><th>Hund 2</th>' : ""}${tt ? '<th style="width:110px" title="Manuel startforskydning i sek. fra løbsstart">Start +sek</th>' : ""}<th></th></tr></thead><tbody>` +
+  $("people").innerHTML = ps.length ? `<table><thead><tr><th style="width:80px">Nr</th><th>Navn</th><th style="width:110px">Køn</th><th style="width:80px">Født</th><th>Klub</th><th>E-mail</th><th style="width:170px">Chip</th>${ds.length ? '<th style="width:130px">Distance</th>' : ""}${cc ? '<th style="width:110px">Hunde</th><th>Hund 1</th><th>Hund 2</th>' : ""}${tt ? '<th style="width:110px" title="Manuel startforskydning i sek. fra løbsstart">Start +sek</th>' : ""}<th></th></tr></thead><tbody>` +
     ps.map(p => `<tr data-pid="${p.id}">
-      <td><input data-f="bib" value="${p.bib ?? ""}" inputmode="numeric"></td><td><input data-f="name" value="${esc(p.name)}"></td>
+      <td><input data-f="bib" value="${p.bib ?? ""}" inputmode="numeric"></td><td><input data-f="name" value="${esc(p.name)}" ${p.signup_id ? 'title="Tilmeldt på hjemmesiden" style="border-left:3px solid var(--orange)"' : ""}></td>
       <td><select data-f="sex">${["Mand", "Kvinde", ""].map(s => `<option value="${s}" ${p.sex === s ? "selected" : ""}>${s || "–"}</option>`).join("")}</select></td>
-      <td><input data-f="club" value="${esc(p.club)}"></td>
+      <td><input data-f="birth_year" value="${p.birth_year ?? ""}" inputmode="numeric" maxlength="4"></td>
+      <td><input data-f="club" value="${esc(p.club)}"></td><td><input data-f="email" type="email" value="${esc(p.email)}"></td>
       <td><input data-f="chip" value="${esc(p.chip)}" placeholder="ingen chip" style="${p.chip ? "" : "border-color:var(--gold)"}"></td>
       ${ds.length ? `<td><select data-f="distance">${dOpts(ds.some(d => d.id === p.distance) ? p.distance : ds[0].id)}</select></td>` : ""}
       ${cc ? `<td><select data-dog="dogs" style="${noDogs.includes(p) ? "border-color:var(--gold)" : ""}">${[["", "Vælg"], ["1", "1 hund"], ["2", "2 hunde"]].map(([v, l]) => `<option value="${v}" ${String(p.dogs ?? "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>

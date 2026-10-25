@@ -114,6 +114,10 @@ def _migrate(c):
         c.execute("ALTER TABLE participants ADD COLUMN dogs INTEGER")
         c.execute("ALTER TABLE participants ADD COLUMN dog1 TEXT")
         c.execute("ALTER TABLE participants ADD COLUMN dog2 TEXT")
+    if "birth_year" not in pcols:  # tilmelding: fødselsår (aldersklasser) og e-mail (vises aldrig offentligt)
+        c.execute("ALTER TABLE participants ADD COLUMN birth_year INTEGER")
+        c.execute("ALTER TABLE participants ADD COLUMN email TEXT")
+        c.execute("ALTER TABLE participants ADD COLUMN signup_id INTEGER")
     if "distance" not in pcols:  # flere distancer i samme løb: id på deltagerens distance (NULL = første)
         c.execute("ALTER TABLE participants ADD COLUMN distance TEXT")
     ucols = [r[1] for r in c.execute("PRAGMA table_info(users)")]
@@ -124,6 +128,8 @@ def _migrate(c):
         c.execute("ALTER TABLE races ADD COLUMN archived_at REAL")
     if "timing" not in rcols:  # tæller: "armband" (RFID-læsere) eller "manual" (RD trykker på felter)
         c.execute("ALTER TABLE races ADD COLUMN timing TEXT NOT NULL DEFAULT 'armband'")
+    if "signup" not in rcols:  # tilmelding på hjemmesiden og aldersklasser (JSON, se signup.py)
+        c.execute("ALTER TABLE races ADD COLUMN signup TEXT")
     if "test" not in rcols:  # testløb: JSON med {speed, no_minimum, no_checkin, no_dedup}, NULL = rigtigt løb
         c.execute("ALTER TABLE races ADD COLUMN test TEXT")
     c.executescript("""
