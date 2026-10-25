@@ -43,7 +43,7 @@ FTP og spejlserver kan ikke bruges fra en browser.
 
 | | Browser | Raspberry Pi |
 |---|---|---|
-| Tidtagning | RD trykker manuelt | RFID-armbånd og læsere (og manuelle tider) |
+| Tidtagning | RD trykker manuelt | Armbånd (RFID) eller manuelle tryk, valgt pr. løb |
 | Deltagere | Op til 12 | Ubegrænset, med Excel-import |
 | Resultatskærm | Ekstra vindue på samme enhed | Pi'ens skærm og alle enheder på netværket |
 | Data | I browseren på én enhed | På Pi'en, med flere administratorer |

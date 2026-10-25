@@ -5,6 +5,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 ## [Ikke udgivet]
 
 **Nyt**
+- **Manuel tidtagning på Pi'en:** hvert løb har en **Tæller**: *📶 Armbånd* eller *👆 Manuel*. Vælg den, når løbet oprettes, og skift når som helst, også under løbet. Ved *Manuel* trykker race director på løberens felt i admin ved hver passage, med samme regler, resultatskærm og hjemmeside som med armbånd. Dobbelttryk inden for 3 sek. tæller ikke, og sidste tryk kan fortrydes.
 - **Browser-udgave til små løb uden Pi og RFID** ([docs/browser.md](docs/browser.md)): race director trykker på løberens felt. Vælg antal løbere (1–12) med ét tryk, og felterne fylder skærmen, så få løbere giver store felter. Samme løbstyper, regler, resultatskærm, splash, testløb, arkiv og hjemmeside som på Pi'en. Data gemmes i browseren med sikkerhedskopi, og den virker offline. Løbsmotoren findes nu også i JavaScript, og en test tjekker, at begge regner ens.
 - `modtag.php` tillader afsendelse fra browser-udgaven (CORS). Nøglen kræves stadig.
 - Resultatskærmen kan få sine data fra et andet browservindue (`display.html?local=1`).

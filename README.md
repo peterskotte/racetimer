@@ -111,6 +111,7 @@ En ny installation indeholder ét **demoløb** med 3 testløbere (chip `DEMO01`�
 3. **Aktivt løb**:
    - **Start nu** eller **Start kl.** (Backyard: start på et helt klokkeslæt).
    - Undervejs kan du markere RTC/DNS/DSQ og ignorere eller gendanne fejllæsninger.
+   - **Tæller: 📶 Armbånd / 👆 Manuel** vælges, når løbet oprettes, og kan skiftes når som helst. Ved *Manuel* viser admin et felt pr. løber (sorteret efter startnummer), og et tryk registrerer en passage, præcis som en læsning. Feltet blinker grønt (*✓ Omgang 3*) eller gult med årsagen. Et nyt tryk på samme løber inden for 3 sek. tæller ikke, og **↶ Fortryd sidste tryk** fjerner det seneste. RFID-værktøjerne skjules imens.
    - **Hvis RFID fejler:** **+ Nu** registrerer en passage med klokken lige nu. **⏱ Tid** åbner en dialog, hvor du indtaster tiden som klokkeslæt (med sekunder) eller som løbstid fra start:
      - **Omgange / mellemtid** (backyard, tidsløb, rekordløb): hver tid tæller som en omgang. Den sidste omgang er sluttiden.
      - **Sluttid** (A til B, intervalstart): erstatter en eventuel forkert mållæsning. Den gamle læsning ignoreres og kan gendannes i loggen.

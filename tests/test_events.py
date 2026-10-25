@@ -177,6 +177,38 @@ def test_login_lockout_cannot_be_bypassed_with_fake_header():
     assert app.client_ip(req("127.0.0.1", {"cf-connecting-ip": "1.2.3.4"})) == "1.2.3.4"          # via cloudflared
     assert app.client_ip(req("192.168.1.50")) == "192.168.1.50"
 
+
+def test_manual_taps():
+    import asyncio
+    from types import SimpleNamespace as N
+    from fastapi import HTTPException
+
+    def req(body):
+        async def j():
+            return body
+        return N(json=j)
+    rid = race("timed", {"min_lap_min": 0, "checkin_min": 0}, started=S)
+    pid = db.q1("SELECT id FROM participants WHERE race_id=? AND bib=1", (rid,))["id"]
+    db.ex("UPDATE races SET started_at=? WHERE id=?", (__import__("time").time() - 600, rid))
+    assert asyncio.run(app.set_timing(rid, req({"timing": "manual"}), u={}))["timing"] == "manual"
+    assert db.race(rid)["timing"] == "manual"
+    r1 = asyncio.run(app.tap(rid, req({"participant_id": pid}), u={}))
+    assert r1["event"]["type"] == "read.counted" and r1["event"]["lap"] == 1 and r1["event"]["name"] == "Løber 1"
+    r2 = asyncio.run(app.tap(rid, req({"participant_id": pid}), u={}))  # dobbelttryk
+    assert r2["event"]["type"] == "read.ignored" and r2["event"]["reason"] == "duplicate"
+    u = app.tap_undo(rid, u={})
+    assert u["name"] == "Løber 1" and db.q1("SELECT deleted FROM reads WHERE id=?", (r1["id"],))["deleted"] == 1
+    try:
+        app.tap_undo(rid, u={})
+        raise AssertionError("intet at fortryde")
+    except HTTPException as e:
+        assert e.status_code == 404
+    try:
+        asyncio.run(app.set_timing(rid, req({"timing": "rfid"}), u={}))
+        raise AssertionError("ukendt tæller skulle afvises")
+    except HTTPException as e:
+        assert e.status_code == 400
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

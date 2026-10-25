@@ -117,6 +117,8 @@ Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 | Enkeltstart, bølgestart eller start på chip | **Intervalstart** |
 | Canicross | Vælg A til B, tidsløb, rekordløb eller intervalstart, og sæt flueben i **Canicross** |
 
+**Tæller:** vælg **📶 Armbånd**, når løberne har RFID-armbånd, eller **👆 Manuel**, når der ikke er læsere, fx til en lille træning. Ved *Manuel* viser **Aktivt løb** et felt pr. løber, og I trykker på feltet, hver gang løberen passerer (et nyt tryk inden for 3 sekunder tæller ikke, og **↶ Fortryd sidste tryk** fjerner det seneste). Der kan skiftes mellem de to når som helst, også under løbet, fx hvis en læser fejler. Resultatskærm og hjemmeside virker ens for begge.
+
 Reglerne for hver type og backyards tidsvinduer står i [README](../README.md#løbstyper).
 
 **Indtjekning:** Ved fælles start skal hver løber scanne sin chip inden for 30 minutter før start. Ellers tæller løberens læsninger ikke. Glemmer en løber det, kan en official trykke **✓ Tjek ind** i admin. Vinduet kan ændres pr. løb, og 0 slår det fra.
@@ -144,7 +146,7 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 **Under løbet**
 - Løberen holder armbåndet mod læser 1. Bipper den ikke, bruges læser 2. Samme chip på begge læsere tæller kun én gang.
-- **Fejler RFID**, kan I registrere tider manuelt: **+ Nu** registrerer en passage med klokken lige nu, og **⏱ Tid** lader jer skrive tiden ind bagefter.
+- **Fejler RFID**, kan I skifte **Tæller** til **👆 Manuel** og trykke på løbernes felter, eller registrere tider ud for løberen: **+ Nu** registrerer en passage med klokken lige nu, og **⏱ Tid** lader jer skrive tiden ind bagefter.
 - Udgår en løber, trykker I **RTC** (udgået) ud for løberen. **DNS** er for en løber, der ikke startede, og **DSQ** for diskvalifikation.
 - En forkert læsning kan ignoreres og gendannes igen i loggen. Intet slettes.
 - I backyard viser **⚑ Til vurdering** læsninger i flagzonen, som en official skal godkende eller afvise.

@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Up
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import branding, db, engine, events, modules, readers, sync, updater
+from . import branding, db, engine, events, modules, outcome, readers, sync, updater
 
 HERE = os.path.dirname(__file__)
 STATIC = os.path.join(HERE, "static")
@@ -527,9 +527,10 @@ async def create_race(request: Request, u=Depends(admin)):
         raise HTTPException(400, "Ukendt løbstype")
     cfg = engine.merged_config(b["type"], b.get("config"))
     test = _test_opts(b.get("test"))
-    rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at, test) VALUES (?,?,?,?,?,?)",
+    timing = "manual" if b.get("timing") == "manual" else "armband"
+    rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at, test, timing) VALUES (?,?,?,?,?,?,?)",
                 (b.get("name") or "Nyt løb", b["type"], json.dumps(cfg), b.get("scheduled_start"), time.time(),
-                 json.dumps(test) if test else None))
+                 json.dumps(test) if test else None, timing))
     if b.get("activate") or not db.active_race():
         _activate(rid)
     return {"id": rid}
@@ -602,6 +603,56 @@ def finish_race(rid: int, u=Depends(admin)):
 def resume_race(rid: int, u=Depends(admin)):
     db.ex("UPDATE races SET status='running', finished_at=NULL WHERE id=?", (rid,))
     return {"ok": True}
+
+
+# ------------------------------------------------------------------ tæller: armbånd eller manuel (tryk på felter)
+
+TAP_DOUBLE_SEC = 3  # et nyt tryk på samme løber inden for 3 sek. er et dobbelttryk
+
+
+@app.post("/api/races/{rid}/timing")
+async def set_timing(rid: int, request: Request, u=Depends(admin)):
+    """Skift tæller – også midt i et løb. Alle registreringer bevares (tryk og scanninger tæller ens)."""
+    db.race(rid) or _404()
+    mode = (await request.json()).get("timing")
+    if mode not in ("armband", "manual"):
+        raise HTTPException(400, "Vælg armbånd eller manuel")
+    db.ex("UPDATE races SET timing=? WHERE id=?", (mode, rid))
+    return {"ok": True, "timing": mode}
+
+
+@app.post("/api/races/{rid}/tap")
+async def tap(rid: int, request: Request, u=Depends(admin)):
+    """Manuel tidtagning: race director trykker på løberens felt. Tæller som en chip-scanning
+    (minimumstid, tidsvinduer og indtjekning gælder) – og giver samme scan-besked og lyd."""
+    race = db.race(rid) or _404()
+    pid = int((await request.json()).get("participant_id") or 0)
+    p = db.q1("SELECT id, chip FROM participants WHERE id=? AND race_id=?", (pid, rid)) or _404()
+    ts = time.time()
+    dup = db.q1("SELECT id FROM reads WHERE race_id=? AND participant_id=? AND duplicate=0 AND deleted=0 AND ABS(ts-?)<?",
+                (rid, pid, ts, TAP_DOUBLE_SEC))
+    if (race.get("test") or {}).get("no_dedup"):
+        dup = None
+    read_id = db.ex("INSERT INTO reads(race_id, chip, reader, ts, participant_id, duplicate) VALUES (?,?,?,?,?,?)",
+                    (rid, p["chip"] or f"TRYK-{pid}", "tap", ts, pid, 1 if dup else 0))
+    try:
+        ev = outcome.evaluate(read_id)
+    except Exception:  # noqa: BLE001 – vurderingen må aldrig stoppe registreringen
+        ev = None
+    if ev and race["is_active"]:  # scan-besked og lyd kun for løbet på skærmen
+        ev = bus.publish(ev)
+    return {"id": read_id, "event": ev}
+
+
+@app.post("/api/races/{rid}/tap/undo")
+def tap_undo(rid: int, u=Depends(admin)):
+    """Fortryd det seneste tryk, der talte (soft delete – kan gendannes i loggen over læsninger)."""
+    last = db.q1("SELECT r.id, r.ts, p.name, p.bib FROM reads r LEFT JOIN participants p ON p.id=r.participant_id "
+                 "WHERE r.race_id=? AND r.reader='tap' AND r.deleted=0 AND r.duplicate=0 ORDER BY r.ts DESC LIMIT 1", (rid,))
+    if not last:
+        raise HTTPException(404, "Intet tryk at fortryde")
+    db.ex("UPDATE reads SET deleted=1 WHERE id=?", (last["id"],))
+    return {"ok": True, **last}
 
 
 @app.post("/api/races/{rid}/archive")

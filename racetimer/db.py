@@ -120,6 +120,8 @@ def _migrate(c):
     rcols = [r[1] for r in c.execute("PRAGMA table_info(races)")]
     if "archived_at" not in rcols:  # arkiverede løb skjules i løbslisten, men kan gendannes
         c.execute("ALTER TABLE races ADD COLUMN archived_at REAL")
+    if "timing" not in rcols:  # tæller: "armband" (RFID-læsere) eller "manual" (RD trykker på felter)
+        c.execute("ALTER TABLE races ADD COLUMN timing TEXT NOT NULL DEFAULT 'armband'")
     if "test" not in rcols:  # testløb: JSON med {speed, no_minimum, no_checkin, no_dedup}, NULL = rigtigt løb
         c.execute("ALTER TABLE races ADD COLUMN test TEXT")
     c.executescript("""
