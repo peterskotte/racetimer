@@ -1441,7 +1441,7 @@ async function loadRemote() {
   else h = `<i class="dot" style="background:var(--grey)"></i>Fjernadgang er slået fra – admin kan kun nås på stævnets netværk.`;
   $("remoteBox").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><div style="min-width:0">${h}
       <div class="muted small" style="margin-top:8px">Pi'en åbner en krypteret tunnel ud til Cloudflare – ingen porte åbnes. Adressen skifter ved genstart; hjemmesiden følger med.
-      Standardkoden admin/admin kan ikke bruges udefra, og login spærres 15 min efter 5 forkerte forsøg.</div></div>
+      Login udefra kræver en kode på mindst 10 tegn, og login spærres 15 min efter 5 forkerte forsøg.</div></div>
     ${r.installed ? `<button class="${r.enabled ? "danger" : "go"}" id="remoteToggle">${r.enabled ? "Slå fjernadgang fra" : "Slå fjernadgang til"}</button>` : ""}</div>`;
   const b = $("remoteToggle");
   if (b) b.onclick = async () => {
