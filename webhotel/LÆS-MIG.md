@@ -7,6 +7,7 @@ Mappen `racetimer/` her lægges op på webhotellet. Den indeholder to filer:
 | `modtag.php` | Tager imod resultater fra Pi'en og gemmer dem i `data/` |
 | `index.php` | Viser resultaterne som en side, med arkiv over tidligere løb |
 | `tilmeld.php` | Tilmelding til løb, som er åbnet for tilmelding i RaceTimer (se nedenfor) |
+| `mailer.php` | Sender bekræftelsen på tilmelding – via klubbens mailkonto (SMTP), hvis den er sat op i RaceTimer |
 | `logo.png` *(valgfri)* | Reserve-logo. Normalt sender Pi'en selv logoet fra **Admin → ⚙ Opsætning → Udseende** |
 | `admin/index.php` | Gør, at `…/racetimer/admin` viderestiller til Pi'ens admin via fjernadgang (se nedenfor) |
 
@@ -56,7 +57,10 @@ Med `tilmeld.php` kan løbere tilmelde sig direkte på hjemmesiden:
 2. I RaceTimer: **Deltagere → 🌐 Tilmelding på hjemmesiden** → sæt flueben i *Åben for tilmelding*, vælg frist m.m. og tryk **Gem tilmelding**. Pi'en sender med det samme løbets navn, dato, frist og distancer til hjemmesiden.
 3. Tilmeldingssiden er `https://ditdomæne.dk/racetimer/tilmeld.php` (adressen står også i RaceTimer). `index.php` viser et link, så længe tilmeldingen er åben.
 4. Er *Startnummer gives ved tilmeldingen* valgt, får løberen sit startnummer med det samme på kvitteringen. Numre, der allerede er brugt på Pi'en, springes over.
-5. Er *Send bekræftelse på e-mail* valgt (standard), får løberen en mail med løb, distance, startnummer og jeres tekst. Mailen sendes med webhotellets egen mailfunktion (PHP `mail()`) fra `noreply@ditdomæne.dk`; skriv klubbens adresse som *Svar-adresse* i RaceTimer, så svar kommer frem. Lander mailen i spam, så tjek hos webhotellet, at domænet har SPF/DKIM for webserveren.
+5. Er *Send bekræftelse på e-mail* valgt (standard), får løberen en mail med løb, distance, startnummer og jeres tekst. Skriv klubbens adresse som *Svar-adresse*, så svar kommer frem.
+   - **Sæt en mailkonto op** under **⚙ Opsætning → Synkronisering → ✉ Mail til tilmeldinger** (SMTP-server, port, brugernavn, adgangskode og afsender – oplysningerne får I hos jeres mailudbyder, fx `smtp.simply.com` port 587, eller `smtp.gmail.com` med en app-adgangskode). Tryk **Gem og send til hjemmesiden** og derefter **✉ Send testmail**. Svaret viser, om mailen blev sendt, eller hvad serveren svarede.
+   - Uden mailkonto bruges webhotellets egen `mail()` fra `noreply@ditdomæne.dk`. Den kommer ofte ikke frem, fordi adressen ikke findes og ikke er godkendt (SPF/DKIM).
+   - Mailopsætningen gemmes på webhotellet i `data/mail.php`, som ikke kan læses udefra (webserveren svarer 404). Brug https, så adgangskoden er krypteret på vej fra Pi'en.
 6. Pi'en henter nye tilmeldinger hvert minut, når den er på nettet, og opretter dem som deltagere med det samme startnummer.
 
 **Persondata:**

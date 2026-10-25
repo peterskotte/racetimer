@@ -92,6 +92,29 @@ function gem($fil, $data) {
     }
 }
 
+// Mailkonto til bekræftelser (fra RaceTimer → ⚙ Opsætning → Synkronisering → ✉ Mail til tilmeldinger)
+if (in_array($data['event'], ['mail_config', 'mail_test'], true)) {
+    if (!is_file(__DIR__ . '/mailer.php')) svar(500, 'mailer.php mangler på webhotellet – upload den ved siden af modtag.php.');
+    require_once __DIR__ . '/mailer.php';
+    if ($data['event'] === 'mail_config') {
+        $smtp = $data['smtp'] ?? null;
+        $cfg = is_array($smtp) && !empty($smtp['host']) ? [
+            'host' => rt_enlinje($smtp['host']), 'port' => (int)($smtp['port'] ?? 587),
+            'security' => in_array($smtp['security'] ?? '', ['starttls', 'ssl', 'none'], true) ? $smtp['security'] : 'starttls',
+            'user' => (string)($smtp['user'] ?? ''), 'password' => (string)($smtp['password'] ?? ''),
+            'from_email' => rt_enlinje($smtp['from_email'] ?? ''), 'from_name' => rt_enlinje($smtp['from_name'] ?? ''),
+            'v' => (int)($data['v'] ?? 0)] : null;
+        if (!rt_gem_mail_opsaetning($mappe, $cfg)) svar(500, 'Kunne ikke gemme mailopsætningen – tjek skriveadgang til data/.');
+        svar(200, $cfg ? 'Mailkonto gemt' : 'Mailkonto fjernet', ['mail_v' => $cfg ? $cfg['v'] : 0]);
+    }
+    $r = rt_send_mail($mappe, $data['to'] ?? '', 'Testmail fra RaceTimer',
+        "Denne mail er sendt fra tilmeldingssiden på " . rt_vaert() . ".\nVirker den, får løberne også deres bekræftelse.\n",
+        $data['brand'] ?? 'RaceTimer', $data['reply_to'] ?? '');
+    $via = rt_mail_opsaetning($mappe) ? 'mailkontoen (SMTP)' : 'webhotellets mail()';
+    if ($r !== true) svar(502, "Testmailen kunne ikke sendes via $via: $r");
+    svar(200, "Testmail sendt via $via");
+}
+
 // Pi'en henter nye tilmeldinger: {"loeb": {"<løb-id>": <sidste hentede id>}}
 if ($data['event'] === 'hent_tilmeldinger') {
     $ud = [];
@@ -161,4 +184,6 @@ if ($data['event'] === 'final' && !empty($data['race']['id'])) {
     gem("$mappe/slut-$dato-$navn.json", $data);
 }
 
-svar(200, 'Gemt', ['brand_v' => $har_v]);
+// mail_v fortæller Pi'en, hvilken mailopsætning hjemmesiden har – den sendes igen, hvis den mangler
+$mail_cfg = is_file(__DIR__ . '/mailer.php') ? (function ($m) { require_once __DIR__ . '/mailer.php'; return rt_mail_opsaetning($m); })($mappe) : null;
+svar(200, 'Gemt', ['brand_v' => $har_v, 'mail_v' => $mail_cfg ? (int)($mail_cfg['v'] ?? 0) : 0]);

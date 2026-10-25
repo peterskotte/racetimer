@@ -446,6 +446,30 @@
             <p class="muted small" id="destTypeHelp"></p>
           </form>
         </div>
+        <h2>✉ Mail til tilmeldinger</h2>
+        <div class="card pad">
+          <p class="muted small" style="margin-top:0">Bekræftelsen med startnummer sendes fra hjemmesiden (<code>tilmeld.php</code>). Uden en mailkonto bruger den webhotellets egen mailfunktion, som mange modtagere afviser eller lægger i spam. Brug derfor klubbens mailkonto, fx <i>tilmelding@klubben.dk</i>, eller en Gmail-konto med en <i>app-adgangskode</i>. Oplysningerne sendes til hjemmesiden og gemmes dér i en fil, der ikke kan læses udefra. Kræver <code>mailer.php</code> og den nye <code>modtag.php</code> på webhotellet.</p>
+          <div id="mailWarn"></div>
+          <form id="mailForm">
+            <div class="grid">
+              <label>SMTP-server<input name="host" placeholder="fx smtp.simply.com eller smtp.gmail.com" autocomplete="off"></label>
+              <label>Sikkerhed<select name="security"><option value="starttls">STARTTLS (port 587)</option><option value="ssl">SSL/TLS (port 465)</option><option value="none">Ingen (port 25)</option></select></label>
+              <label>Port<input name="port" type="number" min="1" max="65535" placeholder="587"></label>
+              <label>Brugernavn<input name="user" autocomplete="off" placeholder="oftest hele e-mailadressen"></label>
+              <label>Adgangskode<input name="password" type="password" autocomplete="new-password"></label>
+              <label>Afsender (e-mail)<input name="from_email" type="email" placeholder="fx tilmelding@klubben.dk"></label>
+              <label>Afsender (navn)<input name="from_name" placeholder="fx Rebild Trail Timing"></label>
+            </div>
+            <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+              <button class="primary">Gem og send til hjemmesiden</button>
+              <button type="button" id="mailClear" class="danger">Fjern mailkonto</button>
+              <div style="flex:1"></div>
+              <input type="email" id="mailTestTo" placeholder="din e-mail" style="max-width:220px">
+              <button type="button" id="mailTest">✉ Send testmail</button>
+            </div>
+          </form>
+          <div id="mailResult" style="margin-top:10px"></div>
+        </div>
       </section>
     </div>
   </div>
@@ -640,7 +664,7 @@ function loadTab(tab) {
   if (tab === "people") { loadPeople(); loadSignup(); }
   if (tab === "archive") loadArchive();
   if (tab === "look") loadLook();
-  if (tab === "sync") loadDests();
+  if (tab === "sync") { loadDests(); loadMail(); }
   if (tab === "wifi") loadWifi();
   if (tab === "remote") loadRemoteTab();
   if (tab === "update") loadUpdate(true);
@@ -1805,6 +1829,40 @@ async function loadRemoteTab() {
   try { dests = await api("/api/destinations"); } catch (_) {}
   loadPrivate(); loadRemote();
 }
+// ------------------------------------------------ mail til tilmeldinger
+function mailResults(rs) {
+  $("mailResult").innerHTML = (rs || []).map(r => `<div class="${r.ok ? "okbox" : "warnbox"}" style="margin:4px 0">${r.ok ? "✓" : "⚠"} <b>${esc(r.name)}</b>: ${esc(r.message)}</div>`).join("");
+}
+async function loadMail() {
+  let m;
+  try { m = await api("/api/mail"); } catch (_) { return; }
+  const f = $("mailForm");
+  for (const k of ["host", "port", "user", "from_email", "from_name"]) f[k].value = m[k] ?? "";
+  f.security.value = m.security || "starttls";
+  f.password.value = "";
+  f.password.placeholder = m.password_set ? "gemt – skriv en ny for at skifte" : "";
+  $("mailClear").hidden = !m.host;
+  $("mailWarn").innerHTML = !m.dests.length
+    ? `<div class="warnbox">Kræver en aktiv destination af typen <b>Egen hjemmeside (JSON)</b> ovenfor.</div>`
+    : m.dests.filter(d => !d.https).map(d => `<div class="warnbox">⚠ <b>${esc(d.name)}</b> bruger ikke https – adgangskoden sendes ukrypteret. Brug en https-adresse.</div>`).join("") +
+      m.dests.filter(d => d.error).map(d => `<div class="warnbox">⚠ <b>${esc(d.name)}</b>: ${esc(d.error)}</div>`).join("");
+}
+$("mailForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, fd = Object.fromEntries(new FormData(f));
+  const r = await api("/api/mail", {method: "PUT", body: fd});
+  mailResults(r.results); loadMail();
+};
+$("mailClear").onclick = async () => {
+  if (!confirm("Fjern mailkontoen? Hjemmesiden bruger så webhotellets egen mailfunktion.")) return;
+  mailResults((await api("/api/mail", {method: "PUT", body: {clear: true}})).results); loadMail();
+};
+$("mailForm").security.onchange = e => { $("mailForm").port.placeholder = {starttls: "587", ssl: "465", none: "25"}[e.target.value]; };
+$("mailTest").onclick = async () => {
+  $("mailResult").innerHTML = `<p class="muted small">Sender …</p>`;
+  try { mailResults((await api("/api/mail/test", {body: {to: $("mailTestTo").value}})).results); } catch (_) { $("mailResult").innerHTML = ""; }
+};
+
 async function loadDests() {
   dests = await api("/api/destinations");
   $("dests").innerHTML = dests.length ? dests.map(d => {

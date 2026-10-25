@@ -725,6 +725,78 @@ def tap_undo(rid: int, u=Depends(admin)):
     return {"ok": True, **last}
 
 
+# ------------------------------------------------------------------ mail til tilmeldinger (SMTP via hjemmesiden)
+
+MAIL_FIELDS = ("host", "port", "security", "user", "from_email", "from_name")
+
+
+@app.get("/api/mail")
+def get_mail(u=Depends(admin)):
+    cfg = sync.mail_config()
+    return {**{k: cfg.get(k) for k in MAIL_FIELDS}, "password_set": bool(cfg.get("password")),
+            "dests": [{"name": d.get("name") or d["url"], "https": d["url"].startswith("https://"),
+                       "error": sync_mgr.status.get(d["id"], {}).get("mail_error")} for d in _signup_dests()]}
+
+
+def _mail_push_all():
+    out = []
+    for d in _signup_dests():
+        try:
+            r = sync.push_mail(d)
+            sync_mgr.status.setdefault(d["id"], {})["mail_error"] = None
+            out.append({"name": d.get("name") or d["url"], "ok": True, "message": r.get("besked") or "Gemt"})
+        except RuntimeError as e:
+            sync_mgr.status.setdefault(d["id"], {})["mail_error"] = str(e)
+            out.append({"name": d.get("name") or d["url"], "ok": False, "message": str(e)})
+    return out
+
+
+@app.put("/api/mail")
+async def put_mail(request: Request, u=Depends(admin)):
+    """Gem klubbens mailkonto og send den til hjemmesiden. Tom adgangskode = behold den gemte."""
+    b = await request.json()
+    old = sync.mail_config()
+    if b.get("clear"):
+        db.set_setting("mail", {"v": old.get("v", 0) + 1})
+    else:
+        host = str(b.get("host") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9.-]+", host):
+            raise HTTPException(400, "Skriv SMTP-serveren, fx smtp.simply.com")
+        sec = b.get("security") if b.get("security") in ("starttls", "ssl", "none") else "starttls"
+        try:
+            port = int(b.get("port") or (465 if sec == "ssl" else 587))
+        except ValueError:
+            raise HTTPException(400, "Porten skal være et tal, fx 587") from None
+        frm = str(b.get("from_email") or "").strip()
+        if not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[A-Za-z]{2,}", frm):
+            raise HTTPException(400, "Skriv afsenderens e-mail, fx tilmelding@klubben.dk")
+        pw = b.get("password") or old.get("password") or ""
+        db.set_setting("mail", {"host": host, "port": port, "security": sec, "user": str(b.get("user") or "").strip(),
+                                "password": pw, "from_email": frm,
+                                "from_name": re.sub(r"[\r\n]+", " ", str(b.get("from_name") or "")).strip()[:80],
+                                "v": old.get("v", 0) + 1})
+    return {**get_mail(u), "results": _mail_push_all()}
+
+
+@app.post("/api/mail/test")
+async def test_mail(request: Request, u=Depends(admin)):
+    to = str((await request.json()).get("to") or "").strip()
+    if not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[A-Za-z]{2,}", to):
+        raise HTTPException(400, "Skriv den e-mail, testmailen skal sendes til")
+    dests = _signup_dests()
+    if not dests:
+        raise HTTPException(400, "Opret først en destination af typen “Egen hjemmeside (JSON)” under Synkronisering")
+    out = []
+    for d in dests:
+        try:
+            r = sync._post(d["url"], {"event": "mail_test", "to": to, "brand": branding.get()["name"], "sent_at": time.time()},
+                           d.get("key"), gz=False)
+            out.append({"name": d.get("name") or d["url"], "ok": True, "message": r.get("besked") or "Sendt"})
+        except RuntimeError as e:
+            out.append({"name": d.get("name") or d["url"], "ok": False, "message": str(e)})
+    return {"results": out}
+
+
 # ------------------------------------------------------------------ tilmelding på hjemmesiden
 
 def _signup_dests():

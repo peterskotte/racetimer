@@ -5,6 +5,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 ## [Ikke udgivet]
 
 **Nyt**
+- **Mailkonto til bekræftelser:** under *⚙ Opsætning → Synkronisering → ✉ Mail til tilmeldinger* kan klubbens mailkonto (SMTP, fx Simply, One.com eller Gmail med app-adgangskode) sættes op, så bekræftelserne kommer frem i stedet for at blive afvist eller havne i spam. **✉ Send testmail** viser med det samme, om det virker, eller hvorfor ikke (fx forkert adgangskode). Pi'en sender opsætningen til hjemmesiden, som gemmer den i en fil, der ikke kan læses udefra; adgangskoden vises aldrig i admin. Kræver den nye `mailer.php` og `modtag.php` på webhotellet.
 - **Bekræftelse på e-mail:** tilmeldte får en mail med løb, distance, startnummer og jeres tekst (fx pris og betaling). Mailen sendes fra webhotellet (`noreply@` jeres domæne), og svar går til klubbens adresse, som vælges i RaceTimer. Kvitteringen på siden fortæller, om mailen blev sendt. Kan slås fra.
 
 **Ændret**

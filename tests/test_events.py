@@ -318,6 +318,31 @@ def test_signup_import_and_age_classes():
     db.ex("UPDATE races SET status='finished', finished_at=? WHERE id=?", (__import__("time").time() - 8 * 86400, rid))
     assert not any(x["id"] == rid for x in signup.public_list())
 
+
+def test_mail_settings():
+    import asyncio
+    from types import SimpleNamespace as N
+    from fastapi import HTTPException
+    from racetimer import sync
+
+    def req(body):
+        async def j():
+            return body
+        return N(json=j)
+    base = {"host": "smtp.klubben.dk", "security": "starttls", "user": "t@klubben.dk", "from_email": "t@klubben.dk"}
+    r = asyncio.run(app.put_mail(req({**base, "password": "hemmelig"}), u={}))
+    assert r["password_set"] and "password" not in r and r["port"] == 587 and sync.mail_config()["v"] == 1
+    asyncio.run(app.put_mail(req({**base, "password": ""}), u={}))  # tom = behold
+    assert sync.mail_config()["password"] == "hemmelig" and sync.mail_config()["v"] == 2
+    for bad in ({**base, "host": "smtp.x.dk\r\nRCPT"}, {**base, "from_email": "ikke-en-mail"}):
+        try:
+            asyncio.run(app.put_mail(req(bad), u={}))
+            raise AssertionError("ugyldig mailopsætning skulle afvises")
+        except HTTPException as e:
+            assert e.status_code == 400
+    asyncio.run(app.put_mail(req({"clear": True}), u={}))
+    assert not sync.mail_config().get("host") and not app.get_mail(u={})["password_set"]
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

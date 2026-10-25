@@ -40,29 +40,22 @@ function distnavn($l, $id) {
     return '';
 }
 
-// Bekræftelse på mail med startnummer. Afsenderen er noreply@<hjemmesidens domæne> (webhoteller kræver
-// typisk en afsender på eget domæne); svar går til klubbens adresse fra RaceTimer. Returnerer true ved succes.
-function send_bekraeftelse($lob, $t, $brand) {
-    $enlinje = function ($s) { return trim(preg_replace('/[\r\n]+/', ' ', (string)$s)); };  // mod header-injektion
-    $vaert = preg_replace('/^www\./', '', strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? 'localhost')));
-    if (!preg_match('/^[a-z0-9.-]+$/', $vaert)) $vaert = 'localhost';
+// Bekræftelse på mail med startnummer – via klubbens mailkonto (SMTP), hvis den er sat op i RaceTimer,
+// ellers webhotellets mail(). Svar går til klubbens adresse. Returnerer true ved succes.
+function send_bekraeftelse($mappe, $lob, $t, $brand) {
+    require_once __DIR__ . '/mailer.php';
     $dist = $t['distance'] ? distnavn($lob, $t['distance']) : '';
-    $emne = 'Tilmeldt: ' . $enlinje($lob['name']) . ($t['bib'] ? ' – startnummer ' . (int)$t['bib'] : '');
-    $side = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? $vaert)
+    $emne = 'Tilmeldt: ' . $lob['name'] . ($t['bib'] ? ' – startnummer ' . (int)$t['bib'] : '');
+    $side = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? rt_vaert())
           . strtok($_SERVER['REQUEST_URI'] ?? '/tilmeld.php', '?') . '?lob=' . (int)$lob['id'];
-    $tekst = "Hej " . $enlinje($t['name']) . "\n\n"
-        . "Du er tilmeldt " . $enlinje($lob['name']) . ($dist !== '' ? ", $dist" : '') . ".\n"
+    $tekst = "Hej " . rt_enlinje($t['name']) . "\n\n"
+        . "Du er tilmeldt " . rt_enlinje($lob['name']) . ($dist !== '' ? ", $dist" : '') . ".\n"
         . "Dato: " . dato($lob['date'], true) . "\n"
         . ($t['bib'] ? "\nDit startnummer er: " . (int)$t['bib'] . "\n" : '')
         . (trim($lob['note'] ?? '') !== '' ? "\n" . trim($lob['note']) . "\n" : '')
         . "\nTilmeldingen: $side\n"
-        . "\nHar du ikke selv tilmeldt dig, så svar på denne mail.\n\nVenlig hilsen\n" . $enlinje($brand) . "\n";
-    $hoved = ['From: ' . mb_encode_mimeheader($enlinje($brand), 'UTF-8', 'Q') . " <noreply@$vaert>",
-              'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit',
-              'Auto-Submitted: auto-generated'];
-    $svar = $enlinje($lob['reply_to'] ?? '');
-    if ($svar !== '' && filter_var($svar, FILTER_VALIDATE_EMAIL)) $hoved[] = "Reply-To: $svar";
-    return @mail($t['email'], mb_encode_mimeheader($emne, 'UTF-8', 'Q'), $tekst, implode("\r\n", $hoved), "-fnoreply@$vaert");
+        . "\nHar du ikke selv tilmeldt dig, så svar på denne mail.\n\nVenlig hilsen\n" . rt_enlinje($brand) . "\n";
+    return rt_send_mail($mappe, $t['email'], $emne, $tekst, $brand, $lob['reply_to'] ?? '') === true;
 }
 
 // Spam-værn: højst $MAKS_PR_TIME tilmeldinger pr. IP pr. time (IP gemmes kun som hash og kun i en time)
@@ -149,7 +142,7 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             fwrite($fp, json_encode($t, JSON_UNESCAPED_UNICODE) . "\n");
             fflush($fp); flock($fp, LOCK_UN); fclose($fp);
             $tak = $t;
-            $mail = !empty($lob['confirm_email']) ? send_bekraeftelse($lob, $t, $brand) : null;
+            $mail = !empty($lob['confirm_email']) && is_file(__DIR__ . '/mailer.php') ? send_bekraeftelse($mappe, $lob, $t, $brand) : null;
         }
     }
 }

@@ -51,6 +51,20 @@ def save_destinations(dests):
     db.set_setting("destinations", dests)
 
 
+def mail_config():
+    """Klubbens mailkonto (SMTP) til bekræftelser på tilmelding – {} hvis ikke sat op."""
+    return db.setting("mail", {}) or {}
+
+
+def push_mail(d):
+    """Send mailopsætningen til én hjemmeside (modtag.php gemmer den utilgængeligt udefra)."""
+    cfg = mail_config()
+    smtp = {k: cfg.get(k) for k in ("host", "port", "security", "user", "password", "from_email", "from_name")} \
+        if cfg.get("host") else None
+    return _post(d["url"], {"event": "mail_config", "smtp": smtp, "v": cfg.get("v", 0) if smtp else 0,
+                            "sent_at": time.time()}, d.get("key"), gz=False)
+
+
 def public_race():
     """Det aktive løb, som det må vises på hjemmesiden – testløb sendes aldrig ud."""
     race = db.active_race()
@@ -176,6 +190,13 @@ class SyncManager(threading.Thread):
                         brand_ok = False  # hjemmesiden mangler billederne – send dem igen
                         if not new_brand:
                             st["force"] = True  # med det samme (én gang – næste afsendelse har billederne med)
+                    mv = mail_config().get("v", 0) if mail_config().get("host") else 0
+                    if isinstance(resp, dict) and "mail_v" in resp and resp["mail_v"] != mv:
+                        try:  # hjemmesiden har en anden mailopsætning (fx ny modtag.php) – send den igen
+                            push_mail(d)
+                            st["mail_error"] = None
+                        except RuntimeError as e:
+                            st["mail_error"] = str(e)
                 elif d["type"] == "ftp":
                     ftpupload.upload(d, self._results_payload(race, final), splash_file=new_brand)
                 else:
