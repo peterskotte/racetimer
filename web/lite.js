@@ -354,7 +354,8 @@ const FIELD_LABELS = {checkin_min: "Indtjekning: min. før start (0 = fra)", loo
   warnings_min: "Advarsler før start (min, komma)", start_window_min: "Afgangsvindue (min)", goal_window_min: "Målvindue starter (min)",
   min_lap_min: "Min. omgangstid (min)", end_mode: "Slutter når", max_yards: "Antal omgange (cutoff)", total_h: "Samlet tid (timer)",
   distance_km: "Distance (km)", min_time_min: "Min. tid (min)", canicross: "Canicross (1–2 hunde)", record_km: "Rekord at slå (km)",
-  record_label: "Rekordens navn", duration_h: "Varighed (timer)", start_mode: "Start", interval_sec: "Startinterval (sek)"};
+  record_label: "Rekordens navn", duration_h: "Varighed (timer)", start_mode: "Start", interval_sec: "Startinterval (sek)",
+  cutoff_min: "Cutoff: maks. tid (min, 0 = ingen)"};
 const SELECTS = {end_mode: [["last_man", "Sidste mand tilbage"], ["duration", "Samlet tid"], ["yards", "Fast antal omgange"]],
                  start_mode: [["interval", "Enkeltstart med interval"], ["waves", "Bølgestart"], ["chip", "Start ved første tryk"]]};
 

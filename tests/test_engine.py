@@ -334,6 +334,28 @@ def test_clean_distances():
     assert cfg["distances"][0]["routes"] == ["r1"] and cfg["distances"][1]["id"] == "d2x" and cfg["distances"][1]["start_min"] == 0
     assert "distances" not in engine.clean_distances("backyard_custom", {"distances": [{}]})
 
+
+def test_cutoff_p2p_and_distance_override():
+    race = {"type": "p2p", "config": {"checkin_min": 0, "min_time_min": 1, "cutoff_min": 60}, "started_at": S}
+    reads = [{"participant_id": 1, "ts": S + 50 * 60}, {"participant_id": 2, "ts": S + 70 * 60}]
+    rows, _ = engine.compute(race, [P(1), P(2), P(3)], reads, S + 30 * 60)
+    assert by(rows)["L3"]["status"] == "active"
+    rows, _ = engine.compute(race, [P(1), P(2), P(3)], reads, S + 80 * 60)
+    b = by(rows)
+    assert b["L1"]["status"] == "finished" and b["L2"]["status"] == "dnf" and b["L2"]["status_label"] == "DNF · over tid"
+    assert b["L2"]["total_time"] is None and b["L3"]["status"] == "dnf" and b["L1"]["place"] == 1
+    cfg = {**NYTAAR, "cutoff_min": 0, "distances": [{**NYTAAR["distances"][2], "cutoff_min": 70}]}
+    rows, _ = engine.compute({"type": "p2p", "config": cfg, "started_at": S}, [P(3, distance="d3")],
+                             [{"participant_id": 3, "ts": S + 20 * 60}, {"participant_id": 3, "ts": S + 75 * 60}], S + 90 * 60)
+    assert rows[0]["status"] == "dnf" and rows[0]["laps"] == 1  # 2. passage efter 70 min tæller ikke
+
+
+def test_example_templates_are_valid():
+    for t in engine.EXAMPLE_TEMPLATES:
+        cfg = engine.clean_distances(t["type"], engine.merged_config(t["type"], t["config"]))
+        rows, info = engine.compute({"type": t["type"], "config": cfg, "started_at": S}, [P(1)], [], S + 60)
+        assert info["phase"] == "running", t["name"]
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

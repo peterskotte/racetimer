@@ -103,6 +103,15 @@
   .ttile .tmain { font-size: max(24px, min(calc(var(--th) * .28), calc(var(--tw) * .2), 130px)); font-weight: 800; line-height: 1.05; margin-top: auto; }
   .ttile .tmain small { font-size: .45em; color: var(--muted); font-weight: 600; }
   .ttile .tsub { font-size: max(11px, min(calc(var(--th) * .08), 17px)); color: var(--muted); }
+  .startfrom { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .build { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-head); }
+  .build .q { margin-bottom: 12px; } .build .q > b { display: block; margin-bottom: 6px; }
+  .build .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .build .opts button { font-size: 13px; padding: 7px 12px; border-radius: 999px; }
+  .build .opts button.on { background: var(--orange, #e5682a); border-color: transparent; color: #fff; }
+  .build .res { margin: 4px 0 0; font-weight: 600; }
+  #tplList .tpl { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  #tplList .tpl:first-child { border-top: 0; } #tplList .tpl .t { flex: 1; min-width: 0; }
   .dtab { margin-top: 4px; } .dtab td { padding: 4px 6px 4px 0; } .dtab input { min-width: 0; } .dtab [data-d=name] { min-width: 5.5em; }
   .dtab .legs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   .dtab .leg { display: inline-flex; } .dtab .leg select { width: auto; } .dtab .leg button, .dtab .addLeg { padding: 4px 8px; font-size: 12px; }
@@ -263,7 +272,16 @@
     <h2>Tilføj nyt løb</h2>
     <div class="card pad">
       <form id="newForm">
-        <div class="grid">
+        <div class="startfrom">
+          <div class="muted small" style="font-weight:600;margin-bottom:6px">Start fra</div>
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <select id="newTpl" style="flex:1;min-width:220px"></select>
+            <button type="button" id="buildBtn" title="Svar på et par spørgsmål, så vælges løbstype og indstillinger for dig">🧩 Byg selv</button>
+          </div>
+          <p class="muted small" id="newTplHelp" style="margin:6px 0 0"></p>
+          <div id="buildBox" class="build" hidden></div>
+        </div>
+        <div class="grid" style="margin-top:14px">
           <label>Navn<input name="name" required placeholder="fx Rold Skov Backyard 2026"></label>
           <label>Løbstype<select name="type" id="newType"></select></label>
           <label>Tæller<select name="timing"><option value="armband">📶 Armbånd (RFID-læsere)</option><option value="manual">👆 Manuel (tryk på felter)</option></select></label>
@@ -281,6 +299,12 @@
           <button class="primary">Opret løb</button>
         </div>
       </form>
+    </div>
+    <h2 style="margin-top:22px">Egne skabeloner</h2>
+    <div class="card pad">
+      <p class="muted small" style="margin-top:0">Gem et løbs opsætning som skabelon under <b>Aktivt løb → Indstillinger → 💾 Gem som skabelon</b>, så kan den bruges igen næste år. Skabeloner kan hentes som fil og deles med andre klubber. Deltagere og tider kommer ikke med.</p>
+      <div id="tplList"></div>
+      <div class="row" style="margin-top:10px;gap:8px"><label class="btn" style="cursor:pointer">⬆ Importér skabelon (.json)<input type="file" id="tplImport" accept=".json,application/json" hidden></label></div>
     </div>
   </section>
 
@@ -661,7 +685,7 @@ const CFG_LABELS = {
   goal_window_min: "Målvindue åbner (min efter start)", canicross: "🐕 Canicross (løber med 1–2 hunde)", distance_km: "Distance (km)", min_time_min: "Min. løbstid (min)",
   record_km: "Rekord at slå (km)", record_label: "Titel på fælles distance", duration_h: "Varighed (timer)",
   start_mode: "Startform", interval_sec: "Startinterval (sek)", waves: "Startbølger",
-  end_mode: "Løbet slutter", max_yards: "Cutoff: antal omgange", total_h: "Samlet tid (timer)",
+  cutoff_min: "Cutoff: maks. tid (min, 0 = ingen)", end_mode: "Løbet slutter", max_yards: "Cutoff: antal omgange", total_h: "Samlet tid (timer)",
 };
 const HELP = {
   backyard: "Officielle regler: 6,7056 km hver hele time, advarsel 3-2-1 min. Sidste løber skal gennemføre én omgang mere end alle andre. Parametre er låst.",
@@ -715,7 +739,7 @@ function distEditor(type, cfg) {
       <table class="dtab routes"><thead><tr><th>Navn</th><th>km</th><th title="${MIN_LAP_HELP}">Min. tid (min)</th><th></th></tr></thead><tbody>${routes.map(routeRow).join("")}</tbody></table>
       <button type="button" class="addRoute" style="margin-top:6px">+ Rute</button>` : ""}
     <div class="muted small" style="font-weight:600;margin-top:12px">Distancer</div>
-    <table class="dtab dists"><thead><tr><th>Navn</th><th title="Minutter efter løbets start (startknappen)">Start + min</th><th>${p2p ? "Ruter i træk" : "Varighed (timer)"}</th><th></th></tr></thead>
+    <table class="dtab dists"><thead><tr><th>Navn</th><th title="Minutter efter løbets start (startknappen)">Start + min</th><th>${p2p ? "Ruter i træk" : "Varighed (timer)"}</th>${p2p ? '<th title="Maks. tid fra distancens start. Tom/0 = løbets cutoff">Cutoff (min)</th>' : ""}<th></th></tr></thead>
       <tbody>${ds.map(d => distRow(type, d, routes)).join("")}</tbody></table>
     <button type="button" class="addDist" style="margin-top:6px">+ Distance</button>
   </div>`;
@@ -728,7 +752,7 @@ function distRow(type, d, routes) {
     ? `<div class="legs">${(d.routes || []).map(id => routeSel(id, routes)).join('<span class="muted">→</span>')}<button type="button" class="addLeg" title="Tilføj en rute mere i træk">+</button></div>`
     : `<input data-d="duration_h" type="number" step="any" min="0.1" value="${d.duration_h ?? ""}">`;
   return `<tr data-id="${esc(d.id)}"><td><input data-d="name" value="${esc(d.name)}"></td><td><input data-d="start_min" type="number" step="any" min="0" value="${d.start_min ?? 0}" style="width:64px"></td>
-    <td>${third}</td><td><button type="button" class="danger delRow">✕</button></td></tr>`;
+    <td>${third}</td>${type === "p2p" ? `<td><input data-d="cutoff_min" type="number" step="any" min="0" value="${d.cutoff_min || ""}" placeholder="–" style="width:64px"></td>` : ""}<td><button type="button" class="danger delRow">✕</button></td></tr>`;
 }
 function readRoutes(box) {
   return [...box.querySelectorAll("table.routes tbody tr")].map(tr => ({id: tr.dataset.id, name: tr.querySelector("[data-r=name]").value,
@@ -737,7 +761,8 @@ function readRoutes(box) {
 function readDists(box) {
   return [...box.querySelectorAll("table.dists tbody tr")].map(tr => {
     const d = {id: tr.dataset.id, name: tr.querySelector("[data-d=name]").value, start_min: parseFloat(tr.querySelector("[data-d=start_min]").value) || 0};
-    if (box.dataset.type === "p2p") d.routes = [...tr.querySelectorAll("select[data-leg]")].map(s => s.value);
+    if (box.dataset.type === "p2p") Object.assign(d, {routes: [...tr.querySelectorAll("select[data-leg]")].map(s => s.value),
+      cutoff_min: parseFloat(tr.querySelector("[data-d=cutoff_min]").value) || 0});
     else d.duration_h = parseFloat(tr.querySelector("[data-d=duration_h]").value) || 0;
     return d;
   });
@@ -854,14 +879,111 @@ function readCfg(form) {
 // ------------------------------------------------ nyt løb
 function fillNewTypes() {
   $("newType").innerHTML = Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join("");
-  $("newType").onchange = renderNewCfg; renderNewCfg();
+  $("newType").onchange = () => renderNewCfg(); renderNewCfg();
+  loadTemplates();
 }
-function renderNewCfg() {
+function renderNewCfg(cfg) {
   const t = $("newType").value;
   $("newTypeHelp").textContent = HELP[t] || "";
-  $("newConfig").innerHTML = cfgFields(t, TYPES[t].config, TYPES[t].locked);
+  $("newConfig").innerHTML = cfgFields(t, {...TYPES[t].config, ...(TYPES[t].locked ? {} : cfg || {})}, TYPES[t].locked);
   wireWaves($("newForm")); wireEndMode($("newForm")); wireDist($("newForm"));
 }
+// Sæt løbstype, indstillinger og tæller i Nyt løb (fra skabelon eller Byg selv)
+function applyNew(type, cfg, timing) {
+  $("newType").value = type;
+  if (timing) $("newForm").timing.value = timing;
+  renderNewCfg(cfg);
+}
+
+// ------------------------------------------------ skabeloner
+let TEMPLATES = {examples: [], own: []};
+async function loadTemplates() {
+  try { TEMPLATES = await api("/api/templates"); } catch (_) { return; }
+  const opt = t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`, cur = $("newTpl").value;
+  $("newTpl").innerHTML = `<option value="">Tomt løb – vælg løbstype nedenfor</option>` +
+    (TEMPLATES.own.length ? `<optgroup label="Egne skabeloner">${TEMPLATES.own.map(opt).join("")}</optgroup>` : "") +
+    `<optgroup label="Eksempler">${TEMPLATES.examples.map(opt).join("")}</optgroup>`;
+  if ([...TEMPLATES.own, ...TEMPLATES.examples].some(t => t.id === cur)) $("newTpl").value = cur;
+  $("tplList").innerHTML = TEMPLATES.own.length ? TEMPLATES.own.map(t => `<div class="tpl"><div class="t"><b>${esc(t.name)}</b>
+      <div class="muted small">${esc(TYPES[t.type]?.label || t.type)}${t.config.distances?.length ? ` · ${t.config.distances.map(d => esc(d.name)).join(", ")}` : ""}${t.timing === "manual" ? " · 👆 Manuel" : ""}${t.description ? ` – ${esc(t.description)}` : ""}</div></div>
+      <a class="btn" href="/api/templates/${esc(t.id)}/export" title="Hent som fil (til en anden Pi eller klub)">⬇</a>
+      <button type="button" class="danger" data-deltpl="${esc(t.id)}" title="Slet skabelonen">✕</button></div>`).join("")
+    : `<p class="muted small" style="margin:0">Ingen egne skabeloner endnu.</p>`;
+  $("tplList").querySelectorAll("[data-deltpl]").forEach(b => b.onclick = async () => {
+    if (!confirm("Slet skabelonen? Løb, der er oprettet ud fra den, påvirkes ikke.")) return;
+    await api(`/api/templates/${b.dataset.deltpl}`, {method: "DELETE"}); toast("Skabelonen er slettet"); loadTemplates();
+  });
+}
+$("newTpl").onchange = () => {
+  const t = [...TEMPLATES.own, ...TEMPLATES.examples].find(x => x.id === $("newTpl").value);
+  $("newTplHelp").textContent = t ? (t.description || "") + " Alt kan justeres nedenfor." : "";
+  $("buildBox").hidden = true;
+  if (t) { applyNew(t.type, t.config, t.timing); if (!$("newForm").name.value) $("newForm").name.placeholder = t.name; }
+};
+$("tplImport").onchange = async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const t = JSON.parse(await file.text());
+    const r = await api("/api/templates", {body: t});
+    toast(`Skabelonen “${r.name}” er importeret`); loadTemplates();
+  } catch (err) { if (err instanceof SyntaxError) toast("Filen er ikke en RaceTimer-skabelon", true); }
+  e.target.value = "";
+};
+
+// ------------------------------------------------ byg selv: et par spørgsmål → løbstype og indstillinger
+const BUILD = {win: null, start: "mass", multi: "one", backyard: "official", cutoff: 0, timing: "armband"};
+const BUILD_Q = {
+  win: ["Hvordan vinder man?", [["fast", "Hurtigste tid på en fast distance"], ["laps_time", "Flest omgange inden for en tidsgrænse"],
+        ["laps_n", "Hurtigst gennem et fast antal omgange"], ["backyard", "Backyard: ny omgang hver time, sidste mand tilbage"],
+        ["together", "Alle samler km til et fælles mål"]]],
+  start: ["Hvordan startes der?", [["mass", "Fælles start"], ["interval", "Enkeltstart med interval"], ["waves", "Bølgestart"], ["chip", "Løberen starter selv (scan ved start)"]]],
+  multi: ["Flere distancer?", [["one", "Én distance"], ["many", "Flere distancer i samme løb"]]],
+  multi_t: ["Flere varigheder?", [["one", "Én varighed"], ["many", "Flere, fx 6 og 12 timer"]]],
+  backyard: ["Regler", [["official", "Officielle regler (låst)"], ["custom", "Egne tider og distancer"]]],
+  timing: ["Tæller", [["armband", "📶 Armbånd"], ["manual", "👆 Manuel (tryk på felter)"]]],
+};
+function buildResult() {
+  const b = BUILD;
+  if (b.win === "fast" && b.start === "mass") {
+    const cfg = {cutoff_min: b.cutoff || 0, distances: [], routes: []};
+    if (b.multi === "many") Object.assign(cfg, {routes: [{id: "r1", name: "Kort rute", km: 5, min_min: 15}, {id: "r2", name: "Lang rute", km: 10, min_min: 30}],
+      distances: [{id: "d1", name: "5 km", start_min: 0, routes: ["r1"]}, {id: "d2", name: "10 km", start_min: 0, routes: ["r2"]}]});
+    return ["p2p", cfg, "Alm. tidtagning (A til B)" + (b.multi === "many" ? " med to distancer (eksempel)" : "")];
+  }
+  if (b.win === "fast") return ["timetrial", {start_mode: b.start, cutoff_min: b.cutoff || 0},
+    `Intervalstart: ${{interval: "enkeltstart med interval", waves: "bølgestart", chip: "chipstart"}[b.start]}`];
+  if (b.win === "laps_time") return ["timed", b.multi === "many" ? {distances: [{id: "d1", name: "6 timer", start_min: 0, duration_h: 6}, {id: "d2", name: "12 timer", start_min: 0, duration_h: 12}]} : {distances: []},
+    "Tidsbaseret" + (b.multi === "many" ? " med to varigheder" : "")];
+  if (b.win === "laps_n") return ["backyard_custom", {end_mode: "yards", max_yards: 5, min_lap_min: 5, interval_min: 60}, "Backyard (custom): først gennem et fast antal omgange – omgangene løbes i træk"];
+  if (b.win === "backyard") return b.backyard === "official" ? ["backyard", {}, "Backyard Ultra (officiel)"] : ["backyard_custom", {end_mode: "last_man"}, "Backyard Ultra (custom)"];
+  if (b.win === "together") return ["record", {}, "Rekordløb: alle løberes km lægges sammen"];
+  return null;
+}
+function renderBuild() {
+  const b = BUILD, qs = ["win"];
+  if (b.win === "fast") qs.push("start");
+  if (b.win === "fast" && b.start === "mass") qs.push("multi");
+  if (b.win === "laps_time") qs.push("multi_t");
+  if (b.win === "backyard") qs.push("backyard");
+  if (b.win) qs.push("timing");
+  const key = q => q === "multi_t" ? "multi" : q;
+  $("buildBox").innerHTML = qs.map(q => `<div class="q"><b>${BUILD_Q[q][0]}</b><div class="opts">${BUILD_Q[q][1].map(([v, l]) =>
+      `<button type="button" data-q="${key(q)}" data-v="${v}" class="${b[key(q)] === v ? "on" : ""}">${l}</button>`).join("")}</div></div>`).join("") +
+    (b.win === "fast" ? `<div class="q"><b>Cutoff</b><label style="flex-direction:row;align-items:center;gap:8px">Maks. tid <input type="number" min="0" step="any" id="buildCutoff" value="${b.cutoff || ""}" placeholder="ingen" style="width:90px"> min – ikke i mål inden da = DNF</label></div>` : "") +
+    (buildResult() ? `<p class="res">→ ${esc(buildResult()[2])}. Indstillingerne er sat nedenfor og kan justeres.</p>` : `<p class="muted small" style="margin:0">Vælg, hvordan man vinder.</p>`);
+  $("buildBox").querySelectorAll("[data-q]").forEach(x => x.onclick = () => { BUILD[x.dataset.q] = x.dataset.v; renderBuild(); applyBuild(); });
+  $("buildCutoff")?.addEventListener("change", e => { BUILD.cutoff = parseFloat(e.target.value) || 0; applyBuild(); });
+}
+function applyBuild() {
+  const r = buildResult();
+  if (r) applyNew(r[0], r[1], BUILD.timing);
+}
+$("buildBtn").onclick = () => {
+  const box = $("buildBox");
+  box.hidden = !box.hidden;
+  if (!box.hidden) { $("newTpl").value = ""; $("newTplHelp").textContent = ""; renderBuild(); }
+};
 // ------------------------------------------------ testløb: hurtigere tid og begrænsninger slået fra
 function testFields(t) {
   t = t || {speed: 60, no_minimum: false, no_checkin: true, no_dedup: false};
@@ -887,7 +1009,7 @@ $("newForm").onsubmit = async e => {
   const r = await api("/api/races", {body: {name: fd.get("name"), type: fd.get("type"), config: readCfg(f),
     scheduled_start: fromLocalInput(fd.get("scheduled_start")), activate: !!fd.get("activate"), timing: fd.get("timing"),
     test: $("newIsTest").checked ? readTest(f) : null}});
-  toast("Løbet er oprettet"); f.reset(); renderNewCfg(); $("newTestOpts").hidden = true; $("newTestOpts").innerHTML = "";
+  toast("Løbet er oprettet"); f.reset(); renderNewCfg(); $("newTpl").value = ""; $("newTplHelp").textContent = ""; $("buildBox").hidden = true; $("newTestOpts").hidden = true; $("newTestOpts").innerHTML = "";
   curId = r.id; await loadRaces();
   showTab("people");
 };
@@ -946,7 +1068,14 @@ async function loadRace(full) {
       ${locked ? `<p class="muted small">Officielle backyard-parametre er låst. Vælg “Backyard Ultra (custom)” for at justere.</p>` : ""}
       ${cfgFields(r.type, r.effective_config, locked)}
       ${r.test ? `<div class="testbox" style="margin-top:14px"><b>🧪 Testløb</b>${testFields(r.test)}</div>` : ""}
-      <div style="margin-top:14px"><button class="primary">Gem indstillinger</button></div>`;
+      <div class="row" style="margin-top:14px;gap:8px"><button class="primary">Gem indstillinger</button>
+        <button type="button" id="saveTpl" title="Gem løbstype og indstillinger (også ruter og distancer) som skabelon til et andet løb">💾 Gem som skabelon</button></div>`;
+    $("saveTpl").onclick = async () => {
+      const name = prompt("Navn på skabelonen (findes navnet, opdateres den):", r.name.replace(/\s*20\d\d\s*$/, ""));
+      if (!name) return;
+      const t = await api("/api/templates", {body: {name, type: r.type, config: readCfg($("editForm")), timing: r.timing}});
+      toast(`Gemt som skabelonen “${t.name}”`); loadTemplates();
+    };
     wireWaves($("editForm")); wireEndMode($("editForm")); wireDist($("editForm"));
     // test uden hardware: vælg en løbers armbånd i stedet for at skrive chip-ID'et
     api(`/api/races/${curId}/participants`).then(ps => {

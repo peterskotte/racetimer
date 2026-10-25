@@ -242,6 +242,34 @@ def test_distances_participants_and_events():
     csv = app.results_csv(rid, u={}).body.decode()
     assert csv.splitlines()[0].lstrip("\ufeff").startswith("Distance;Placering") and "\n15 km;" in csv
 
+
+def test_templates():
+    import asyncio
+    from types import SimpleNamespace as N
+    from fastapi import HTTPException
+
+    def req(body):
+        async def j():
+            return body
+        return N(json=j)
+    assert len(app.templates(u={})["examples"]) >= 3
+    rid = race("p2p", {"cutoff_min": 90, "routes": [{"id": "r1", "name": "A", "km": 5, "min_min": 10}],
+                       "distances": [{"id": "d1", "name": "5 km", "routes": ["r1"]}]})
+    t = asyncio.run(app.save_template(req({"race_id": rid, "name": "Sommerløb"}), u={}))
+    assert t["type"] == "p2p" and t["config"]["cutoff_min"] == 90 and t["config"]["distances"][0]["name"] == "5 km"
+    t2 = asyncio.run(app.save_template(req({"name": "sommerløb", "type": "timed", "config": {"duration_h": 6}}), u={}))
+    assert t2["id"] == t["id"] and len(app.templates(u={})["own"]) == 1  # samme navn → opdateret
+    exp = json.loads(app.export_template(t["id"], u={}).body)
+    assert exp["racetimer_template"] == 1 and exp["config"]["duration_h"] == 6
+    for bad in ({"name": "X", "type": "golf"}, {"name": "", "type": "p2p"}):
+        try:
+            asyncio.run(app.save_template(req(bad), u={}))
+            raise AssertionError("ugyldig skabelon skulle afvises")
+        except HTTPException as e:
+            assert e.status_code == 400
+    app.delete_template(t["id"], u={})
+    assert app.templates(u={})["own"] == []
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

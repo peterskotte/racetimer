@@ -21,7 +21,7 @@ RACE_TYPES = {
     },
     "p2p": {
         "label": "Alm. tidtagning (A til B)",
-        "config": {"checkin_min": 30, "distance_km": 10.0, "min_time_min": 5, "canicross": False},
+        "config": {"checkin_min": 30, "distance_km": 10.0, "min_time_min": 5, "cutoff_min": 0, "canicross": False},
     },
     "record": {
         "label": "Rekordløb (Årets rekord)",
@@ -33,11 +33,35 @@ RACE_TYPES = {
     },
     "timetrial": {
         "label": "Intervalstart / enkeltstart",
-        "config": {"checkin_min": 30, "distance_km": 10.0, "start_mode": "interval", "interval_sec": 30, "min_time_min": 5, "canicross": False,
+        "config": {"checkin_min": 30, "distance_km": 10.0, "start_mode": "interval", "interval_sec": 30, "min_time_min": 5,
+                   "cutoff_min": 0, "canicross": False,
                    "waves": [{"name": "Bølge 1", "from_bib": 1, "to_bib": 20, "offset_sec": 0},
                              {"name": "Bølge 2", "from_bib": 21, "to_bib": 40, "offset_sec": 120}]},
     },
 }
+
+# Eksempler, der altid kan vælges som skabelon (egne skabeloner gemmes i indstillingerne)
+EXAMPLE_TEMPLATES = [
+    {"id": "ex-nytaar", "name": "Nytårsløb: 5, 10 og 15 km", "example": True, "type": "p2p", "timing": "armband",
+     "description": "To ruter. 15 km er den korte og den lange rute i træk og starter 30 min før de andre.",
+     "config": {"checkin_min": 0, "cutoff_min": 0,
+                "routes": [{"id": "r1", "name": "Kort rute", "km": 5, "min_min": 15},
+                           {"id": "r2", "name": "Lang rute", "km": 10, "min_min": 30}],
+                "distances": [{"id": "d1", "name": "15 km", "start_min": 0, "routes": ["r1", "r2"]},
+                              {"id": "d2", "name": "5 km", "start_min": 30, "routes": ["r1"]},
+                              {"id": "d3", "name": "10 km", "start_min": 30, "routes": ["r2"]}]}},
+    {"id": "ex-6-12", "name": "6- og 12-timersløb", "example": True, "type": "timed", "timing": "armband",
+     "description": "Samme omgang og fælles start. 6-timersløberne er færdige efter 6 timer, de andre efter 12.",
+     "config": {"checkin_min": 30, "loop_km": 1.0, "min_lap_min": 3,
+                "distances": [{"id": "d1", "name": "6 timer", "start_min": 0, "duration_h": 6},
+                              {"id": "d2", "name": "12 timer", "start_min": 0, "duration_h": 12}]}},
+    {"id": "ex-cutoff", "name": "Trailløb med cutoff", "example": True, "type": "p2p", "timing": "armband",
+     "description": "Fælles start, 25 km. Ikke i mål inden for 4 timer = DNF (over tid).",
+     "config": {"checkin_min": 30, "distance_km": 25.0, "min_time_min": 60, "cutoff_min": 240}},
+    {"id": "ex-traening", "name": "Klubtræning uden armbånd", "example": True, "type": "timed", "timing": "manual",
+     "description": "1 time, flest omgange. Race director trykker på løbernes felter.",
+     "config": {"checkin_min": 0, "duration_h": 1, "loop_km": 1.0, "min_lap_min": 2}},
+]
 
 STATUS_LABELS = {
     "waiting": "Venter", "active": "Aktiv", "resting": "I mål", "finished": "Færdig",
@@ -73,6 +97,7 @@ def clean_distances(race_type, cfg):
         dids.add(did)
         out = {"id": did, "name": str(d.get("name") or f"Distance {i}").strip(), "start_min": max(0.0, num(d.get("start_min")))}
         if race_type == "p2p":
+            out["cutoff_min"] = max(0.0, num(d.get("cutoff_min")))
             out["routes"] = [x for x in (d.get("routes") or []) if x in rids] or ([routes[0]["id"]] if routes else [])
         else:
             out["duration_h"] = num(d.get("duration_h"), cfg.get("duration_h") or 1) or (cfg.get("duration_h") or 1)
@@ -93,7 +118,7 @@ def merged_config(race_type, cfg):
 
 
 TEST_SPEEDS = (1, 10, 60, 120)
-_SCALE_MIN = ("checkin_min", "interval_min", "start_window_min", "goal_window_min", "min_lap_min", "min_time_min")
+_SCALE_MIN = ("checkin_min", "interval_min", "start_window_min", "goal_window_min", "min_lap_min", "min_time_min", "cutoff_min")
 
 
 def test_config(cfg, opts):
@@ -117,6 +142,7 @@ def test_config(cfg, opts):
             cfg["waves"] = [{**w, "offset_sec": w.get("offset_sec", 0) / speed} for w in cfg["waves"]]
         if cfg.get("distances"):
             cfg["distances"] = [{**d, "start_min": (d.get("start_min") or 0) / speed,
+                                 **({"cutoff_min": d["cutoff_min"] / speed} if d.get("cutoff_min") else {}),
                                  **({"duration_h": d["duration_h"] / speed} if d.get("duration_h") else {})}
                                 for d in cfg["distances"]]
         if cfg.get("routes"):
@@ -168,6 +194,15 @@ def _reads_by_pid(reads):
         if r.get("participant_id"):
             by.setdefault(r["participant_id"], []).append(r["ts"])
     return by
+
+
+def fsum(xs):
+    """Læg kommatal sammen fra venstre mod højre – giver samme resultat i alle Python-versioner og i JavaScript
+    (Pythons sum() blev mere præcis i 3.12, men Pi'en og browser-udgaven skal regne helt ens)."""
+    t = 0.0
+    for x in xs:
+        t += x
+    return t
 
 
 def _place(rows, key):
@@ -230,7 +265,7 @@ def compute_backyard_open(race, cfg, parts, reads, now):
         resolved_at=(end if end and now >= end else now) if ended and not stop else None,
         finishers=sum(1 for r in rows if r["status"] == "finished"),
         on_course=sum(1 for r in rows if r["status"] == "active"),
-        total_km=round(sum(r["distance_km"] for r in rows), 2),
+        total_km=round(fsum(r["distance_km"] for r in rows), 2),
         leader=leader["name"] if leader else None, leader_laps=leader["laps"] if leader else 0,
         leader_time=leader["total_time"] if leader else None,
         completed_yards=leader["laps"] if leader else 0,
@@ -330,7 +365,7 @@ def compute_backyard(race, cfg, parts, reads, now):
             st, n = (_manual(p) or "dnf"), 0
         times = [pl[b] - (start + b * I) for b in range(n) if b in pl]
         rows.append(_row(p, status=st, laps=n, distance_km=round(n * loop, 3),
-                         total_time=sum(times) if times else None,
+                         total_time=fsum(times) if times else None,
                          last_lap=times[-1] if times else None, best_lap=min(times) if times else None,
                          current_lap_done=current.get(pid), started_current=cur in started.get(pid, ()),
                          flags=sum(1 for f in flags if f["participant_id"] == pid)))
@@ -404,7 +439,7 @@ def compute_timed(race, cfg, parts, reads, now):
     done = now >= end or bool(race.get("finished_at"))
     rows = _lap_rows(parts, reads, start, end, cfg.get("min_lap_min", 0) * 60, cfg["loop_km"], done)
     info.update(phase="ended" if done else "running", end_at=end, remaining=max(0, end - now),
-                total_km=round(sum(r["distance_km"] for r in rows), 2))
+                total_km=round(fsum(r["distance_km"] for r in rows), 2))
     return rows, info
 
 
@@ -417,7 +452,7 @@ def compute_record(race, cfg, parts, reads, now):
         return [_row(p) for p in parts], info
     done = bool(race.get("finished_at"))
     rows = _lap_rows(parts, reads, start, race.get("finished_at"), cfg.get("min_lap_min", 0) * 60, cfg["loop_km"], done)
-    total = round(sum(r["distance_km"] for r in rows), 2)
+    total = round(fsum(r["distance_km"] for r in rows), 2)
     info.update(phase="ended" if done else "running", total_km=total,
                 total_laps=sum(r["laps"] for r in rows), new_record=bool(info["record_km"]) and total > info["record_km"])
     return rows, info
@@ -437,8 +472,9 @@ def _passages(tss, ps, mins, approved):
     return out
 
 
-def _finish_rows(parts, reads, starts, minimum, now, legs=None):
-    """A→B-mål. legs = ruterne i træk ([{"km", "min_min"}, …]) – ellers ét stræk med minimumstiden."""
+def _finish_rows(parts, reads, starts, minimum, now, legs=None, cutoff=0):
+    """A→B-mål. legs = ruterne i træk ([{"km", "min_min"}, …]) – ellers ét stræk med minimumstiden.
+    cutoff = maks. tid i sek. fra løberens start (0 = ingen): læsninger derefter tæller ikke, og løberen er DNF."""
     by, ok = _reads_by_pid(reads), _approved_by_pid(reads)
     rows = []
     multi = bool(legs) and len(legs) > 1
@@ -450,13 +486,17 @@ def _finish_rows(parts, reads, starts, minimum, now, legs=None):
         passed = []
         if ps is not None:
             mine = ok.get(p["id"], ())
+            tss = by.get(p["id"], [])
+            if cutoff:
+                tss = [ts for ts in tss if ts <= ps + cutoff]
             if multi:
-                passed = _passages(by.get(p["id"], []), ps, [lg["min_min"] * 60 for lg in legs], mine)
+                passed = _passages(tss, ps, [lg["min_min"] * 60 for lg in legs], mine)
                 fin = passed[-1] if len(passed) == len(legs) else None
                 last_ts[p["id"]] = passed[-1] if passed else None
             else:
-                fin = next((ts for ts in by.get(p["id"], []) if ts >= ps + minimum or (ts in mine and ts > ps)), None)
-        if m in ("rtc",):
+                fin = next((ts for ts in tss if ts >= ps + minimum or (ts in mine and ts > ps)), None)
+        over = bool(cutoff and ps is not None and not fin and now > ps + cutoff)
+        if m in ("rtc",) or (over and not m):
             st = "dnf"
         elif m:
             st = m
@@ -468,9 +508,11 @@ def _finish_rows(parts, reads, starts, minimum, now, legs=None):
             st = "active"
         row = _row(p, status=st, start_ts=ps, finish_ts=fin, total_time=(fin - ps) if fin else None,
                    elapsed=(now - ps) if (ps and not fin and now >= ps) else None, laps=1 if fin else 0)
+        if over and not m:
+            row.update(status_label="DNF · over tid", elapsed=None)
         if multi:
             splits = [b - a for a, b in zip([ps] + passed, passed)]
-            row.update(laps=len(passed), legs=len(legs), distance_km=round(sum(lg["km"] for lg in legs[:len(passed)]), 3),
+            row.update(laps=len(passed), legs=len(legs), distance_km=round(fsum(lg["km"] for lg in legs[:len(passed)]), 3),
                        last_lap=splits[-1] if splits else None, best_lap=min(splits) if splits else None)
             if st == "active" and passed:
                 row["status_label"] = f"{STATUS_LABELS['active']} · {len(passed)}/{len(legs)}"
@@ -486,7 +528,8 @@ def compute_p2p(race, cfg, parts, reads, now):
     if not start:
         info.update(phase="before", next_start=race.get("scheduled_start"))
         return [_row(p) for p in parts], info
-    rows = _finish_rows(parts, reads, {p["id"]: start for p in parts}, cfg.get("min_time_min", 0) * 60, now, cfg.get("legs"))
+    rows = _finish_rows(parts, reads, {p["id"]: start for p in parts}, cfg.get("min_time_min", 0) * 60, now, cfg.get("legs"),
+                        (cfg.get("cutoff_min") or 0) * 60)
     info.update(phase="ended" if race.get("finished_at") else "running", elapsed=now - start,
                 finished=sum(1 for r in rows if r["status"] == "finished"))
     return rows, info
@@ -532,7 +575,7 @@ def compute_timetrial(race, cfg, parts, reads, now):
     if info["start_mode"] == "chip":
         # første læsning er start – mållæsning skal derfor ligge efter minimumstiden
         reads = [r for r in reads if r["ts"] != starts.get(r.get("participant_id"))]
-    rows = _finish_rows(parts, reads, starts, minimum, now)
+    rows = _finish_rows(parts, reads, starts, minimum, now, cutoff=(cfg.get("cutoff_min") or 0) * 60)
     upcoming = sorted((r for r in rows if r["status"] == "waiting" and r["start_ts"]), key=lambda r: r["start_ts"])
     info.update(phase="ended" if race.get("finished_at") else "running", elapsed=now - start,
                 next_starters=[{"bib": r["bib"], "name": r["name"], "start_ts": r["start_ts"]} for r in upcoming[:5]],
@@ -576,7 +619,9 @@ def _distance_setup(race, cfg, d, now):
         by_id = {r["id"]: r for r in cfg.get("routes") or []}
         legs = [by_id[x] for x in d.get("routes") or [] if x in by_id]
         if legs:
-            sub.update(legs=legs, distance_km=round(sum(lg["km"] for lg in legs), 3), min_time_min=legs[0]["min_min"])
+            sub.update(legs=legs, distance_km=round(fsum(lg["km"] for lg in legs), 3), min_time_min=legs[0]["min_min"])
+        if d.get("cutoff_min"):
+            sub["cutoff_min"] = d["cutoff_min"]
     elif d.get("duration_h"):
         sub["duration_h"] = d["duration_h"]
     start = race["started_at"] + off if race.get("started_at") else None

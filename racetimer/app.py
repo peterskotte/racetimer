@@ -498,6 +498,68 @@ def types(u=Depends(admin)):
     return engine.RACE_TYPES
 
 
+# ------------------------------------------------------------------ skabeloner (egne løbsopsætninger)
+
+def _clean_template(b):
+    """En skabelon: løbstype, indstillinger (inkl. ruter og distancer) og tæller – ingen deltagere eller tider."""
+    typ = b.get("type")
+    if typ not in engine.RACE_TYPES:
+        raise HTTPException(400, "Ukendt løbstype i skabelonen")
+    name = str(b.get("name") or "").strip()[:80]
+    if not name:
+        raise HTTPException(400, "Skabelonen skal have et navn")
+    cfg = b.get("config") if isinstance(b.get("config"), dict) else {}
+    return {"name": name, "description": str(b.get("description") or "").strip()[:300], "type": typ,
+            "timing": "manual" if b.get("timing") == "manual" else "armband",
+            "config": engine.clean_distances(typ, engine.merged_config(typ, cfg))}
+
+
+def _templates():
+    return db.setting("templates", []) or []
+
+
+@app.get("/api/templates")
+def templates(u=Depends(admin)):
+    return {"examples": engine.EXAMPLE_TEMPLATES, "own": _templates()}
+
+
+@app.post("/api/templates")
+async def save_template(request: Request, u=Depends(admin)):
+    """Gem en skabelon – fra et løb ({"race_id", "name"}) eller fra en fil/formular (type, config, …)."""
+    b = await request.json()
+    if b.get("race_id"):
+        race = db.race(int(b["race_id"])) or _404()
+        b = {**b, "type": race["type"], "config": race["config"], "timing": race.get("timing")}
+    t = _clean_template(b)
+    own = _templates()
+    old = next((x for x in own if x["name"].lower() == t["name"].lower()), None)
+    if old:  # samme navn → opdatér (fx næste års udgave)
+        old.update(t, updated_at=time.time())
+    else:
+        t.update(id=secrets.token_hex(4), created_at=time.time())
+        own.append(t)
+    db.set_setting("templates", own)
+    return old or t
+
+
+@app.delete("/api/templates/{tid}")
+def delete_template(tid: str, u=Depends(admin)):
+    own = _templates()
+    if not any(x["id"] == tid for x in own):
+        _404()
+    db.set_setting("templates", [x for x in own if x["id"] != tid])
+    return {"ok": True}
+
+
+@app.get("/api/templates/{tid}/export")
+def export_template(tid: str, u=Depends(admin)):
+    t = next((x for x in _templates() + engine.EXAMPLE_TEMPLATES if x["id"] == tid), None) or _404()
+    out = {"racetimer_template": 1, **{k: t[k] for k in ("name", "description", "type", "timing", "config")}}
+    fn = "".join(c if c.isalnum() else "-" for c in t["name"].lower()).strip("-") or "skabelon"
+    return Response(json.dumps(out, ensure_ascii=False, indent=2), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="skabelon-{fn}.json"'})
+
+
 @app.get("/api/races")
 def races(u=Depends(admin)):
     rows = db.q("SELECT r.*, (SELECT COUNT(*) FROM participants p WHERE p.race_id=r.id) AS n "

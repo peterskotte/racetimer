@@ -30,7 +30,7 @@ def scenario(rnd):
     if typ == "record":
         cfg.update(record_km=rnd.choice([0, 10, 50]))
     if typ in ("p2p", "timetrial"):
-        cfg.update(min_time_min=rnd.choice([0, 5, 20]), distance_km=5.0)
+        cfg.update(min_time_min=rnd.choice([0, 5, 20]), distance_km=5.0, cutoff_min=rnd.choice([0, 0, 30, 90]))
     if typ == "timetrial":
         cfg.update(start_mode=rnd.choice(["interval", "waves", "chip"]), interval_sec=rnd.choice([15, 30, 60]),
                    waves=[{"name": "A", "from_bib": 1, "to_bib": 3, "offset_sec": 0},

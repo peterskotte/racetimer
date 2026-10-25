@@ -10,12 +10,12 @@ export const RACE_TYPES = {
   backyard_custom: {label: "Backyard Ultra (custom)",
     config: {checkin_min: 30, loop_km: BACKYARD_KM, interval_min: 60, warnings_min: [3, 2, 1], start_window_min: 3, goal_window_min: 25,
              min_lap_min: 10, end_mode: "last_man", max_yards: 5, total_h: 3}},
-  p2p: {label: "Alm. tidtagning (A til B)", config: {checkin_min: 30, distance_km: 10.0, min_time_min: 5, canicross: false}},
+  p2p: {label: "Alm. tidtagning (A til B)", config: {checkin_min: 30, distance_km: 10.0, min_time_min: 5, cutoff_min: 0, canicross: false}},
   record: {label: "Rekordløb (Årets rekord)",
     config: {checkin_min: 30, loop_km: 1.0, min_lap_min: 2, record_km: 0, record_label: "Årets rekord", canicross: false}},
   timed: {label: "Tidsbaseret (6/12/24/48 t)", config: {checkin_min: 30, duration_h: 24, loop_km: 1.0, min_lap_min: 2, canicross: false}},
   timetrial: {label: "Intervalstart / enkeltstart",
-    config: {checkin_min: 30, distance_km: 10.0, start_mode: "interval", interval_sec: 30, min_time_min: 5, canicross: false,
+    config: {checkin_min: 30, distance_km: 10.0, start_mode: "interval", interval_sec: 30, min_time_min: 5, cutoff_min: 0, canicross: false,
              waves: [{name: "Bølge 1", from_bib: 1, to_bib: 20, offset_sec: 0}, {name: "Bølge 2", from_bib: 21, to_bib: 40, offset_sec: 120}]}},
 };
 
@@ -37,15 +37,11 @@ function pyRound(x, n) {
   }
   return f;
 }
-// sum() som i Python 3.12+: kompenseret (Neumaier), så kommatal lægges præcist sammen
+// læg sammen fra venstre mod højre – som fsum() i engine.py
 function pySum(xs) {
-  let sum = 0, c = 0;
-  for (const x of xs) {
-    const t = sum + x;
-    c += Math.abs(sum) >= Math.abs(x) ? (sum - t) + x : (x - t) + sum;
-    sum = t;
-  }
-  return sum + c;
+  let sum = 0;
+  for (const x of xs) sum += x;
+  return sum;
 }
 const r3 = x => pyRound(x, 3);
 const r2 = x => pyRound(x, 2);
@@ -66,7 +62,7 @@ export function mergedConfig(type, cfg) {
 }
 
 export const TEST_SPEEDS = [1, 10, 60, 120];
-const SCALE_MIN = ["checkin_min", "interval_min", "start_window_min", "goal_window_min", "min_lap_min", "min_time_min"];
+const SCALE_MIN = ["checkin_min", "interval_min", "start_window_min", "goal_window_min", "min_lap_min", "min_time_min", "cutoff_min"];
 
 export function testConfig(cfg, opts) {
   cfg = clone(cfg);
@@ -342,18 +338,24 @@ function computeRecord(race, cfg, parts, reads, now) {
 
 // ---------------------------------------------------------------- A→B og tidskørsel
 
-function finishRows(parts, reads, starts, minimum, now) {
+// cutoff = maks. tid i sek. fra løberens start (0 = ingen): læsninger derefter tæller ikke, og løberen er DNF
+function finishRows(parts, reads, starts, minimum, now, cutoff = 0) {
   const by = readsByPid(reads), ok = approvedByPid(reads), rows = [];
   for (const p of parts) {
     const ps = starts.has(p.id) ? starts.get(p.id) : null, m = manual(p);
     let fin = null;
     if (ps !== null) {
       const mine = ok.get(p.id) || new Set();
-      fin = (by.get(p.id) || []).find(ts => ts >= ps + minimum || (mine.has(ts) && ts > ps)) ?? null;
+      let tss = by.get(p.id) || [];
+      if (cutoff) tss = tss.filter(ts => ts <= ps + cutoff);
+      fin = tss.find(ts => ts >= ps + minimum || (mine.has(ts) && ts > ps)) ?? null;
     }
-    const st = m === "rtc" ? "dnf" : m ? m : fin ? "finished" : ps === null || now < ps ? "waiting" : "active";
-    rows.push(row(p, {status: st, start_ts: ps, finish_ts: fin, total_time: fin ? fin - ps : null,
-      elapsed: ps && !fin && now >= ps ? now - ps : null, laps: fin ? 1 : 0}));
+    const over = !!(cutoff && ps !== null && !fin && now > ps + cutoff);
+    const st = m === "rtc" || (over && !m) ? "dnf" : m ? m : fin ? "finished" : ps === null || now < ps ? "waiting" : "active";
+    const r = row(p, {status: st, start_ts: ps, finish_ts: fin, total_time: fin ? fin - ps : null,
+      elapsed: ps && !fin && now >= ps ? now - ps : null, laps: fin ? 1 : 0});
+    if (over && !m) Object.assign(r, {status_label: "DNF · over tid", elapsed: null});
+    rows.push(r);
   }
   const order = {finished: 0, active: 1, waiting: 2};
   return place(rows, r => [order[r.status] ?? 3, r.total_time || 9e18, r.start_ts || 9e18, r.bib || 0]);
@@ -365,7 +367,7 @@ function computeP2p(race, cfg, parts, reads, now) {
     Object.assign(info, {phase: "before", next_start: race.scheduled_start ?? null});
     return [parts.map(p => row(p)), info];
   }
-  const rows = finishRows(parts, reads, new Map(parts.map(p => [p.id, start])), (cfg.min_time_min || 0) * 60, now);
+  const rows = finishRows(parts, reads, new Map(parts.map(p => [p.id, start])), (cfg.min_time_min || 0) * 60, now, (cfg.cutoff_min || 0) * 60);
   Object.assign(info, {phase: race.finished_at ? "ended" : "running", elapsed: now - start,
     finished: rows.filter(r => r.status === "finished").length});
   return [rows, info];
@@ -405,7 +407,7 @@ function computeTimetrial(race, cfg, parts, reads, now) {
   const starts = timetrialStarts(race, cfg, parts, reads), minimum = (cfg.min_time_min || 0) * 60;
   // chipstart: første læsning er start – mållæsning skal derfor ligge efter minimumstiden
   if (info.start_mode === "chip") reads = reads.filter(r => r.ts !== starts.get(r.participant_id));
-  const rows = finishRows(parts, reads, starts, minimum, now);
+  const rows = finishRows(parts, reads, starts, minimum, now, (cfg.cutoff_min || 0) * 60);
   const upcoming = rows.filter(r => r.status === "waiting" && r.start_ts).sort((a, b) => a.start_ts - b.start_ts);
   Object.assign(info, {phase: race.finished_at ? "ended" : "running", elapsed: now - start,
     next_starters: upcoming.slice(0, 5).map(r => ({bib: r.bib, name: r.name, start_ts: r.start_ts})),
