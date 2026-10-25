@@ -57,6 +57,7 @@
     #standings .c-st { grid-area: st; font-size: 13px; } #standings .c-dep { grid-area: dep; font-size: 13px; } #standings .c-dep:not(:empty)::before { content: "Afgang "; color: var(--muted); }
     #standings .c-sub { grid-area: sub; font-size: 13px; color: var(--muted); } #standings .c-sub::before { content: attr(data-l); }
     #standings .c-act { grid-area: act; margin-top: 6px; }
+    #standings tr.dhead { display: block; } #standings tr.dhead td { display: block; padding: 4px 0; }
     #standings .btns { gap: 6px; } #standings .btns button { padding: 6px 9px; }
     main, #setup { padding-left: 12px; padding-right: 12px; }
     header.top .logo img { max-width: 60vw; }
@@ -102,6 +103,10 @@
   .ttile .tmain { font-size: max(24px, min(calc(var(--th) * .28), calc(var(--tw) * .2), 130px)); font-weight: 800; line-height: 1.05; margin-top: auto; }
   .ttile .tmain small { font-size: .45em; color: var(--muted); font-weight: 600; }
   .ttile .tsub { font-size: max(11px, min(calc(var(--th) * .08), 17px)); color: var(--muted); }
+  .dtab { margin-top: 4px; } .dtab td { padding: 4px 6px 4px 0; } .dtab input { min-width: 0; } .dtab [data-d=name] { min-width: 5.5em; }
+  .dtab .legs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .dtab .leg { display: inline-flex; } .dtab .leg select { width: auto; } .dtab .leg button, .dtab .addLeg { padding: 4px 8px; font-size: 12px; }
+  tr.dhead td { background: var(--card-head); font-weight: 700; padding-top: 10px; }
   .ttile .tflash { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 5px 8px; border-radius: 10px; font-weight: 800; font-size: 14px; text-align: center; }
   .ttile.ok .tap { border-color: var(--green); } .ttile.ok .tflash { background: #1f9d4f; color: #fff; }
   .ttile.warn .tap { border-color: var(--gold); } .ttile.warn .tflash { background: #f2c14e; color: #1b1e23; }
@@ -292,6 +297,7 @@
             <label>Køn<select name="sex"><option>Mand</option><option>Kvinde</option><option value="">–</option></select></label>
             <label>Klub<input name="club"></label>
             <label>Chip<input name="chip" id="addChip" placeholder="Scan eller skriv"></label>
+            <label id="addDistL" hidden>Distance<select name="distance" id="addDist"></select></label>
             <label class="dogf" hidden>Hunde<select name="dogs" id="addDogs"><option value="">Vælg</option><option value="1">1 hund</option><option value="2">2 hunde</option></select></label>
             <label class="dogf" hidden>Hund 1<input name="dog1" placeholder="Navn"></label>
             <label class="dogf" hidden id="addDog2">Hund 2<input name="dog2" placeholder="Navn"></label>
@@ -303,7 +309,7 @@
       <div>
         <h2>Importér fra Excel</h2>
         <div class="card pad">
-          <p class="muted small" style="margin-top:0">Kolonner: <b>Startnr, Navn, Køn, Klub, Chip</b> – ved canicross også <b>Hunde, Hund 1, Hund 2</b> (.xlsx eller .csv). Eksisterende startnumre opdateres.
+          <p class="muted small" style="margin-top:0">Kolonner: <b>Startnr, Navn, Køn, Klub, Chip</b> – har løbet distancer, også <b>Distance</b> (navnet, fx “10 km”) – ved canicross også <b>Hunde, Hund 1, Hund 2</b> (.xlsx eller .csv). Eksisterende startnumre opdateres.
             Chip kan stå tom og scannes bagefter.</p>
           <form id="importForm" class="row">
             <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required style="flex:1">
@@ -671,7 +677,7 @@ function cfgFields(type, cfg, locked) {
   const dis = locked ? "disabled" : "";
   let h = `<div class="grid" style="margin-top:12px">`;
   for (const [k, v] of Object.entries(cfg)) {
-    if (k === "waves") continue;
+    if (["waves", "routes", "distances"].includes(k)) continue;
     const lab = CFG_LABELS[k] || k, title = k.startsWith("min_") ? `title="${MIN_LAP_HELP}"` : "";
     if (k === "end_mode")
       h += `<label>${lab}<select name="cfg.${k}" ${dis}>${[["last_man", "Sidste mand tilbage (officiel)"], ["yards", "Efter fast antal omgange (cutoff)"], ["duration", "Efter samlet tid"]]
@@ -692,7 +698,97 @@ function cfgFields(type, cfg, locked) {
       <table class="waves" style="margin-top:6px"><thead><tr><th>Navn</th><th>Fra nr.</th><th>Til nr.</th><th>Start + sek</th><th></th></tr></thead><tbody>` +
       cfg.waves.map(waveRow).join("") + `</tbody></table><button type="button" class="addWave" style="margin-top:8px">+ Bølge</button>`;
   }
+  if (DIST_TYPES.includes(type) && !locked) h += distEditor(type, cfg);
   return h;
+}
+
+// ------------------------------------------------ distancer: flere løb i samme tidtagning
+const DIST_TYPES = ["p2p", "timed"];
+function distEditor(type, cfg) {
+  const p2p = type === "p2p", routes = cfg.routes || [], ds = cfg.distances || [];
+  return `<div class="dist" data-type="${type}">
+    <h3 style="margin:18px 0 4px">Distancer</h3>
+    <p class="muted small" style="margin:0 0 8px">${p2p
+      ? "Har løbet flere distancer, fx 5 og 10 km, så opret ruterne og saml distancerne af dem. En lang distance kan bestå af flere ruter i træk (fx kort + lang = 15 km): løberen er i mål efter sidste rute. Alle bruger de samme læsere. Uden distancer er det ét løb med indstillingerne ovenfor."
+      : "Har løbet flere varigheder, fx 6 og 12 timer, så opret dem her. Alle bruger de samme læsere og omgang. Uden distancer er det ét løb med varigheden ovenfor."}</p>
+    ${p2p ? `<div class="muted small" style="font-weight:600;margin-top:10px">Ruter</div>
+      <table class="dtab routes"><thead><tr><th>Navn</th><th>km</th><th title="${MIN_LAP_HELP}">Min. tid (min)</th><th></th></tr></thead><tbody>${routes.map(routeRow).join("")}</tbody></table>
+      <button type="button" class="addRoute" style="margin-top:6px">+ Rute</button>` : ""}
+    <div class="muted small" style="font-weight:600;margin-top:12px">Distancer</div>
+    <table class="dtab dists"><thead><tr><th>Navn</th><th title="Minutter efter løbets start (startknappen)">Start + min</th><th>${p2p ? "Ruter i træk" : "Varighed (timer)"}</th><th></th></tr></thead>
+      <tbody>${ds.map(d => distRow(type, d, routes)).join("")}</tbody></table>
+    <button type="button" class="addDist" style="margin-top:6px">+ Distance</button>
+  </div>`;
+}
+const routeRow = r => `<tr data-id="${esc(r.id)}"><td><input data-r="name" value="${esc(r.name)}"></td><td><input data-r="km" type="number" step="any" min="0" value="${r.km}"></td>
+  <td><input data-r="min_min" type="number" step="any" min="0" value="${r.min_min}"></td><td><button type="button" class="danger delRow">✕</button></td></tr>`;
+const routeSel = (id, routes) => `<span class="leg"><select data-leg>${routes.map(r => `<option value="${esc(r.id)}" ${r.id === id ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select><button type="button" class="delLeg" title="Fjern ruten fra distancen">✕</button></span>`;
+function distRow(type, d, routes) {
+  const third = type === "p2p"
+    ? `<div class="legs">${(d.routes || []).map(id => routeSel(id, routes)).join('<span class="muted">→</span>')}<button type="button" class="addLeg" title="Tilføj en rute mere i træk">+</button></div>`
+    : `<input data-d="duration_h" type="number" step="any" min="0.1" value="${d.duration_h ?? ""}">`;
+  return `<tr data-id="${esc(d.id)}"><td><input data-d="name" value="${esc(d.name)}"></td><td><input data-d="start_min" type="number" step="any" min="0" value="${d.start_min ?? 0}" style="width:64px"></td>
+    <td>${third}</td><td><button type="button" class="danger delRow">✕</button></td></tr>`;
+}
+function readRoutes(box) {
+  return [...box.querySelectorAll("table.routes tbody tr")].map(tr => ({id: tr.dataset.id, name: tr.querySelector("[data-r=name]").value,
+    km: parseFloat(tr.querySelector("[data-r=km]").value) || 0, min_min: parseFloat(tr.querySelector("[data-r=min_min]").value) || 0}));
+}
+function readDists(box) {
+  return [...box.querySelectorAll("table.dists tbody tr")].map(tr => {
+    const d = {id: tr.dataset.id, name: tr.querySelector("[data-d=name]").value, start_min: parseFloat(tr.querySelector("[data-d=start_min]").value) || 0};
+    if (box.dataset.type === "p2p") d.routes = [...tr.querySelectorAll("select[data-leg]")].map(s => s.value);
+    else d.duration_h = parseFloat(tr.querySelector("[data-d=duration_h]").value) || 0;
+    return d;
+  });
+}
+const newId = (pre, rows) => { let n = rows.length + 1; while (rows.some(r => r.dataset.id === pre + n)) n++; return pre + n; };
+function wireDist(form) {
+  const box = form.querySelector(".dist");
+  if (!box) return;
+  const p2p = box.dataset.type === "p2p", f = n => form.querySelector(`[name='cfg.${n}']`);
+  const refresh = () => {  // rutenavne i valglisterne følger med, når en rute omdøbes
+    const routes = readRoutes(box);
+    box.querySelectorAll("select[data-leg]").forEach(s => { const v = s.value; s.outerHTML = routeSel(v, routes).match(/<select[\s\S]*?<\/select>/)[0]; });
+    box.querySelectorAll("select[data-leg]").forEach(s => { if (!routes.some(r => r.id === s.value) && routes[0]) s.value = routes[0].id; });
+  };
+  // med distancer bestemmer ruterne/distancerne km, minimumstid og varighed – felterne foroven skjules
+  const own = () => {
+    const has = !!box.querySelector("table.dists tbody tr");
+    for (const n of p2p ? ["distance_km", "min_time_min"] : ["duration_h"]) { const l = f(n)?.closest("label"); if (l) l.style.display = has ? "none" : ""; }
+  };
+  own();
+  box.addEventListener("click", e => {
+    setTimeout(own);
+    const t = e.target;
+    if (t.classList.contains("addRoute")) {
+      const rows = [...box.querySelectorAll("table.routes tbody tr")];
+      box.querySelector("table.routes tbody").insertAdjacentHTML("beforeend", routeRow({id: newId("r", rows), name: `Rute ${rows.length + 1}`,
+        km: rows.length ? 0 : (parseFloat(f("distance_km")?.value) || 5), min_min: rows.length ? 0 : (parseFloat(f("min_time_min")?.value) || 0)}));
+      refresh();
+    } else if (t.classList.contains("addDist")) {
+      if (p2p && !box.querySelector("table.routes tbody tr")) box.querySelector(".addRoute").click();
+      const rows = [...box.querySelectorAll("table.dists tbody tr")], routes = readRoutes(box);
+      box.querySelector("table.dists tbody").insertAdjacentHTML("beforeend", distRow(box.dataset.type,
+        {id: newId("d", rows), name: p2p ? `${String(routes[0]?.km || "").replace(".", ",")} km` : `${f("duration_h")?.value || 6} timer`,
+         start_min: 0, routes: routes[0] ? [routes[0].id] : [], duration_h: parseFloat(f("duration_h")?.value) || 6}, routes));
+    } else if (t.classList.contains("addLeg")) {
+      const routes = readRoutes(box);
+      if (!routes.length) return;
+      t.insertAdjacentHTML("beforebegin", (t.parentElement.querySelector(".leg") ? '<span class="muted">→</span>' : "") + routeSel(routes[routes.length - 1].id, routes));
+    } else if (t.classList.contains("delLeg")) {
+      const leg = t.closest(".leg"), legs = leg.parentElement.querySelectorAll(".leg");
+      if (legs.length < 2) return toast("En distance skal have mindst én rute");
+      (leg.previousElementSibling?.matches("span.muted") ? leg.previousElementSibling : leg.nextElementSibling)?.remove(); leg.remove();
+    } else if (t.classList.contains("delRow")) {
+      const tr = t.closest("tr");
+      if (tr.closest("table.routes") && box.querySelectorAll("table.routes tbody tr").length < 2 && box.querySelector("table.dists tbody tr"))
+        return toast("Distancerne skal have mindst én rute");
+      tr.remove();
+      if (p2p) refresh();
+    }
+  });
+  box.querySelector("table.routes")?.addEventListener("input", refresh);
 }
 const waveRow = w => `<tr><td><input data-w="name" value="${esc(w.name)}"></td><td><input data-w="from_bib" type="number" value="${w.from_bib}"></td>
   <td><input data-w="to_bib" type="number" value="${w.to_bib}"></td><td><input data-w="offset_sec" type="number" value="${w.offset_sec}"></td>
@@ -743,6 +839,11 @@ function readCfg(form) {
     else if (el.type === "number") cfg[k] = parseFloat(el.value);
     else cfg[k] = el.value;
   });
+  const dist = form.querySelector(".dist");
+  if (dist) {
+    if (dist.dataset.type === "p2p") cfg.routes = readRoutes(dist);
+    cfg.distances = readDists(dist);
+  }
   const wt = form.querySelector("table.waves");
   if (wt) cfg.waves = [...wt.querySelectorAll("tbody tr")].map(tr => {
     const w = {}; tr.querySelectorAll("[data-w]").forEach(i => w[i.dataset.w] = i.type === "number" ? parseFloat(i.value) || 0 : i.value); return w;
@@ -759,7 +860,7 @@ function renderNewCfg() {
   const t = $("newType").value;
   $("newTypeHelp").textContent = HELP[t] || "";
   $("newConfig").innerHTML = cfgFields(t, TYPES[t].config, TYPES[t].locked);
-  wireWaves($("newForm")); wireEndMode($("newForm"));
+  wireWaves($("newForm")); wireEndMode($("newForm")); wireDist($("newForm"));
 }
 // ------------------------------------------------ testløb: hurtigere tid og begrænsninger slået fra
 function testFields(t) {
@@ -823,6 +924,7 @@ async function loadRace(full) {
   if (i.continuous && i.phase === "running") extra = i.end_mode === "duration"
     ? ` · ${hms(i.remaining)} tilbage · ${i.on_course} på ruten` : ` · ${i.finishers} færdige · ${i.on_course} på ruten`;
   if (i.continuous && i.phase === "ended") extra = i.leader ? ` · 🏁 Vinder: ${esc(i.leader)}` : " · Slut";
+  if (i.distances) extra += `<br>Distancer: ${i.distances.map(d => `<b>${esc(d.name)}</b> ${d.count} delt.${d.started_at || (r.scheduled_start && d.next_start) ? ` · start ${clock(d.started_at || d.next_start)}` : ""}`).join(" &nbsp;│&nbsp; ")}`;
   $("raceHead").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center">
     <div><div style="font-size:20px;font-weight:700">${esc(r.name)} ${r.is_active ? '<span class="pill">PÅ SKÆRMEN</span>' : ""}
       ${r.test ? `<span class="pill test" title="Sendes ikke til hjemmesiden">🧪 TESTLØB${r.test.speed > 1 ? ` · ${r.test.speed}× tid` : ""}${r.test.no_minimum ? " · ingen minimumstid" : ""}${r.test.no_checkin ? " · ingen indtjekning" : ""}${r.test.no_dedup ? " · intet dublet-filter" : ""}</span>` : ""}</div>
@@ -845,7 +947,7 @@ async function loadRace(full) {
       ${cfgFields(r.type, r.effective_config, locked)}
       ${r.test ? `<div class="testbox" style="margin-top:14px"><b>🧪 Testløb</b>${testFields(r.test)}</div>` : ""}
       <div style="margin-top:14px"><button class="primary">Gem indstillinger</button></div>`;
-    wireWaves($("editForm")); wireEndMode($("editForm"));
+    wireWaves($("editForm")); wireEndMode($("editForm")); wireDist($("editForm"));
     // test uden hardware: vælg en løbers armbånd i stedet for at skrive chip-ID'et
     api(`/api/races/${curId}/participants`).then(ps => {
       $("chipList").innerHTML = ps.filter(p => p.chip).map(p => `<option value="${esc(p.chip)}">${p.bib != null ? "#" + p.bib + " " : ""}${esc(p.name)}</option>`).join("");
@@ -1208,8 +1310,11 @@ function renderStandings() {
   const rows = cur.rows, type = cur.race.type, tt = ["p2p", "timetrial"].includes(type);
   const by = type.startsWith("backyard") && !cur.info.continuous && cur.info.phase === "running";
   if (!rows.length) { $("standings").innerHTML = `<p class="muted" style="padding:16px">Ingen deltagere endnu – tilføj under “Deltagere”.</p>`; return; }
+  const ds = cur.info.distances, ncol = by ? 8 : 7;
+  const dhead = (r, k) => ds && (k === 0 || rows[k - 1].distance !== r.distance)
+    ? (d => `<tr class="dhead"><td colspan="${ncol}">${esc(r.distance_name)}${d?.legs > 1 ? ` <span class="muted small">· ${d.legs} ruter i træk</span>` : ""}${d?.distance_km ? ` <span class="muted small">· ${String(d.distance_km).replace(".", ",")} km</span>` : ""} <span class="muted small">· ${d?.phase === "before" ? `start ${clock(d.next_start)}` : d?.started_at ? `startede ${clock(d.started_at)}` : ""}</span></td></tr>`)(ds.find(x => x.id === r.distance)) : "";
   $("standings").innerHTML = `<table><thead><tr><th>#</th><th>Nr</th><th>Navn</th><th>Status</th>${by ? `<th title="Læsning i afgangsvinduet i denne runde">Afgang</th>` : ""}<th>${tt ? "Tid" : "Omgange"}</th><th>${tt ? "Start" : "Sidste omg."}</th><th>Handling</th></tr></thead><tbody>` +
-    rows.map(r => `<tr class="st-${r.status}"><td class="c-pl">${r.place ?? "–"}</td><td class="c-bib">${r.bib ?? ""}</td><td class="c-name">${esc(r.name)}</td>
+    rows.map((r, k) => dhead(r, k) + `<tr class="st-${r.status}"><td class="c-pl">${r.place ?? "–"}</td><td class="c-bib">${r.bib ?? ""}</td><td class="c-name">${esc(r.name)}</td>
       <td class="c-st" style="white-space:nowrap"><i class="dot"></i>${esc(r.status_label)}${r.flags ? ` <span class="pill" style="background:var(--gold);color:#1b1e23">⚑ ${r.flags}</span>` : ""}</td>
       ${by ? `<td class="c-dep">${r.started_current ? "✓" : ["active", "resting"].includes(r.status) ? '<span class="muted">–</span>' : ""}</td>` : ""}
       <td class="num c-main" data-l="${tt ? "" : "omg."}">${tt ? hms(r.total_time) : r.laps}</td><td class="num c-sub" data-l="${tt ? "start " : "sidste "}">${tt ? clock(r.start_ts) : hms(r.last_lap)}</td>
@@ -1366,17 +1471,22 @@ async function loadPeople() {
   if (!curId) { $("people").innerHTML = `<p class="muted" style="padding:16px">Opret først et løb.</p>`; return; }
   const ps = await api(`/api/races/${curId}/participants`);
   const tt = cur?.race.type === "timetrial", cc = !!cur?.race.effective_config?.canicross;
+  const ds = DIST_TYPES.includes(cur?.race.type) ? cur.race.effective_config.distances || [] : [];
+  const dOpts = sel => ds.map(d => `<option value="${esc(d.id)}" ${d.id === sel ? "selected" : ""}>${esc(d.name)}</option>`).join("");
+  $("addDistL").hidden = !ds.length;
+  if (ds.length) { const v = $("addDist").value; $("addDist").innerHTML = dOpts(ds.some(d => d.id === v) ? v : ds[0].id); }
   const noDogs = ps.filter(p => !(p.dogs && p.dog1 && (p.dogs < 2 || p.dog2)));
   document.querySelectorAll("#addForm .dogf").forEach(l => l.hidden = !cc);
   $("addDogs").required = cc; $("addForm").dog1.required = cc;
   $("addDog2").hidden = !cc || $("addDogs").value !== "2";
   $("peopleCount").innerHTML = `(${ps.length}, ${ps.filter(p => p.chip).length} med chip${cc ? `, <span style="color:${noDogs.length ? "var(--gold)" : "inherit"}">${noDogs.length} mangler hunde</span>` : ""})`;
-  $("people").innerHTML = ps.length ? `<table><thead><tr><th style="width:80px">Nr</th><th>Navn</th><th style="width:110px">Køn</th><th>Klub</th><th style="width:170px">Chip</th>${cc ? '<th style="width:110px">Hunde</th><th>Hund 1</th><th>Hund 2</th>' : ""}${tt ? '<th style="width:110px" title="Manuel startforskydning i sek. fra løbsstart">Start +sek</th>' : ""}<th></th></tr></thead><tbody>` +
+  $("people").innerHTML = ps.length ? `<table><thead><tr><th style="width:80px">Nr</th><th>Navn</th><th style="width:110px">Køn</th><th>Klub</th><th style="width:170px">Chip</th>${ds.length ? '<th style="width:130px">Distance</th>' : ""}${cc ? '<th style="width:110px">Hunde</th><th>Hund 1</th><th>Hund 2</th>' : ""}${tt ? '<th style="width:110px" title="Manuel startforskydning i sek. fra løbsstart">Start +sek</th>' : ""}<th></th></tr></thead><tbody>` +
     ps.map(p => `<tr data-pid="${p.id}">
       <td><input data-f="bib" value="${p.bib ?? ""}" inputmode="numeric"></td><td><input data-f="name" value="${esc(p.name)}"></td>
       <td><select data-f="sex">${["Mand", "Kvinde", ""].map(s => `<option value="${s}" ${p.sex === s ? "selected" : ""}>${s || "–"}</option>`).join("")}</select></td>
       <td><input data-f="club" value="${esc(p.club)}"></td>
       <td><input data-f="chip" value="${esc(p.chip)}" placeholder="ingen chip" style="${p.chip ? "" : "border-color:var(--gold)"}"></td>
+      ${ds.length ? `<td><select data-f="distance">${dOpts(ds.some(d => d.id === p.distance) ? p.distance : ds[0].id)}</select></td>` : ""}
       ${cc ? `<td><select data-dog="dogs" style="${noDogs.includes(p) ? "border-color:var(--gold)" : ""}">${[["", "Vælg"], ["1", "1 hund"], ["2", "2 hunde"]].map(([v, l]) => `<option value="${v}" ${String(p.dogs ?? "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>
         <td><input data-dog="dog1" value="${esc(p.dog1)}" placeholder="Navn"></td>
         <td><input data-dog="dog2" value="${esc(p.dog2)}" placeholder="${p.dogs == 2 ? "Navn" : "–"}" ${p.dogs == 2 ? "" : "disabled"}></td>` : ""}
@@ -1408,7 +1518,8 @@ $("addDogs").onchange = () => { $("addDog2").hidden = $("addDogs").value !== "2"
 $("addForm").onsubmit = async e => {
   e.preventDefault();
   await api(`/api/races/${curId}/participants`, {body: Object.fromEntries(new FormData(e.target))});
-  toast("Deltager tilføjet"); e.target.reset(); $("addDogs").onchange(); e.target.name.focus(); loadPeople(); loadRace(false);
+  const dv = $("addDist").value;
+  toast("Deltager tilføjet"); e.target.reset(); $("addDist").value = dv; $("addDogs").onchange(); e.target.name.focus(); loadPeople(); loadRace(false);
 };
 $("importForm").onsubmit = async e => {
   e.preventDefault();

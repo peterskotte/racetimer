@@ -62,7 +62,68 @@ $final = ($data['event'] ?? '') === 'final';
 $omgang = $race && in_array($race['type'], ['backyard', 'backyard_custom', 'timed', 'record'], true);
 $medtid = $omgang && !empty($info['continuous']);
 $live = !$splash && $race && !$final && ($race['status'] ?? '') === 'running' && $vis === '';
-?><!doctype html>
+?>
+<?php
+// Opsummering, nedtæller og resultattabel – for hele løbet eller én distance
+function sektion($race, $info, $rows, $final) {
+    $omgang = in_array($race['type'], ['backyard', 'backyard_custom', 'timed', 'record'], true);
+    $medtid = $omgang && !empty($info['continuous']);
+
+    $sum = '';
+if (!empty($info['continuous'])) {
+    $maal = ($info['end_mode'] ?? '') === 'duration' ? 'flest omgange på ' . hms($info['duration_sec'] ?? 0, true) : 'først til ' . (int)$info['max_yards'] . ' omgange';
+    $sum = (($info['phase'] ?? '') === 'ended' && !empty($info['leader']))
+        ? '🏁 Vinder: ' . e($info['leader']) . ' – ' . (int)$info['leader_laps'] . " omgange ($maal)"
+        : ucfirst($maal) . ' · ' . (int)($info['on_course'] ?? 0) . ' på ruten';
+} elseif (strpos($race['type'], 'backyard') === 0) {
+    if (!empty($info['winner'])) $sum = '🏆 Vinder: ' . e($info['winner']) . ' – ' . (int)$info['completed_yards'] . ' yards';
+    elseif (!empty($info['no_winner'])) $sum = 'Løbet er slut – ingen vinder';
+    elseif (($info['phase'] ?? '') === 'running') $sum = 'Yard ' . (int)$info['yard'] . ' · ' . (int)$info['runners_left'] . ' tilbage';
+} elseif ($race['type'] === 'record') {
+    $sum = e($info['record_label'] ?? 'Årets rekord') . ': ' . km($info['total_km'] ?? 0) . ' km';
+} elseif ($race['type'] === 'timed' && isset($info['total_km'])) {
+    $sum = 'Samlet distance: ' . km($info['total_km']) . ' km';
+}
+if ($sum) echo "<div class=\"sum\">$sum</div>";
+
+// Nedtæller med ring: tid tilbage af løbet (tidsløb / samlet tid) eller til næste yard (backyard)
+$cd = null;
+if (!$final && ($info['phase'] ?? '') === 'running') {
+    if (($race['type'] === 'timed' || (!empty($info['continuous']) && ($info['end_mode'] ?? '') === 'duration')) && !empty($info['end_at']))
+        $cd = ['Tid tilbage', $info['end_at'], $info['duration_sec'] ?? 0];
+    elseif (strpos($race['type'], 'backyard') === 0 && empty($info['continuous']) && !empty($info['next_start']))
+        $cd = ['Næste start', $info['next_start'], $info['interval_sec'] ?? 3600];
+}
+if ($cd): ?>
+<div class="cd" data-end="<?= (float)$cd[1] ?>" data-total="<?= (float)$cd[2] ?>" data-now="<?= time() ?>">
+  <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52"/></svg>
+  <div><div class="cdk"><?= e($cd[0]) ?></div><div class="cdv">--:--:--</div></div>
+</div>
+<?php endif; ?>
+<div class="card"><table>
+<thead><tr><th>#</th><th>Navn</th><th>Køn</th><th>Status</th>
+<?php if ($omgang): ?><th class="r">Omgange</th><th class="r">Distance</th><th class="r">Sidste omg.</th><?php if ($medtid): ?><th class="r">Tid</th><?php endif; ?><?php else: ?><th class="r">Tid</th><?php endif; ?>
+</tr></thead><tbody>
+<?php if (!$rows): ?><tr><td colspan="7" class="tom">Ingen deltagere endnu</td></tr><?php endif; ?>
+<?php foreach ($rows as $r): $ude = in_array($r['status'], ['dnf', 'rtc', 'dsq', 'dns'], true); ?>
+<tr class="<?= $ude ? 'ude' : '' ?>">
+  <td><?= $r['place'] !== null ? (int)$r['place'] : '–' ?></td>
+  <td class="navn"><?= $r['bib'] !== null ? '<span class="nr">' . (int)$r['bib'] . '</span>' : '' ?><?= e($r['name']) ?><?= !empty($r['club']) ? '<span class="klub">' . e($r['club']) . '</span>' : '' ?><?= !empty($r['dogs']) ? '<span class="klub" style="color:var(--orange)">🐕 ' . e(implode(' & ', $r['dogs'])) . '</span>' : '' ?></td>
+  <td><?= e($r['sex'] ?? '') ?></td>
+  <td style="white-space:nowrap"><i class="dot <?= e($r['status']) ?>"></i><?= e($r['status_label']) ?></td>
+<?php if ($omgang): ?>
+  <td class="r"><?= (int)$r['laps'] ?></td><td class="r"><?= km($r['distance_km']) ?> km</td><td class="r"><?= hms($r['last_lap']) ?></td>
+  <?php if ($medtid): ?><td class="r"><?= $r['total_time'] !== null ? hms($r['total_time'], true) : '–' ?></td><?php endif; ?>
+<?php else: ?>
+  <td class="r"><?= $r['total_time'] !== null ? hms($r['total_time'], true) : '–' ?></td>
+<?php endif; ?>
+</tr>
+<?php endforeach; ?>
+</tbody></table></div>
+<?php
+}
+?>
+<!doctype html>
 <html lang="da">
 <head>
 <meta charset="utf-8">
@@ -74,7 +135,7 @@ $live = !$splash && $race && !$final && ($race['status'] ?? '') === 'running' &&
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 header{background:var(--cream);border-bottom:3px solid var(--orange);padding:14px 20px}header img{height:40px;display:block}
 .brand{font-weight:800;font-size:26px;color:#0c1b14;font-style:italic}
-h1{margin:0;font-size:28px}.sub{color:var(--muted);margin:6px 0 16px}
+h1{margin:0;font-size:28px}h2.dist{margin:26px 0 10px;font-size:22px}h2.dist small{color:var(--muted);font-weight:500;font-size:14px}.sub{color:var(--muted);margin:6px 0 16px}
 main{max-width:1100px;margin:0 auto;padding:16px}
 .pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;margin-right:8px;color:#06121f}
 .pill.live{background:#3fc56b}.pill.final{background:#5aa3ff}.pill.prel{background:#9aa1ab}
@@ -116,40 +177,15 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
     <span class="pill <?= $final ? 'final' : ($live ? 'live' : 'prel') ?>"><?= $final ? 'Endelige resultater' : ($live ? 'Live' : 'Foreløbige resultater') ?></span>
     <?= e($info['type_label'] ?? '') ?><?= !empty($race['started_at']) ? ' · start ' . date('d.m.Y H:i', (int)$race['started_at']) : '' ?>
   </div>
-<?php
-$sum = '';
-if (!empty($info['continuous'])) {
-    $maal = ($info['end_mode'] ?? '') === 'duration' ? 'flest omgange på ' . hms($info['duration_sec'] ?? 0, true) : 'først til ' . (int)$info['max_yards'] . ' omgange';
-    $sum = (($info['phase'] ?? '') === 'ended' && !empty($info['leader']))
-        ? '🏁 Vinder: ' . e($info['leader']) . ' – ' . (int)$info['leader_laps'] . " omgange ($maal)"
-        : ucfirst($maal) . ' · ' . (int)($info['on_course'] ?? 0) . ' på ruten';
-} elseif (strpos($race['type'], 'backyard') === 0) {
-    if (!empty($info['winner'])) $sum = '🏆 Vinder: ' . e($info['winner']) . ' – ' . (int)$info['completed_yards'] . ' yards';
-    elseif (!empty($info['no_winner'])) $sum = 'Løbet er slut – ingen vinder';
-    elseif (($info['phase'] ?? '') === 'running') $sum = 'Yard ' . (int)$info['yard'] . ' · ' . (int)$info['runners_left'] . ' tilbage';
-} elseif ($race['type'] === 'record') {
-    $sum = e($info['record_label'] ?? 'Årets rekord') . ': ' . km($info['total_km'] ?? 0) . ' km';
-} elseif ($race['type'] === 'timed' && isset($info['total_km'])) {
-    $sum = 'Samlet distance: ' . km($info['total_km']) . ' km';
-}
-if ($sum) echo "<div class=\"sum\">$sum</div>";
-
-// Nedtæller med ring: tid tilbage af løbet (tidsløb / samlet tid) eller til næste yard (backyard)
-$cd = null;
-if (!$final && ($info['phase'] ?? '') === 'running') {
-    if (($race['type'] === 'timed' || (!empty($info['continuous']) && ($info['end_mode'] ?? '') === 'duration')) && !empty($info['end_at']))
-        $cd = ['Tid tilbage', $info['end_at'], $info['duration_sec'] ?? 0];
-    elseif (strpos($race['type'], 'backyard') === 0 && empty($info['continuous']) && !empty($info['next_start']))
-        $cd = ['Næste start', $info['next_start'], $info['interval_sec'] ?? 3600];
-}
-if ($cd): ?>
-<div class="cd" data-end="<?= (float)$cd[1] ?>" data-total="<?= (float)$cd[2] ?>" data-now="<?= time() ?>">
-  <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52"/></svg>
-  <div><div class="cdk"><?= e($cd[0]) ?></div><div class="cdv">--:--:--</div></div>
-</div>
+<?php if (!empty($info['distances'])): foreach ($info['distances'] as $d): ?>
+<h2 class="dist"><?= e($d['name']) ?> <small>· <?= (int)($d['count'] ?? 0) ?> deltagere<?= !empty($d['started_at']) ? ' · start ' . date('H:i', (int)$d['started_at']) : '' ?></small></h2>
+<?php sektion($race, $d, array_values(array_filter($rows, function ($r) use ($d) { return ($r['distance'] ?? null) === $d['id']; })), $final); endforeach;
+else: sektion($race, $info, $rows, $final); endif;
+if (!$final): ?>
 <script>
 (function () {  // tæller ned hvert sekund mellem opdateringerne (webhotellets ur bruges som reference)
-  var el = document.querySelector('.cd'), end = +el.dataset.end, total = +el.dataset.total,
+  document.querySelectorAll('.cd').forEach(function (el) {
+  var end = +el.dataset.end, total = +el.dataset.total,
       off = +el.dataset.now - Date.now() / 1000, C = 2 * Math.PI * 52, fg = el.querySelector('.fg');
   fg.style.strokeDasharray = C;
   function p(n) { return (n < 10 ? '0' : '') + n; }
@@ -160,29 +196,10 @@ if ($cd): ?>
     el.className = 'cd' + (left <= Math.min(900, total * 0.05) ? ' last' : f <= 0.1 ? ' soon' : '');
   }
   tick(); setInterval(tick, 1000);
+  });
 })();
 </script>
 <?php endif; ?>
-<div class="card"><table>
-<thead><tr><th>#</th><th>Navn</th><th>Køn</th><th>Status</th>
-<?php if ($omgang): ?><th class="r">Omgange</th><th class="r">Distance</th><th class="r">Sidste omg.</th><?php if ($medtid): ?><th class="r">Tid</th><?php endif; ?><?php else: ?><th class="r">Tid</th><?php endif; ?>
-</tr></thead><tbody>
-<?php if (!$rows): ?><tr><td colspan="7" class="tom">Ingen deltagere endnu</td></tr><?php endif; ?>
-<?php foreach ($rows as $r): $ude = in_array($r['status'], ['dnf', 'rtc', 'dsq', 'dns'], true); ?>
-<tr class="<?= $ude ? 'ude' : '' ?>">
-  <td><?= $r['place'] !== null ? (int)$r['place'] : '–' ?></td>
-  <td class="navn"><?= $r['bib'] !== null ? '<span class="nr">' . (int)$r['bib'] . '</span>' : '' ?><?= e($r['name']) ?><?= !empty($r['club']) ? '<span class="klub">' . e($r['club']) . '</span>' : '' ?><?= !empty($r['dogs']) ? '<span class="klub" style="color:var(--orange)">🐕 ' . e(implode(' & ', $r['dogs'])) . '</span>' : '' ?></td>
-  <td><?= e($r['sex'] ?? '') ?></td>
-  <td style="white-space:nowrap"><i class="dot <?= e($r['status']) ?>"></i><?= e($r['status_label']) ?></td>
-<?php if ($omgang): ?>
-  <td class="r"><?= (int)$r['laps'] ?></td><td class="r"><?= km($r['distance_km']) ?> km</td><td class="r"><?= hms($r['last_lap']) ?></td>
-  <?php if ($medtid): ?><td class="r"><?= $r['total_time'] !== null ? hms($r['total_time'], true) : '–' ?></td><?php endif; ?>
-<?php else: ?>
-  <td class="r"><?= $r['total_time'] !== null ? hms($r['total_time'], true) : '–' ?></td>
-<?php endif; ?>
-</tr>
-<?php endforeach; ?>
-</tbody></table></div>
 <footer>Opdateret <?= date('d.m.Y \k\l. H:i', (int)$data['sent_at']) ?><?= $live ? ' · siden opdaterer sig selv hvert 30. sekund' : '' ?></footer>
 <?php endif; ?>
 

@@ -278,6 +278,62 @@ def test_testrace_no_minimum_and_checkin():
                               "checkin_min": 30, "waves": [{"offset_sec": 120}]}, {"speed": 10, "no_minimum": True})
     assert cfg["interval_min"] == 6 and cfg["goal_window_min"] == 0 and cfg["checkin_min"] == 3 and cfg["waves"][0]["offset_sec"] == 12
 
+
+NYTAAR = {"checkin_min": 0, "routes": [{"id": "r1", "name": "Kort", "km": 5, "min_min": 15},
+                                       {"id": "r2", "name": "Lang", "km": 10, "min_min": 30}],
+          "distances": [{"id": "d1", "name": "5 km", "start_min": 30, "routes": ["r1"]},
+                        {"id": "d2", "name": "10 km", "start_min": 30, "routes": ["r2"]},
+                        {"id": "d3", "name": "15 km", "start_min": 0, "routes": ["r1", "r2"]}]}
+
+
+def test_distances_p2p_routes_in_a_row():
+    race = {"type": "p2p", "config": NYTAAR, "started_at": S}
+    parts = [P(1, distance="d1"), P(2, distance="d2"), P(3, distance="d3"), P(4, distance="d3"), P(5)]  # 5: ingen → første
+    m = 60
+    reads = [(1, 30 * m + 22 * m), (2, 30 * m + 45 * m), (3, 20 * m), (3, 75 * m), (4, 10 * m), (4, 25 * m)]
+    rows, info = engine.compute(race, parts, [{"participant_id": a, "ts": S + t} for a, t in reads], S + 80 * m)
+    b = by(rows)
+    assert [d["name"] for d in info["distances"]] == ["5 km", "10 km", "15 km"] and info["phase"] == "running"
+    assert b["L1"]["status"] == "finished" and b["L1"]["total_time"] == 22 * m and b["L1"]["distance"] == "d1"
+    assert b["L5"]["distance"] == "d1" and b["L5"]["status"] == "active"
+    assert b["L2"]["total_time"] == 45 * m and b["L2"]["place"] == 1
+    # 15 km: kort rute på 20 min, lang rute på 55 min → i mål efter 2. passage
+    assert b["L3"]["status"] == "finished" and b["L3"]["laps"] == 2 and b["L3"]["total_time"] == 75 * m
+    assert b["L3"]["distance_km"] == 15 and b["L3"]["place"] == 1
+    # L4: 10 min er under kort rutes minimum (15) → tæller ikke; 25 min tæller som 1. passage
+    assert b["L4"]["status"] == "active" and b["L4"]["laps"] == 1 and b["L4"]["status_label"].endswith("1/2")
+    assert b["L4"]["place"] == 2 and b["L4"]["distance_km"] == 5
+
+
+def test_distances_later_start_is_before_until_its_start():
+    race = {"type": "p2p", "config": NYTAAR, "started_at": S}
+    rows, info = engine.compute(race, [P(1, distance="d1"), P(3, distance="d3")], [], S + 10 * 60)
+    d = {x["id"]: x for x in info["distances"]}
+    assert d["d1"]["phase"] == "before" and d["d1"]["next_start"] == S + 30 * 60 and d["d3"]["phase"] == "running"
+    assert info["phase"] == "running"
+
+
+def test_distances_timed_6_and_12_hours():
+    cfg = {"checkin_min": 0, "loop_km": 2, "min_lap_min": 5,
+           "distances": [{"id": "a", "name": "6 t", "start_min": 0, "duration_h": 6},
+                         {"id": "b", "name": "12 t", "start_min": 0, "duration_h": 12}]}
+    race = {"type": "timed", "config": cfg, "started_at": S}
+    reads = [{"participant_id": 1, "ts": S + 7 * H}, {"participant_id": 2, "ts": S + 7 * H}]
+    rows, info = engine.compute(race, [P(1, distance="a"), P(2, distance="b")], reads, S + 8 * H)
+    b = by(rows)
+    assert b["L1"]["laps"] == 0 and b["L1"]["status"] == "finished"  # efter 6 timer tæller intet
+    assert b["L2"]["laps"] == 1 and b["L2"]["status"] == "active" and info["phase"] == "running"
+    rows, info = engine.compute(race, [P(1, distance="a"), P(2, distance="b")], reads, S + 13 * H)
+    assert info["phase"] == "ended" and info["end_at"] == S + 12 * H
+
+
+def test_clean_distances():
+    cfg = engine.clean_distances("p2p", {"routes": [{"name": "A", "km": "5", "min_min": 10}],
+                                         "distances": [{"name": "X", "routes": ["nope"]}, {"id": "d1", "name": "Y", "start_min": -5}]})
+    assert cfg["routes"][0]["id"] == "r1" and cfg["routes"][0]["km"] == 5.0
+    assert cfg["distances"][0]["routes"] == ["r1"] and cfg["distances"][1]["id"] == "d2x" and cfg["distances"][1]["start_min"] == 0
+    assert "distances" not in engine.clean_distances("backyard_custom", {"distances": [{}]})
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

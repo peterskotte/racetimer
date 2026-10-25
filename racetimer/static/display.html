@@ -51,6 +51,11 @@
   .filters { display: flex; gap: 8px; margin-bottom: 12px; }
   .filters button { font-size: 14px; padding: 6px 14px; border-radius: 999px; }
   .filters button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  /* flere distancer: én fane pr. distance – skifter selv på storskærmen, til nogen trykker */
+  .dists { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .dists button { font-size: clamp(15px, 1.4vw, 22px); font-weight: 700; padding: 8px 18px; border-radius: 12px; }
+  .dists button.on { background: var(--brand-orange, #e5682a); color: #fff; border-color: transparent; }
+  .dists button small { font-weight: 500; opacity: .75; margin-left: 6px; }
 
   table { width: 100%; border-collapse: collapse; }
   th { background: var(--card-head); color: var(--muted); text-align: left; font-weight: 600;
@@ -194,6 +199,7 @@
 <main>
   <div id="banner"></div>
   <div class="hero" id="hero"></div>
+  <div class="dists" id="dists"></div>
   <div class="filters" id="filters"></div>
   <div class="leaders" id="leaders"></div>
   <div class="card" id="board"><div class="empty">Henter…</div></div>
@@ -217,6 +223,19 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const kiosk = new URLSearchParams(location.search).has("kiosk");
 let data = null, version = null, offset = 0, filter = "Alle", lastLaps = {}, fired = new Set();
+let dist = null, distPinned = false, distSwitched = Date.now();  // valgt distance (flere distancer i samme løb)
+const DIST_ROTATE_MS = 15000;
+// Den del af løbet, der vises: hele løbet – eller én distance med sin egen start, stilling og nedtælling
+function view() {
+  const {race, info, rows} = data, ds = info.distances;
+  if (!ds?.length) return {race, info, rows};
+  if (!ds.some(d => d.id === dist)) dist = ds[0].id;
+  if (!distPinned && ds.length > 1 && Date.now() - distSwitched > DIST_ROTATE_MS) {
+    dist = ds[(ds.findIndex(d => d.id === dist) + 1) % ds.length].id; distSwitched = Date.now();
+  }
+  const d = ds.find(x => x.id === dist);
+  return {race: {...race, started_at: d.started_at ?? race.started_at}, info: d, rows: rows.filter(r => r.distance === dist), dists: ds};
+}
 
 function now() { return Date.now() / 1000 + offset; }
 function hms(sec, forceH) {
@@ -431,12 +450,14 @@ function render() {
   $("testTag").hidden = !test;
   if (test) $("testTag").textContent = `🧪 TESTLØB${data.race.test.speed > 1 ? ` · ${data.race.test.speed}× TID` : ""}`;
   if (idle) {
-    $("raceName").textContent = ""; $("hero").innerHTML = ""; $("banner").innerHTML = ""; $("filters").innerHTML = ""; $("leaders").innerHTML = "";
+    $("raceName").textContent = ""; $("hero").innerHTML = ""; $("dists").innerHTML = ""; $("banner").innerHTML = ""; $("filters").innerHTML = ""; $("leaders").innerHTML = "";
     $("board").innerHTML = `<div class="empty">Intet aktivt løb</div>`;
     return;
   }
-  const {race, info, rows} = data;
-  $("raceName").textContent = (race.test ? "🧪 TEST · " : "") + race.name + " · " + info.type_label;
+  const {race, info, rows, dists} = view();
+  $("raceName").textContent = (race.test ? "🧪 TEST · " : "") + race.name + " · " + (dists ? info.name : info.type_label);
+  $("dists").innerHTML = dists && dists.length > 1 ? dists.map(d => `<button class="${d.id === dist ? "on" : ""}" data-d="${esc(d.id)}">${esc(d.name)}<small>${d.count}</small></button>`).join("") : "";
+  $("dists").querySelectorAll("button").forEach(b => b.onclick = () => { dist = b.dataset.d; distPinned = true; render(); });
   $("readers").innerHTML = (data.readers || []).map(r => `<span class="${r.connected ? "on" : ""}"><i class="dot"></i>${r.role === "primary" ? "Primær" : "Backup"}</span>`).join("");
   const age = data.mirror?.age;
   const solo = info.solo && info.phase === "running"
@@ -470,7 +491,7 @@ function render() {
       <div class="ldet">${cols.filter(c => c !== main).map(c => `<span>${c.h}: <b class="num">${c.f(r)}</b></span>`).join("")}</div>
     </div>`).join("");
   const rest = shown.slice(nLead);
-  if (!rest.length) { $("board").hidden = true; lastLaps = Object.fromEntries(rows.map(r => [r.id, r.laps])); return; }
+  if (!rest.length) { $("board").hidden = true; lastLaps = Object.fromEntries(data.rows.map(r => [r.id, r.laps])); return; }
   let html = `<table><thead><tr><th>#</th><th class="name-col-sep">Navn</th><th class="hide-sm">Køn</th><th>Status</th>` +
     cols.map(c => `<th class="${c.r ? "r" : ""} ${c.sm ? "hide-sm" : ""}">${c.h}</th>`).join("") + `</tr></thead><tbody>`;
   rest.forEach((r, j) => {
@@ -482,7 +503,7 @@ function render() {
       cols.map(c => `<td class="num ${c.r ? "r" : ""} ${c.sm ? "hide-sm" : ""}">${c.f(r)}</td>`).join("") + `</tr>`;
   });
   $("board").innerHTML = html + "</tbody></table>";
-  lastLaps = Object.fromEntries(rows.map(r => [r.id, r.laps]));
+  lastLaps = Object.fromEntries(data.rows.map(r => [r.id, r.laps]));
 }
 
 // ---------------- ur + 3-2-1-advarsler (kører lokalt hvert ¼ sek.)
@@ -491,8 +512,8 @@ function tick() {
   $("clock").textContent = new Date(t * 1000).toLocaleTimeString("da-DK");
   $("splashClock").textContent = new Date(t * 1000).toLocaleTimeString("da-DK", {hour: "2-digit", minute: "2-digit"});
   if (!data?.race) return;
-  const info = data.info;
-  if (data.race && info.phase !== "before") $("hero").innerHTML = hero(info, data.race);
+  const {info, race} = view();
+  if (info.phase !== "before") $("hero").innerHTML = hero(info, race);
   const alert = $("alert");
   let show = false;
   if (info.type.startsWith("backyard") && info.phase === "running" && !info.continuous) {

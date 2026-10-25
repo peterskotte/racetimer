@@ -52,7 +52,9 @@ def evaluate(read_id):
     after_rows, info = engine.compute(race, parts, reads, now)
     after = _row(after_rows, p["id"]) or {}
 
-    if not race.get("started_at") or rd["ts"] < race["started_at"]:
+    # flere distancer: hver distance har sin egen start
+    start = after["dist_start"] if "dist_start" in after else race.get("started_at")
+    if not start or rd["ts"] < start:
         if after.get("status") == "checkedin" and before.get("status") != "checkedin":
             return {"type": "read.checkin", **who}
         if after.get("status") == "checkedin":
@@ -63,7 +65,8 @@ def evaluate(read_id):
     if after.get("start_ts") and not before.get("start_ts") and race["type"] == "timetrial":
         return {"type": "read.started", **who}
     if (after.get("laps") or 0) > (before.get("laps") or 0) or (after.get("finish_ts") and not before.get("finish_ts")):
-        finish = race["type"] in ("p2p", "timetrial") or bool(info.get("continuous") and after.get("status") == "finished")
+        finish = (race["type"] in ("p2p", "timetrial") and bool(after.get("finish_ts"))) or \
+            bool(info.get("continuous") and after.get("status") == "finished")
         return {"type": "read.counted", "lap": after.get("laps"), "finish": finish,
                 "time": after.get("total_time") if finish or info.get("continuous") else after.get("last_lap"), **who}
     if after.get("started_current") and not before.get("started_current"):

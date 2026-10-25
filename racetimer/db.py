@@ -114,6 +114,8 @@ def _migrate(c):
         c.execute("ALTER TABLE participants ADD COLUMN dogs INTEGER")
         c.execute("ALTER TABLE participants ADD COLUMN dog1 TEXT")
         c.execute("ALTER TABLE participants ADD COLUMN dog2 TEXT")
+    if "distance" not in pcols:  # flere distancer i samme løb: id på deltagerens distance (NULL = første)
+        c.execute("ALTER TABLE participants ADD COLUMN distance TEXT")
     ucols = [r[1] for r in c.execute("PRAGMA table_info(users)")]
     if "strong" not in ucols:  # koden er mindst MIN_PW tegn (kræves for login via det offentlige link)
         c.execute("ALTER TABLE users ADD COLUMN strong INTEGER NOT NULL DEFAULT 0")

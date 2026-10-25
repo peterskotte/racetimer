@@ -117,6 +117,13 @@ Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 | Enkeltstart, bølgestart eller start på chip | **Intervalstart** |
 | Canicross | Vælg A til B, tidsløb, rekordløb eller intervalstart, og sæt flueben i **Canicross** |
 
+**Flere distancer i samme løb** (fx Nytårsløbet med 5, 10 og 15 km): vælg *Alm. tidtagning (A til B)*, og opret under **Distancer**:
+1. **Ruterne** med navn, km og minimumstid, fx *Kort* 5 km / 15 min og *Lang* 10 km / 30 min.
+2. **Distancerne**, der hver består af en eller flere ruter i træk, fx *5 km* = Kort, *10 km* = Lang og *15 km* = Kort → Lang. Ved 15 km er løberen i mål efter anden passage.
+3. **Start + min** giver en distance sin egen start, fx 30 min efter løbets start. Startknappen starter løbet, og senere distancer starter selv.
+
+Hver deltager vælger distance i deltagerlisten (eller kolonnen *Distance* i Excel). Stilling, resultatskærm, hjemmeside og CSV deles op pr. distance, og resultatskærmen skifter selv mellem distancerne hvert 15. sekund. Alle bruger de samme læsere. *Tidsbaseret* kan på samme måde have flere varigheder, fx 6 og 12 timer.
+
 **Tæller:** vælg **📶 Armbånd**, når løberne har RFID-armbånd, eller **👆 Manuel**, når der ikke er læsere, fx til en lille træning. Ved *Manuel* viser **Aktivt løb** et felt pr. løber, og I trykker på feltet, hver gang løberen passerer (et nyt tryk inden for 3 sekunder tæller ikke, og **↶ Fortryd sidste tryk** fjerner det seneste). Der kan skiftes mellem de to når som helst, også under løbet, fx hvis en læser fejler. Resultatskærm og hjemmeside virker ens for begge.
 
 Reglerne for hver type og backyards tidsvinduer står i [README](../README.md#løbstyper).

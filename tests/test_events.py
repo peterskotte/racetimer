@@ -209,6 +209,39 @@ def test_manual_taps():
     except HTTPException as e:
         assert e.status_code == 400
 
+
+def test_distances_participants_and_events():
+    import asyncio
+    from types import SimpleNamespace as N
+    from fastapi import HTTPException
+
+    def req(body):
+        async def j():
+            return body
+        return N(json=j)
+    cfg = {"checkin_min": 0, "routes": [{"name": "Kort", "km": 5, "min_min": 1}, {"name": "Lang", "km": 10, "min_min": 2}],
+           "distances": [{"name": "5 km", "routes": ["r1"]}, {"name": "15 km", "routes": ["r1", "r2"], "start_min": 0}]}
+    rid = asyncio.run(app.create_race(req({"name": "Nytår", "type": "p2p", "config": cfg}), u={}))["id"]
+    ds = db.race(rid)["config"]["distances"]
+    assert [d["id"] for d in ds] == ["d1", "d2"] and ds[1]["routes"] == ["r1", "r2"]
+    pid = asyncio.run(app.add_participant(rid, req({"name": "Ulla", "bib": 9, "chip": "U9", "distance": "15 KM"}), u={}))["id"]
+    assert db.q1("SELECT distance FROM participants WHERE id=?", (pid,))["distance"] == "d2"
+    try:
+        asyncio.run(app.add_participant(rid, req({"name": "X", "distance": "42 km"}), u={}))
+        raise AssertionError("ukendt distance skulle afvises")
+    except HTTPException as e:
+        assert e.status_code == 400
+    app._activate(rid)
+    db.ex("UPDATE races SET status='running', started_at=? WHERE id=?", (S, rid))
+    ev = scan("U9", 90)  # 1. rute (kort) – ikke i mål endnu
+    assert kind(ev) == "read.counted" and ev["lap"] == 1 and not ev["finish"]
+    ev = scan("U9", 150)  # under lang rutes minimum (2 min)
+    assert kind(ev) == "ignored:too_early"
+    ev = scan("U9", 240)
+    assert kind(ev) == "read.counted" and ev["finish"] and round(ev["time"]) == 240
+    csv = app.results_csv(rid, u={}).body.decode()
+    assert csv.splitlines()[0].lstrip("\ufeff").startswith("Distance;Placering") and "\n15 km;" in csv
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

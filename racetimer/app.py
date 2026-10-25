@@ -393,9 +393,9 @@ async def mirror_push(request: Request):
             if b.get("participants") is not None:
                 c.execute("DELETE FROM participants WHERE race_id=?", (rid,))
                 c.executemany("INSERT INTO participants(id, race_id, bib, name, sex, club, status, status_at, "
-                              "start_offset, dogs, dog1, dog2) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                              "start_offset, dogs, dog1, dog2, distance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                               [(p["id"], rid, p["bib"], p["name"], p["sex"], p["club"], p["status"], p["status_at"],
-                                p["start_offset"], p.get("dogs"), p.get("dog1"), p.get("dog2"))
+                                p["start_offset"], p.get("dogs"), p.get("dog1"), p.get("dog2"), p.get("distance"))
                                for p in b["participants"]])
             c.executemany("INSERT OR REPLACE INTO reads(id, race_id, chip, reader, ts, participant_id, duplicate, "
                           "deleted, approved) VALUES (?,?,'',?,?,?,?,?,?)",
@@ -525,7 +525,7 @@ async def create_race(request: Request, u=Depends(admin)):
     b = await request.json()
     if b.get("type") not in engine.RACE_TYPES:
         raise HTTPException(400, "Ukendt løbstype")
-    cfg = engine.merged_config(b["type"], b.get("config"))
+    cfg = engine.clean_distances(b["type"], engine.merged_config(b["type"], b.get("config")))
     test = _test_opts(b.get("test"))
     timing = "manual" if b.get("timing") == "manual" else "armband"
     rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at, test, timing) VALUES (?,?,?,?,?,?,?)",
@@ -540,7 +540,7 @@ async def create_race(request: Request, u=Depends(admin)):
 async def update_race(rid: int, request: Request, u=Depends(admin)):
     race = db.race(rid) or _404()
     b = await request.json()
-    cfg = engine.merged_config(race["type"], {**race["config"], **(b.get("config") or {})})
+    cfg = engine.clean_distances(race["type"], engine.merged_config(race["type"], {**race["config"], **(b.get("config") or {})}))
     db.ex("UPDATE races SET name=?, config=?, scheduled_start=? WHERE id=?",
           (b.get("name", race["name"]), json.dumps(cfg), b.get("scheduled_start", race["scheduled_start"]), rid))
     if race.get("test") and b.get("test"):  # et testløb forbliver et testløb – kun indstillingerne kan ændres
@@ -689,11 +689,13 @@ def results_csv(rid: int, u=Depends(admin)):
     rows, info = standings(race)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
-    cc = bool(engine.merged_config(race["type"], race["config"]).get("canicross"))
-    w.writerow(["Placering", "Startnr", "Navn", "Køn", "Klub"] + (["Hunde"] if cc else []) +
+    cfg = engine.merged_config(race["type"], race["config"])
+    cc, multi = bool(cfg.get("canicross")), bool(engine.distances(race["type"], cfg))
+    w.writerow((["Distance"] if multi else []) + ["Placering", "Startnr", "Navn", "Køn", "Klub"] + (["Hunde"] if cc else []) +
                ["Status", "Omgange", "Distance km", "Tid (s)", "Sidste omgang (s)", "Bedste omgang (s)"])
     for r in rows:
-        w.writerow([r["place"], r["bib"], r["name"], r["sex"], r["club"]] + ([" & ".join(r["dogs"])] if cc else []) +
+        w.writerow(([r.get("distance_name")] if multi else []) + [r["place"], r["bib"], r["name"], r["sex"], r["club"]] +
+                   ([" & ".join(r["dogs"])] if cc else []) +
                    [r["status_label"], r["laps"], r["distance_km"], r["total_time"] and round(r["total_time"], 1),
                     r["last_lap"] and round(r["last_lap"], 1), r["best_lap"] and round(r["best_lap"], 1)])
     return Response("﻿" + buf.getvalue(), media_type="text/csv",
@@ -723,7 +725,21 @@ def _participant_fields(b):
         "dogs": int(dogs) if dogs in ("1", "2") else None,
         "dog1": (b.get("dog1") or "").strip() or None,
         "dog2": (b.get("dog2") or "").strip() or None,
+        "distance": str(b.get("distance") or "").strip() or None,
     }
+
+
+def _distance_id(rid, value):
+    """Distance ud fra id eller navn (fx fra Excel: "10 km"). None = løbets første distance."""
+    race = db.race(rid)
+    ds = engine.distances(race["type"], engine.merged_config(race["type"], race["config"])) if race else []
+    v = str(value or "").strip().lower()
+    if not v or not ds:
+        return None
+    hit = next((d["id"] for d in ds if v in (d["id"].lower(), d["name"].lower())), None)
+    if not hit:
+        raise HTTPException(400, f"Ukendt distance: {value} (vælg mellem {', '.join(d['name'] for d in ds)})")
+    return hit
 
 
 def _check_dogs(rid, f):
@@ -762,8 +778,10 @@ async def add_participant(rid: int, request: Request, u=Depends(admin)):
         raise HTTPException(400, "Navn mangler")
     _check_chip(rid, f["chip"])
     _check_dogs(rid, f)
-    pid = db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2) VALUES (?,?,?,?,?,?,?,?,?)",
-                (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"]))
+    f["distance"] = _distance_id(rid, f["distance"])
+    pid = db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2, distance) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"]))
     _relink(rid)
     return {"id": pid}
 
@@ -777,9 +795,11 @@ async def update_participant(pid: int, request: Request, u=Depends(admin)):
     if any(k in b for k in ("dogs", "dog1", "dog2")):  # ellers kan man ikke rette fx navnet på en deltager uden hunde
         _check_dogs(p["race_id"], f)
     so = b.get("start_offset", p["start_offset"])
-    db.ex("UPDATE participants SET bib=?, name=?, sex=?, club=?, chip=?, start_offset=?, dogs=?, dog1=?, dog2=? WHERE id=?",
+    f["distance"] = _distance_id(p["race_id"], f["distance"])
+    db.ex("UPDATE participants SET bib=?, name=?, sex=?, club=?, chip=?, start_offset=?, dogs=?, dog1=?, dog2=?, distance=? "
+          "WHERE id=?",
           (f["bib"], f["name"], f["sex"], f["club"], f["chip"], None if so in ("", None) else float(so),
-           f["dogs"], f["dog1"], f["dog2"], pid))
+           f["dogs"], f["dog1"], f["dog2"], f["distance"], pid))
     _relink(p["race_id"])
     return {"ok": True}
 
@@ -817,6 +837,7 @@ HEADERS = {
     "dogs": ("hunde", "antal hunde", "dogs"),
     "dog1": ("hund 1", "hund1", "hund", "hundenavn", "dog 1", "dog1", "dog"),
     "dog2": ("hund 2", "hund2", "dog 2", "dog2"),
+    "distance": ("distance", "distancer", "løb", "rute"),
 }
 
 
@@ -850,24 +871,26 @@ async def import_participants(rid: int, file: UploadFile = File(...), u=Depends(
             row[col["chip"]] = get("chip")[:-2]
         f = _participant_fields({"name": name, "sex": get("sex"), "bib": get("bib"), "club": get("club"),
                                  "chip": get("chip"), "dogs": get("dogs").replace(".0", ""),
-                                 "dog1": get("dog1"), "dog2": get("dog2")})
+                                 "dog1": get("dog1"), "dog2": get("dog2"), "distance": get("distance")})
         existing = None
         if f["bib"] is not None:
             existing = db.q1("SELECT id FROM participants WHERE race_id=? AND bib=?", (rid, f["bib"]))
         try:
             _check_chip(rid, f["chip"], existing["id"] if existing else None)
             _check_dogs(rid, f)
+            f["distance"] = _distance_id(rid, f["distance"])
         except HTTPException as e:
             errors.append(f"Række {n}: {e.detail}")
             continue
         if existing:
             db.ex("UPDATE participants SET name=?, sex=?, club=?, chip=COALESCE(?, chip), dogs=COALESCE(?, dogs), "
-                  "dog1=COALESCE(?, dog1), dog2=COALESCE(?, dog2) WHERE id=?",
-                  (f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], existing["id"]))
+                  "dog1=COALESCE(?, dog1), dog2=COALESCE(?, dog2), distance=COALESCE(?, distance) WHERE id=?",
+                  (f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"], existing["id"]))
             updated += 1
         else:
-            db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2) VALUES (?,?,?,?,?,?,?,?,?)",
-                  (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"]))
+            db.ex("INSERT INTO participants(race_id, bib, name, sex, club, chip, dogs, dog1, dog2, distance) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                  (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"]))
             added += 1
     _relink(rid)
     return {"added": added, "updated": updated, "errors": errors}
@@ -879,9 +902,9 @@ def import_template(u=Depends(admin)):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Deltagere"
-    ws.append(["Startnr", "Navn", "Køn", "Klub", "Chip", "Hunde", "Hund 1", "Hund 2"])
-    ws.append([1, "Kenneth Risom", "Mand", "Aalborg Løbeklub", "", 1, "Bella", ""])
-    ws.append([2, "Mette Hansen", "Kvinde", "", "", 2, "Max", "Luna"])
+    ws.append(["Startnr", "Navn", "Køn", "Klub", "Chip", "Distance", "Hunde", "Hund 1", "Hund 2"])
+    ws.append([1, "Kenneth Risom", "Mand", "Aalborg Løbeklub", "", "", 1, "Bella", ""])
+    ws.append([2, "Mette Hansen", "Kvinde", "", "", "", 2, "Max", "Luna"])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

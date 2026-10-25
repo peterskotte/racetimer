@@ -102,8 +102,7 @@ COUNTDOWN_CSS = """
 .cd.soon .fg{stroke:var(--orange)}.cd.soon .cdv{color:var(--orange)}.cd.last .fg{stroke:#ef5b5b}.cd.last .cdv{color:#ef5b5b}
 """
 COUNTDOWN_JS = """<script>
-(function () {
-  var el = document.querySelector('.cd'); if (!el) return;
+document.querySelectorAll('.cd').forEach(function (el) {
   var end = +el.dataset.end, total = +el.dataset.total, C = 2 * Math.PI * 52, fg = el.querySelector('.fg');
   fg.style.strokeDasharray = C;
   function p(n) { return (n < 10 ? '0' : '') + n; }
@@ -114,7 +113,7 @@ COUNTDOWN_JS = """<script>
     el.className = 'cd' + (left <= Math.min(900, total * 0.05) ? ' last' : f <= 0.1 ? ' soon' : '');
   }
   tick(); setInterval(tick, 1000);
-})();
+});
 </script>"""
 
 
@@ -130,7 +129,7 @@ def _countdown(race, info, final):
         return ""
     return (f'<div class="cd" data-end="{float(end)}" data-total="{float(total)}"><svg viewBox="0 0 120 120" aria-hidden="true">'
             f'<circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52"/></svg>'
-            f'<div><div class="cdk">{label}</div><div class="cdv">--:--:--</div></div></div>' + COUNTDOWN_JS)
+            f'<div><div class="cdk">{label}</div><div class="cdv">--:--:--</div></div></div>')
 
 
 def render_html(payload, refresh_sec=0):
@@ -138,6 +137,43 @@ def render_html(payload, refresh_sec=0):
     e = html.escape
     updated = time.strftime("%d.%m.%Y kl. %H:%M", time.localtime(payload["sent_at"]))
     final = payload["event"] == "final"
+    if info.get("distances"):  # flere distancer: et afsnit med egen stilling pr. distance
+        sections = "".join(
+            f'<h2 class="dist">{e(d["name"])} <small>· {d.get("count", 0)} deltagere'
+            f'{" · start " + _clock(d["started_at"]) if d.get("started_at") else ""}</small></h2>' +
+            _section(race, d, [r for r in rows if r.get("distance") == d["id"]], final)
+            for d in info["distances"])
+    else:
+        sections = _section(race, info, rows, final)
+    refresh = f'<meta http-equiv="refresh" content="{int(refresh_sec)}">' if refresh_sec and not final else ""
+    status = "Endelige resultater" if final else ("Live" if race["status"] == "running" else "Foreløbige resultater")
+    return f"""<!doctype html>
+<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+{refresh}<title>{e(race['name'])} – resultater</title>
+<style>
+:root{{--bg:#111814;--card:#1a231e;--head:#212c26;--line:#2e3a33;--text:#f3f1ec;--muted:#a2aca5;--dim:#6b766f;--orange:#e5682a;--cream:#f6efe3}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}}
+header{{background:var(--cream);border-bottom:3px solid var(--orange);padding:14px 20px}}header img{{height:40px;display:block}}.brand{{font-weight:800;font-size:26px;color:#0c1b14;font-style:italic}}
+h1{{margin:0;font-size:28px}}.sub{{color:var(--muted);margin:6px 0 16px}}h2.dist{{margin:26px 0 10px;font-size:22px}}h2.dist small{{color:var(--muted);font-weight:500;font-size:14px}}
+main{{max-width:1100px;margin:0 auto;padding:16px}}.pill{{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:{'#5aa3ff' if final else '#3fc56b'};color:#06121f;margin-right:8px}}
+.sum{{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-bottom:14px;font-size:20px;font-weight:600}}
+.card{{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow-x:auto}}
+table{{width:100%;border-collapse:collapse}}th{{background:var(--head);color:var(--muted);text-align:left;padding:12px 14px;white-space:nowrap}}
+td{{padding:11px 14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}}td.r,th.r{{text-align:right;white-space:nowrap}}
+td.name{{font-weight:600}}.bib{{color:var(--muted);font-weight:500;font-size:.85em;margin-right:.45em}}.club{{display:block;color:var(--muted);font-weight:400;font-size:.8em}}
+td.st{{white-space:nowrap}}tr.out td{{color:var(--dim)}}.dot{{display:inline-block;width:.55em;height:.55em;border-radius:50%;margin-right:.5em;background:#8a9099}}
+.dot.active{{background:#3fc56b}}.dot.resting{{background:#2bb3a3}}.dot.winner{{background:#f2c14e}}.dot.finished{{background:#5aa3ff}}.dot.rtc,.dot.dsq{{background:#ef5b5b}}
+footer{{color:var(--muted);font-size:13px;padding:14px 4px}}
+{COUNTDOWN_CSS}</style></head><body>
+<header>{_brand_header()}</header>
+<main><h1>{e(race['name'])}</h1><div class="sub"><span class="pill">{status}</span>{e(info.get('type_label', ''))} · start {_clock(race.get('started_at'))}</div>
+{sections}
+<footer>Opdateret {updated} · {e(_brand_name())}</footer></main>{COUNTDOWN_JS if 'class="cd"' in sections else ""}</body></html>"""
+
+
+def _section(race, info, rows, final):
+    """Opsummering, nedtæller og resultattabel – for hele løbet eller én distance."""
+    e = html.escape
     typ = race["type"]
     lap = typ in LAP_TYPES
 
@@ -179,31 +215,10 @@ def render_html(payload, refresh_sec=0):
         body.append(f'<tr class="{"out" if out else ""}">' +
                     "".join(f'<td class="{c}">{v}</td>' for c, v in zip(cls, cells)) + "</tr>")
 
-    refresh = f'<meta http-equiv="refresh" content="{int(refresh_sec)}">' if refresh_sec and not final else ""
-    status = "Endelige resultater" if final else ("Live" if race["status"] == "running" else "Foreløbige resultater")
-    return f"""<!doctype html>
-<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-{refresh}<title>{e(race['name'])} – resultater</title>
-<style>
-:root{{--bg:#111814;--card:#1a231e;--head:#212c26;--line:#2e3a33;--text:#f3f1ec;--muted:#a2aca5;--dim:#6b766f;--orange:#e5682a;--cream:#f6efe3}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}}
-header{{background:var(--cream);border-bottom:3px solid var(--orange);padding:14px 20px}}header img{{height:40px;display:block}}.brand{{font-weight:800;font-size:26px;color:#0c1b14;font-style:italic}}
-h1{{margin:0;font-size:28px}}.sub{{color:var(--muted);margin:6px 0 16px}}
-main{{max-width:1100px;margin:0 auto;padding:16px}}.pill{{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:{'#5aa3ff' if final else '#3fc56b'};color:#06121f;margin-right:8px}}
-.sum{{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-bottom:14px;font-size:20px;font-weight:600}}
-.card{{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow-x:auto}}
-table{{width:100%;border-collapse:collapse}}th{{background:var(--head);color:var(--muted);text-align:left;padding:12px 14px;white-space:nowrap}}
-td{{padding:11px 14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}}td.r,th.r{{text-align:right;white-space:nowrap}}
-td.name{{font-weight:600}}.bib{{color:var(--muted);font-weight:500;font-size:.85em;margin-right:.45em}}.club{{display:block;color:var(--muted);font-weight:400;font-size:.8em}}
-td.st{{white-space:nowrap}}tr.out td{{color:var(--dim)}}.dot{{display:inline-block;width:.55em;height:.55em;border-radius:50%;margin-right:.5em;background:#8a9099}}
-.dot.active{{background:#3fc56b}}.dot.resting{{background:#2bb3a3}}.dot.winner{{background:#f2c14e}}.dot.finished{{background:#5aa3ff}}.dot.rtc,.dot.dsq{{background:#ef5b5b}}
-footer{{color:var(--muted);font-size:13px;padding:14px 4px}}
-{COUNTDOWN_CSS}</style></head><body>
-<header>{_brand_header()}</header>
-<main><h1>{e(race['name'])}</h1><div class="sub"><span class="pill">{status}</span>{e(info.get('type_label', ''))} · start {_clock(race.get('started_at'))}</div>{''.join(f'<div class="sum">{x}</div>' for x in summary)}{_countdown(race, info, final)}
-<div class="card"><table><thead><tr>{''.join(f'<th class="{"r" if i > 3 else ""}">{h}</th>' for i, h in enumerate(head))}</tr></thead>
-<tbody>{''.join(body) or '<tr><td colspan="7">Ingen deltagere endnu</td></tr>'}</tbody></table></div>
-<footer>Opdateret {updated} · {e(_brand_name())}</footer></main></body></html>"""
+    ths = "".join(f'<th class="{"r" if i > 3 else ""}">{h}</th>' for i, h in enumerate(head))
+    return ("".join(f'<div class="sum">{x}</div>' for x in summary) + _countdown(race, info, final) +
+            f'<div class="card"><table><thead><tr>{ths}</tr></thead>'
+            f'<tbody>{"".join(body) or "<tr><td colspan=7>Ingen deltagere endnu</td></tr>"}</tbody></table></div>')
 
 
 class _FTP_TLS(ftplib.FTP_TLS):

@@ -185,7 +185,8 @@ class SyncManager(threading.Thread):
                                            "finished_at")},
                 info=info,
                 results=[{k: r.get(k) for k in ("place", "bib", "name", "sex", "club", "status", "status_label",
-                                                 "laps", "distance_km", "total_time", "last_lap", "best_lap", "dogs")}
+                                                 "laps", "distance_km", "total_time", "last_lap", "best_lap", "dogs",
+                                                 "distance", "distance_name")}
                          for r in rows])
         return payload
 
@@ -201,7 +202,8 @@ class SyncManager(threading.Thread):
         state = allstate.setdefault(d["id"], {})
         for _ in range(100):  # flere portioner, hvis der er meget at indhente
             since = state.get(str(rid), 0)
-            parts = db.q("SELECT id, bib, name, sex, club, status, status_at, start_offset, dogs, dog1, dog2 FROM participants "
+            parts = db.q("SELECT id, bib, name, sex, club, status, status_at, start_offset, dogs, dog1, dog2, distance "
+                         "FROM participants "
                          "WHERE race_id=?", (rid,))
             reads = db.q("SELECT id, participant_id, ts, reader, duplicate, deleted, approved, rev FROM reads "
                          "WHERE race_id=? AND rev>? ORDER BY rev LIMIT ?", (rid, since, BATCH))
