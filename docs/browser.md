@@ -8,7 +8,7 @@ Race director **trykker på løberens felt**, hver gang løberen passerer. Reste
 
 1. Åbn browser-udgaven. Når den er lagt på GitHub Pages, ligger den på `https://peterskotte.github.io/racetimer/`. Den kan også lægges på klubbens eget webhotel, se nederst.
 2. **Opsæt løb:** vælg navn og løbstype. Indtjekning er slået fra som standard, undtagen i det officielle backyard. Sæt evt. flueben i *🧪 Testløb* for at øve.
-3. **Deltagere:** tilføj op til 12 løbere med startnummer, navn, køn og klub, og hundenavne ved canicross.
+3. **Deltagere:** vælg **antal løbere (1–12)**, og tryk **Lav felterne**. Felterne hedder Løber 1, Løber 2 … Ret navne og startnumre direkte i listen, eller lad dem stå. Du kan også tilføje løbere én ad gangen med køn, klub og hundenavne ved canicross.
 4. **Løb → ▶ Start nu**, og tryk på løberens felt ved hver passage.
 5. **🖥️ Resultatskærm** åbner resultatskærmen i et nyt vindue. Træk det over på en ekstern skærm eller et TV (HDMI), og sæt det i fuld skærm.
 
@@ -16,6 +16,7 @@ Race director **trykker på løberens felt**, hver gang løberen passerer. Reste
 
 | Handling | Sådan |
 |---|---|
+| Felterne | Fylder skærmen: få løbere giver store felter (fx 4 løbere = 2×2), 12 løbere giver 4×3 (på en mobil 2–3 kolonner). |
 | Passage | Tryk på løberens felt. Feltet blinker grønt (*✓ Omgang 3*) eller gult med årsagen (fx *For tidligt*). |
 | Dobbelttryk | Et nyt tryk på samme løber inden for 3 sekunder tæller ikke (*Allerede registreret*). |
 | Fortryd | **↶ Fortryd sidste** fjerner det seneste tryk, der talte. |

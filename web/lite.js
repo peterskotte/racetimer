@@ -310,9 +310,27 @@ function renderRace() {
       <button class="tmenu" data-menu="${p.id}" aria-label="Flere valg for ${esc(p.name)}">⋯</button>
     </div>`;
   }).join("") : `<p class="muted">Ingen deltagere endnu – tilføj dem under <b>Deltagere</b>.</p>`;
+  layoutTiles(parts.length);
   $("tiles").querySelectorAll("button.tap").forEach(btn => btn.onclick = () => tap(+btn.dataset.pid));
   $("tiles").querySelectorAll("button.tmenu").forEach(btn => btn.onclick = () => openMenu(+btn.dataset.menu));
 }
+
+// Felterne fylder skærmen: få løbere → store felter, 12 løbere → 4×3 (eller 2/3 kolonner på en mobil på højkant)
+const LANDSCAPE_COLS = [1, 2, 3, 2, 3, 3, 4, 4, 3, 4, 4, 4];
+function layoutTiles(n) {
+  const el = $("tiles");
+  if (!n) { el.style.gridTemplateColumns = ""; el.style.gridAutoRows = ""; return; }
+  const portrait = innerWidth < 600 || innerHeight > innerWidth * 1.15;
+  const cols = portrait ? (n <= 2 ? 1 : n <= 8 ? 2 : 3) : LANDSCAPE_COLS[Math.min(n, 12) - 1];
+  const rows = Math.ceil(n / cols), gap = portrait ? 8 : 12;
+  const top = el.getBoundingClientRect().top + scrollY, help = ($("tapHelp")?.offsetHeight || 40) + 12 + 24;
+  const th = Math.max(portrait ? 110 : 120, Math.floor((innerHeight - top - help - (rows - 1) * gap) / rows));
+  const tw = Math.floor((el.clientWidth - (cols - 1) * gap) / cols);
+  Object.assign(el.style, {gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: `minmax(${th}px, auto)`});
+  el.style.setProperty("--th", th + "px");
+  el.style.setProperty("--tw", tw + "px");
+}
+addEventListener("resize", () => { if (tab === "race") renderRace(); });
 
 function openMenu(pid) {
   const p = db.parts.find(x => x.id === pid);
@@ -407,10 +425,26 @@ function renderPeople() {
   $("peopleRace").textContent = race ? race.name : "– intet aktivt løb –";
   const ps = race ? partsOf(race.id).sort((a, b) => (a.bib ?? 999) - (b.bib ?? 999)) : [];
   const cc = race && Boolean(mergedConfig(race.type, race.config).canicross);
+  $("countBox").hidden = !race;
+  $("runnerCount").innerHTML = Array.from({length: MAX_RUNNERS}, (_, i) => `<option value="${i + 1}" ${i + 1 === (ps.length || 4) ? "selected" : ""}>${i + 1}</option>`).join("");
+  $("setCount").onclick = () => setRunnerCount(race, +$("runnerCount").value);
   $("peopleList").innerHTML = ps.length ? `<table><thead><tr><th>Nr</th><th>Navn</th><th>Køn</th><th>Klub</th>${cc ? "<th>Hunde</th>" : ""}<th></th></tr></thead><tbody>` +
-    ps.map(p => `<tr><td>${p.bib ?? ""}</td><td>${esc(p.name)}</td><td>${esc(p.sex || "")}</td><td>${esc(p.club || "")}</td>
+    ps.map(p => `<tr><td><input data-edit="bib" data-id="${p.id}" type="number" min="1" value="${p.bib ?? ""}" style="width:70px"></td>
+      <td><input data-edit="name" data-id="${p.id}" value="${esc(p.name)}"></td><td>${esc(p.sex || "")}</td><td>${esc(p.club || "")}</td>
       ${cc ? `<td>${esc([p.dog1, p.dog2].slice(0, p.dogs || 0).filter(Boolean).join(" & "))}</td>` : ""}
       <td><button class="danger" data-del="${p.id}">Slet</button></td></tr>`).join("") + "</tbody></table>" : `<p class="muted" style="padding:12px">Ingen deltagere endnu.</p>`;
+  $("peopleList").querySelectorAll("[data-edit]").forEach(inp => inp.onchange = () => {
+    const p = db.parts.find(x => x.id === +inp.dataset.id);
+    if (inp.dataset.edit === "name") {
+      if (!inp.value.trim()) { inp.value = p.name; return toast("Navnet må ikke være tomt", true); }
+      p.name = inp.value.trim();
+    } else {
+      const bib = inp.value.trim() ? parseInt(inp.value, 10) : null;
+      if (bib != null && partsOf(p.race_id).some(x => x !== p && x.bib === bib)) { inp.value = p.bib ?? ""; return toast(`Startnummer ${bib} er allerede brugt`, true); }
+      p.bib = bib;
+    }
+    save(); toast("Gemt");
+  });
   $("peopleList").querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     if (!confirm("Slet deltageren og deres tider?")) return;
     const id = +b.dataset.del;
@@ -432,6 +466,27 @@ function renderPeople() {
                    status: null, status_at: null, dogs, dog1: cc ? f.dog1.value.trim() : null, dog2: cc ? f.dog2.value.trim() || null : null, start_offset: null});
     save(); f.reset(); f.bib.value = (bib ?? 0) + 1; f.name.focus(); render();
   };
+}
+
+// Vælg antal løbere: felter tilføjes som "Løber N" – eller de sidste fjernes (spørger, hvis de har tider)
+function setRunnerCount(race, n) {
+  const ps = partsOf(race.id).sort((a, b) => (a.bib ?? 999) - (b.bib ?? 999));
+  if (n > ps.length) {
+    let bib = Math.max(0, ...ps.map(p => p.bib || 0));
+    for (let i = ps.length; i < n; i++) {
+      bib++;
+      db.parts.push({id: newId(), race_id: race.id, bib, name: `Løber ${bib}`, sex: "", club: "", status: null, status_at: null,
+                     dogs: null, dog1: null, dog2: null, start_offset: null});
+    }
+  } else if (n < ps.length) {
+    const gone = ps.slice(n), withTimes = gone.filter(p => readsOf(race.id).some(r => r.participant_id === p.id));
+    if (!confirm(`Fjern ${gone.map(p => p.name).join(", ")}?${withTimes.length ? `\n\n${withTimes.map(p => p.name).join(", ")} har allerede tider, som også slettes.` : ""}`)) return;
+    const ids = new Set(gone.map(p => p.id));
+    db.parts = db.parts.filter(p => !ids.has(p.id));
+    db.reads = db.reads.filter(r => !ids.has(r.participant_id));
+  }
+  save(); render();
+  toast(`${n} ${n === 1 ? "felt" : "felter"} klar`);
 }
 
 // ------------------------------------------------------------------ arkiv
