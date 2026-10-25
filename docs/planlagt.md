@@ -2,7 +2,7 @@
 
 Noter fra Peter, 24. oktober 2026. Intet af dette er bygget endnu.
 
-## 1. Visuel nedtælling ved tidsbegrænsede løb
+## 1. Visuel nedtælling ved tidsbegrænsede løb ✅ bygget (25.10.2026)
 
 Ved løb med en fast varighed skal skærmen vise **hvor meget tid der er tilbage** med en bar, en cirkel eller lignende, så det kan aflæses på afstand.
 

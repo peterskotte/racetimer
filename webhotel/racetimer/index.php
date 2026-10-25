@@ -87,6 +87,10 @@ tr.ude td{color:var(--dim)}.dot{display:inline-block;width:.55em;height:.55em;bo
 .active{background:#3fc56b}.resting{background:#2bb3a3}.winner{background:#f2c14e}.finished{background:#5aa3ff}.rtc,.dsq{background:#ef5b5b}
 .arkiv{margin-top:22px}.arkiv a{color:var(--text)}.arkiv li{margin:6px 0}
 footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text-align:center;color:var(--muted)}
+.cd{display:flex;align-items:center;gap:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 18px;margin-bottom:14px}
+.cd svg{width:72px;height:72px;transform:rotate(-90deg);flex:none}.cd circle{fill:none;stroke-width:10}.cd .bg{stroke:var(--line)}.cd .fg{stroke:#3fc56b;stroke-linecap:round}
+.cdk{color:var(--muted);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}.cdv{font-size:clamp(30px,6vw,52px);font-weight:700;font-variant-numeric:tabular-nums}
+.cd.soon .fg{stroke:var(--orange)}.cd.soon .cdv{color:var(--orange)}.cd.last .fg{stroke:#ef5b5b}.cd.last .cdv{color:#ef5b5b}
 .splash{position:relative;min-height:70vh;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
 .splash.plain{align-items:center;justify-content:center;flex-direction:column;text-align:center}
 .splash .pn{font-weight:800;font-style:italic;font-size:clamp(36px,8vw,110px);letter-spacing:-.03em;line-height:1.05;padding:0 5vw}
@@ -129,7 +133,36 @@ if (!empty($info['continuous'])) {
     $sum = 'Samlet distance: ' . km($info['total_km']) . ' km';
 }
 if ($sum) echo "<div class=\"sum\">$sum</div>";
-?>
+
+// Nedtæller med ring: tid tilbage af løbet (tidsløb / samlet tid) eller til næste yard (backyard)
+$cd = null;
+if (!$final && ($info['phase'] ?? '') === 'running') {
+    if (($race['type'] === 'timed' || (!empty($info['continuous']) && ($info['end_mode'] ?? '') === 'duration')) && !empty($info['end_at']))
+        $cd = ['Tid tilbage', $info['end_at'], $info['duration_sec'] ?? 0];
+    elseif (strpos($race['type'], 'backyard') === 0 && empty($info['continuous']) && !empty($info['next_start']))
+        $cd = ['Næste start', $info['next_start'], $info['interval_sec'] ?? 3600];
+}
+if ($cd): ?>
+<div class="cd" data-end="<?= (float)$cd[1] ?>" data-total="<?= (float)$cd[2] ?>" data-now="<?= time() ?>">
+  <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52"/></svg>
+  <div><div class="cdk"><?= e($cd[0]) ?></div><div class="cdv">--:--:--</div></div>
+</div>
+<script>
+(function () {  // tæller ned hvert sekund mellem opdateringerne (webhotellets ur bruges som reference)
+  var el = document.querySelector('.cd'), end = +el.dataset.end, total = +el.dataset.total,
+      off = +el.dataset.now - Date.now() / 1000, C = 2 * Math.PI * 52, fg = el.querySelector('.fg');
+  fg.style.strokeDasharray = C;
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  function tick() {
+    var left = Math.max(0, end - (Date.now() / 1000 + off)), s = Math.round(left), f = total ? Math.min(1, left / total) : 0;
+    el.querySelector('.cdv').textContent = p(Math.floor(s / 3600)) + ':' + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60);
+    fg.style.strokeDashoffset = C * (1 - f);
+    el.className = 'cd' + (left <= Math.min(900, total * 0.05) ? ' last' : f <= 0.1 ? ' soon' : '');
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+<?php endif; ?>
 <div class="card"><table>
 <thead><tr><th>#</th><th>Navn</th><th>Køn</th><th>Status</th>
 <?php if ($omgang): ?><th class="r">Omgange</th><th class="r">Distance</th><th class="r">Sidste omg.</th><?php if ($medtid): ?><th class="r">Tid</th><?php endif; ?><?php else: ?><th class="r">Tid</th><?php endif; ?>

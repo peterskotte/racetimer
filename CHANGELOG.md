@@ -2,6 +2,11 @@
 
 Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin under **Opdatering → Hvad er nyt** og på GitHub-udgivelsen.
 
+## [Ikke udgivet]
+
+**Nyt**
+- **Nedtæller med ring:** tidsløb og custom backyard med samlet tid viser *Tid tilbage* som en stor `00:00:00`-nedtæller med en ring, der tømmes. Backyard viser det samme for tiden til næste start. Ringen bliver orange de sidste 10 % og rød det sidste kvarter. Nedtælleren vises også på hjemmesiden (PHP og FTP) og spejlserveren. Upload den nye `index.php` til webhotellet.
+
 ## [1.3.0] – 2026-10-24
 
 **Til eksisterende installationer:** jeres admin-kode virker som før. Er den kortere end 10 tegn, skal den skiftes under *⚙ Opsætning → Brugere*, før det offentlige link kan bruges. Pi'er installeret før denne version kan ikke få Pi'ens kode skiftet fra RaceTimer – brug `passwd` på Pi'en.

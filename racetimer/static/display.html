@@ -33,6 +33,15 @@
   .stat .s { color: var(--muted); font-size: 14px; margin-top: 2px; }
   .stat.big { grid-column: span 2; }
   .stat.warn .v { color: var(--gold); }
+  /* nedtæller med fremskridtsring: tid tilbage af løbet (eller af yarden i backyard) */
+  .stat.countdown { display: flex; align-items: center; gap: clamp(12px, 1.6vw, 24px); }
+  .stat.countdown .ring { flex: none; width: clamp(64px, 7vw, 120px); height: clamp(64px, 7vw, 120px); transform: rotate(-90deg); }
+  .stat.countdown .ring circle { fill: none; stroke-width: 10; }
+  .stat.countdown .ring .bg { stroke: var(--line); }
+  .stat.countdown .ring .fg { stroke: var(--green, #3fc56b); stroke-linecap: round; transition: stroke-dashoffset .3s linear, stroke .3s; }
+  .stat.countdown .v { font-size: clamp(30px, 4.4vw, 68px); letter-spacing: .02em; }
+  .stat.countdown.soon .ring .fg { stroke: var(--brand-orange); } .stat.countdown.soon .v { color: var(--brand-orange); }
+  .stat.countdown.last .ring .fg { stroke: #ef5b5b; } .stat.countdown.last .v { color: #ef5b5b; }
   .bar { height: 8px; background: var(--line); border-radius: 4px; margin-top: 10px; overflow: hidden; }
   .bar i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
   .banner { border-radius: 14px; padding: 18px 22px; font-size: clamp(20px, 2.4vw, 34px); font-weight: 700; margin-bottom: 18px; }
@@ -298,6 +307,16 @@ function columns(type, info) {
   return [timeCol];
 }
 
+const hhmmss = sec => { sec = Math.max(0, Math.round(sec)); const p = n => String(n).padStart(2, "0");
+  return `${p(Math.floor(sec / 3600))}:${p(Math.floor(sec % 3600 / 60))}:${p(sec % 60)}`; };
+// Nedtæller 00:00:00 med en ring, der tømmes. Orange de sidste 10 %, rød det sidste kvarter (eller de sidste 5 %, hvis kortere).
+function countdown(label, left, total, sub) {
+  const frac = total > 0 ? Math.max(0, Math.min(1, left / total)) : 0, C = 2 * Math.PI * 52;
+  const cls = left <= Math.min(900, total * 0.05) ? "last" : frac <= 0.1 ? "soon" : "";
+  return `<div class="stat big countdown ${cls}"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="52"/>
+    <circle class="fg" cx="60" cy="60" r="52" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}"/></svg>
+    <div><div class="k">${label}</div><div class="v num">${hhmmss(left)}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div></div>`;
+}
 function hero(info, race) {
   const t = now(), st = (k, v, s, cls = "") => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v num">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
   if (info.phase === "before") {
@@ -314,7 +333,7 @@ function hero(info, race) {
     const run = info.phase === "running", elapsed = (race.finished_at || t) - race.started_at;
     const out = [];
     if (info.end_mode === "duration")
-      out.push(st("Tid tilbage", run ? hms(info.end_at - t, true) : "0:00:00", "slut kl. " + clockOf(info.end_at), "big"));
+      out.push(countdown("Tid tilbage", run ? info.end_at - t : 0, info.duration_sec, "slut kl. " + clockOf(info.end_at)));
     else
       out.push(st("Løbstid", hms(elapsed, true), `først til ${info.max_yards} omgange`, "big"));
     out.push(st(info.end_mode === "duration" ? "Flest omgange" : "Færdige", info.end_mode === "duration" ? info.leader_laps : `${info.finishers}<small>/ ${data.rows.length}</small>`,
@@ -327,14 +346,14 @@ function hero(info, race) {
   if (by) {
     const left = info.next_start - t, warn = left <= 180 && info.phase === "running";
     const out = [];
-    if (info.phase === "running") out.push(st("Næste start", hms(left), "kl. " + clockOf(info.next_start), "big" + (warn ? " warn" : "")));
+    if (info.phase === "running") out.push(countdown("Næste start", left, info.interval_sec, "kl. " + clockOf(info.next_start)));
     out.push(st("Yard", info.phase === "running" ? info.yard : info.completed_yards, km(info.loop_km) + " km pr. omgang"));
     out.push(st("Tilbage", info.runners_left, info.phase === "running" ? `${info.on_course} på ruten` : ""));
     out.push(st("Distance", km(info.completed_yards * info.loop_km) + "<small>km</small>", "førende løbers distance"));
     return out.join("");
   }
   if (info.type === "timed")
-    return st("Tid tilbage", hms(info.end_at - t, true), "slut kl. " + clockOf(info.end_at), "big") +
+    return countdown("Tid tilbage", info.phase === "running" ? info.end_at - t : 0, info.duration_sec, "slut kl. " + clockOf(info.end_at)) +
            st("Forløbet", hms(t - race.started_at, true)) + st("Samlet", km(info.total_km) + "<small>km</small>");
   if (info.type === "record") {
     const pct = info.record_km ? Math.min(100, info.total_km / info.record_km * 100) : 0;

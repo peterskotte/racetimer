@@ -95,6 +95,44 @@ def render_splash_html(payload, image=None, refresh_sec=0):
 <header>{_brand_header()}</header>{body}</body></html>"""
 
 
+COUNTDOWN_CSS = """
+.cd{display:flex;align-items:center;gap:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 18px;margin-bottom:14px}
+.cd svg{width:72px;height:72px;transform:rotate(-90deg);flex:none}.cd circle{fill:none;stroke-width:10}.cd .bg{stroke:var(--line)}.cd .fg{stroke:#3fc56b;stroke-linecap:round}
+.cdk{color:var(--muted);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}.cdv{font-size:clamp(30px,6vw,52px);font-weight:700;font-variant-numeric:tabular-nums}
+.cd.soon .fg{stroke:var(--orange)}.cd.soon .cdv{color:var(--orange)}.cd.last .fg{stroke:#ef5b5b}.cd.last .cdv{color:#ef5b5b}
+"""
+COUNTDOWN_JS = """<script>
+(function () {
+  var el = document.querySelector('.cd'); if (!el) return;
+  var end = +el.dataset.end, total = +el.dataset.total, C = 2 * Math.PI * 52, fg = el.querySelector('.fg');
+  fg.style.strokeDasharray = C;
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  function tick() {
+    var left = Math.max(0, end - Date.now() / 1000), s = Math.round(left), f = total ? Math.min(1, left / total) : 0;
+    el.querySelector('.cdv').textContent = p(Math.floor(s / 3600)) + ':' + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60);
+    fg.style.strokeDashoffset = C * (1 - f);
+    el.className = 'cd' + (left <= Math.min(900, total * 0.05) ? ' last' : f <= 0.1 ? ' soon' : '');
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>"""
+
+
+def _countdown(race, info, final):
+    """Nedtæller med ring: tid tilbage af løbet (tidsløb / samlet tid) eller til næste yard (backyard)."""
+    if final or info.get("phase") != "running":
+        return ""
+    if (race["type"] == "timed" or (info.get("continuous") and info.get("end_mode") == "duration")) and info.get("end_at"):
+        label, end, total = "Tid tilbage", info["end_at"], info.get("duration_sec") or 0
+    elif race["type"].startswith("backyard") and not info.get("continuous") and info.get("next_start"):
+        label, end, total = "Næste start", info["next_start"], info.get("interval_sec") or 3600
+    else:
+        return ""
+    return (f'<div class="cd" data-end="{float(end)}" data-total="{float(total)}"><svg viewBox="0 0 120 120" aria-hidden="true">'
+            f'<circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52"/></svg>'
+            f'<div><div class="cdk">{label}</div><div class="cdv">--:--:--</div></div></div>' + COUNTDOWN_JS)
+
+
 def render_html(payload, refresh_sec=0):
     race, info, rows = payload.get("race"), payload.get("info") or {}, payload.get("results") or []
     e = html.escape
@@ -160,9 +198,9 @@ td.name{{font-weight:600}}.bib{{color:var(--muted);font-weight:500;font-size:.85
 td.st{{white-space:nowrap}}tr.out td{{color:var(--dim)}}.dot{{display:inline-block;width:.55em;height:.55em;border-radius:50%;margin-right:.5em;background:#8a9099}}
 .dot.active{{background:#3fc56b}}.dot.resting{{background:#2bb3a3}}.dot.winner{{background:#f2c14e}}.dot.finished{{background:#5aa3ff}}.dot.rtc,.dot.dsq{{background:#ef5b5b}}
 footer{{color:var(--muted);font-size:13px;padding:14px 4px}}
-</style></head><body>
+{COUNTDOWN_CSS}</style></head><body>
 <header>{_brand_header()}</header>
-<main><h1>{e(race['name'])}</h1><div class="sub"><span class="pill">{status}</span>{e(info.get('type_label', ''))} · start {_clock(race.get('started_at'))}</div>{''.join(f'<div class="sum">{x}</div>' for x in summary)}
+<main><h1>{e(race['name'])}</h1><div class="sub"><span class="pill">{status}</span>{e(info.get('type_label', ''))} · start {_clock(race.get('started_at'))}</div>{''.join(f'<div class="sum">{x}</div>' for x in summary)}{_countdown(race, info, final)}
 <div class="card"><table><thead><tr>{''.join(f'<th class="{"r" if i > 3 else ""}">{h}</th>' for i, h in enumerate(head))}</tr></thead>
 <tbody>{''.join(body) or '<tr><td colspan="7">Ingen deltagere endnu</td></tr>'}</tbody></table></div>
 <footer>Opdateret {updated} · {e(_brand_name())}</footer></main></body></html>"""
