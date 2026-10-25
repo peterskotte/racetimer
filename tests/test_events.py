@@ -297,6 +297,14 @@ def test_signup_import_and_age_classes():
     ole = db.q1("SELECT * FROM participants WHERE race_id=? AND name='Ole Bo'", (rid,))
     assert ida["bib"] == 100 and ida["distance"] == "d2" and ida["email"] == "ida@example.dk" and ole["bib"] == 101
     assert ole["distance"] is None and signup.settings(db.race(rid))["fetched"] == 2
+    # nummeret fra hjemmesiden bevares; er det optaget på Pi'en, gives et nyt, og admin får besked
+    one = next(x for x in signup.public_list() if x["id"] == rid)
+    assert one["auto_bib"] and {1, 2, 100, 101} <= set(one["taken_bibs"])
+    assert signup.import_entries(db.race(rid), [{"id": 3, "name": "Web Nr", "sex": "Mand", "bib": 150},
+                                                {"id": 4, "name": "Dublet", "sex": "Mand", "bib": 1}]) == 2
+    assert db.q1("SELECT bib FROM participants WHERE race_id=? AND name='Web Nr'", (rid,))["bib"] == 150
+    assert db.q1("SELECT bib FROM participants WHERE race_id=? AND name='Dublet'", (rid,))["bib"] == 151
+    assert "Dublet: nr. 1 var optaget" in signup.settings(db.race(rid))["bib_conflicts"][0]
     s = signup.settings(db.race(rid))
     assert signup.age_class(ida, db.race(rid), s) == "K40"  # 42 år på løbsdagen → 40-44
     assert signup.age_class(ole, db.race(rid), s) == "M Junior"

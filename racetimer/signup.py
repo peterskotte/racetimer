@@ -78,10 +78,14 @@ def public_list(now=None):
         if not (s["open"] or s.get("fetched")) or (pa and now > pa):
             continue
         ds = engine.distances(r["type"], engine.merged_config(r["type"], r["config"]))
+        # startnumre tildeles på hjemmesiden ved tilmeldingen – den skal kende de numre, Pi'en allerede har brugt
+        taken = [x["bib"] for x in db.q("SELECT bib FROM participants WHERE race_id=? AND bib IS NOT NULL ORDER BY bib",
+                                         (r["id"],))]
         out.append({"id": r["id"], "name": r["name"], "date": race_date(r), "open": is_open(r, s, now),
                     "deadline": s["deadline"], "distances": [{"id": d["id"], "name": d["name"]} for d in ds],
                     "birth_year": s["birth_year"], "public_list": s["public_list"], "note": s["note"],
-                    "delete_days": s["delete_days"], "purge_at": pa})
+                    "delete_days": s["delete_days"], "purge_at": pa,
+                    "auto_bib": s["auto_bib"], "bib_from": s["bib_from"], "taken_bibs": taken})
     return out
 
 
@@ -124,8 +128,14 @@ def import_entries(race, entries, now=None):
         name = str(e.get("name") or "").strip()[:100]
         if not name or db.q1("SELECT 1 FROM participants WHERE race_id=? AND signup_id=?", (race["id"], eid)):
             continue
-        bib = None
-        if s["auto_bib"]:
+        # startnummeret fra hjemmesiden er det, løberen har fået at vide – det bevares, hvis det er ledigt
+        bib = int(e["bib"]) if str(e.get("bib") or "").isdigit() else None
+        if bib is not None and db.q1("SELECT 1 FROM participants WHERE race_id=? AND bib=?", (race["id"], bib)):
+            top = db.q1("SELECT MAX(bib) m FROM participants WHERE race_id=?", (race["id"],))["m"]
+            new = max(s["bib_from"], (top or 0) + 1)
+            s.setdefault("bib_conflicts", []).append(f"{name}: nr. {bib} var optaget og blev ændret til {new}")
+            bib = new
+        elif bib is None and s["auto_bib"]:  # ældre tilmelding uden nummer
             top = db.q1("SELECT MAX(bib) m FROM participants WHERE race_id=?", (race["id"],))["m"]
             bib = max(s["bib_from"], (top or 0) + 1)
         by = e.get("birth_year")

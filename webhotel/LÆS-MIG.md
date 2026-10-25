@@ -55,7 +55,8 @@ Med `tilmeld.php` kan løbere tilmelde sig direkte på hjemmesiden:
 1. Læg `tilmeld.php` i samme mappe som `modtag.php`. Der skal ikke sættes noget op i filen.
 2. I RaceTimer: **Deltagere → 🌐 Tilmelding på hjemmesiden** → sæt flueben i *Åben for tilmelding*, vælg frist m.m. og tryk **Gem tilmelding**. Pi'en sender med det samme løbets navn, dato, frist og distancer til hjemmesiden.
 3. Tilmeldingssiden er `https://ditdomæne.dk/racetimer/tilmeld.php` (adressen står også i RaceTimer). `index.php` viser et link, så længe tilmeldingen er åben.
-4. Pi'en henter nye tilmeldinger hvert minut, når den er på nettet, og opretter dem som deltagere (med startnummer, hvis det er valgt).
+4. Er *Startnummer gives ved tilmeldingen* valgt, får løberen sit startnummer med det samme på kvitteringen. Numre, der allerede er brugt på Pi'en, springes over.
+5. Pi'en henter nye tilmeldinger hvert minut, når den er på nettet, og opretter dem som deltagere med det samme startnummer.
 
 **Persondata:**
 - Tilmeldingerne gemmes i `data/tilmeld-<løb>.php`. Filen starter med en PHP-linje, så webserveren svarer *404* og viser intet, hvis nogen prøver at åbne den. Den kan kun hentes af Pi'en med nøglen.

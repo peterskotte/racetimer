@@ -1617,6 +1617,7 @@ async function loadSignup() {
       <button type="button" id="signupFetch" style="margin-left:6px">⟳ Hent nu</button><br>
       <span class="muted small">Tilmeldingsside: ${s.forms.map(f => `<a href="${esc(f)}" target="_blank" rel="noopener">${esc(f)}</a>`).join(" · ")} – nye tilmeldinger hentes automatisk hvert minut og bliver til deltagere.</span></p>` : ""}
     ${s.errors.length ? `<div class="warnbox">⚠ ${s.errors.map(esc).join("<br>")}</div>` : ""}
+    ${s.bib_conflicts?.length ? `<div class="warnbox">⚠ Startnumre ændret ved hentning (nummeret var allerede brugt på Pi'en – giv løberen besked):<br>${s.bib_conflicts.slice(-10).map(esc).join("<br>")}</div>` : ""}
     <form id="signupForm">
       <div class="grid">
         ${chk("open", s.open, "<b>Åben for tilmelding</b>")}
@@ -1624,7 +1625,7 @@ async function loadSignup() {
         <label>Fødselsår${sel("birth_year", [["required", "Skal udfyldes"], ["optional", "Valgfrit"], ["off", "Spørg ikke"]], s.birth_year)}</label>
         <label>Slet tilmeldinger på hjemmesiden (dage efter løbet)<input type="number" name="delete_days" min="1" max="365" value="${s.delete_days}"></label>
         ${chk("public_list", s.public_list, "Vis tilmeldte på hjemmesiden (navn, klub, distance)")}
-        ${chk("auto_bib", s.auto_bib, "Giv startnumre automatisk")}
+        ${chk("auto_bib", s.auto_bib, "Startnummer gives ved tilmeldingen (vises på kvitteringen)")}
         <label>Første startnummer<input type="number" name="bib_from" min="1" value="${s.bib_from}"></label>
       </div>
       <label style="margin-top:10px">Tekst på tilmeldingssiden <span class="muted small">(fx pris, betaling, praktisk info)</span><textarea name="note" rows="3" maxlength="500">${esc(s.note)}</textarea></label>

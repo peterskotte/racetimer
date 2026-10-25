@@ -106,8 +106,16 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             flock($fp, LOCK_EX);
             $linjer = array_filter(explode("\n", stream_get_contents($fp)));
             $id = 0;
+            // startnummer: næste efter det højeste, der er brugt – her eller på Pi'en
+            $bib = null;
+            if (!empty($lob['auto_bib'])) {
+                $hoejeste = max(array_merge([(int)($lob['bib_from'] ?? 1) - 1], array_map('intval', $lob['taken_bibs'] ?? [])));
+                foreach (array_slice($linjer, 1) as $l) $hoejeste = max($hoejeste, (int)(json_decode($l, true)['bib'] ?? 0));
+                $bib = $hoejeste + 1;
+            }
             foreach (array_slice($linjer, 1) as $l) $id = max($id, (int)(json_decode($l, true)['id'] ?? 0));
-            $t = ['id' => $id + 1, 'ts' => time(), 'name' => $v['name'], 'sex' => $v['sex'],
+            // id stiger altid (også hvis filen er slettet og startet forfra), så Pi'en aldrig springer en over
+            $t = ['id' => max($id + 1, (int)floor(microtime(true) * 1000)), 'ts' => time(), 'bib' => $bib, 'name' => $v['name'], 'sex' => $v['sex'],
                   'birth_year' => $v['birth_year'] !== '' ? (int)$v['birth_year'] : null, 'club' => $v['club'],
                   'email' => $v['email'], 'distance' => $v['distance'] ?: null];
             if (!$linjer) fwrite($fp, "<?php http_response_code(404); exit; ?>\n");
@@ -141,7 +149,7 @@ input,select{display:block;width:100%;margin-top:6px;padding:11px 12px;border-ra
 button{background:var(--orange);color:#fff;border:0;border-radius:12px;padding:13px 22px;font-size:17px;font-weight:700;cursor:pointer}
 .fejl{background:#3a1414;border:1px solid var(--red);color:#ffc9c9;border-radius:12px;padding:12px 16px;margin-bottom:16px}
 .ok{background:#12301d;border:1px solid var(--green);border-radius:12px;padding:16px;margin-bottom:16px}
-.note{white-space:pre-line}.muted{color:var(--muted)}.hp{position:absolute;left:-9999px}
+.bib{font-size:20px;margin:10px 0 6px}.bib b{font-size:34px;color:var(--orange);margin-left:6px}.note{white-space:pre-line}.muted{color:var(--muted)}.hp{position:absolute;left:-9999px}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 8px;border-top:1px solid var(--line)}th{color:var(--muted);border-top:0}
 a{color:var(--text)}ul.loeb{list-style:none;padding:0}ul.loeb li{margin:10px 0}
 </style>
@@ -162,8 +170,9 @@ a{color:var(--text)}ul.loeb{list-style:none;padding:0}ul.loeb li{margin:10px 0}
   <h1><?= e($lob['name']) ?></h1>
   <div class="sub"><?= dato($lob['date'], true) ?><?= !empty($lob['deadline']) ? ' · tilmelding senest ' . dato($lob['deadline'], true) : '' ?></div>
   <?php if ($tak): ?>
-    <div class="ok"><b>Tak, <?= e($tak['name']) ?> – du er tilmeldt<?= $tak['distance'] ? ' ' . e(distnavn($lob, $tak['distance'])) : '' ?>.</b><br>
-      <span class="muted">Du får ikke en bekræftelse på mail. Startnummer og tider får du på løbsdagen.</span></div>
+    <div class="ok"><b>Tak, <?= e($tak['name']) ?> – du er tilmeldt<?= $tak['distance'] ? ' ' . e(distnavn($lob, $tak['distance'])) : '' ?>.</b>
+      <?php if ($tak['bib']): ?><div class="bib">Dit startnummer er <b><?= (int)$tak['bib'] ?></b></div><?php endif; ?>
+      <span class="muted">Du får ikke en bekræftelse på mail<?= $tak['bib'] ? ', så skriv nummeret ned eller tag et billede af siden' : '' ?>.</span></div>
   <?php elseif (!aaben($lob)): ?>
     <div class="card">Tilmeldingen er lukket.</div>
   <?php else: ?>
@@ -199,8 +208,8 @@ a{color:var(--text)}ul.loeb{list-style:none;padding:0}ul.loeb li{margin:10px 0}
   <?php if ($vis_liste): ?>
     <h2>Tilmeldte (<?= count($deltagere) ?>)</h2>
     <?php if ($deltagere): ?><div class="card" style="padding:6px 12px"><table>
-      <tr><th>Navn</th><th>Klub</th><?= !empty($lob['distances']) ? '<th>Distance</th>' : '' ?></tr>
-      <?php foreach ($deltagere as $t): ?><tr><td><?= e($t['name']) ?></td><td class="muted"><?= e($t['club'] ?? '') ?></td>
+      <tr><?= !empty($lob['auto_bib']) ? '<th>Nr</th>' : '' ?><th>Navn</th><th>Klub</th><?= !empty($lob['distances']) ? '<th>Distance</th>' : '' ?></tr>
+      <?php foreach ($deltagere as $t): ?><tr><?= !empty($lob['auto_bib']) ? '<td class="muted">' . (int)($t['bib'] ?? 0) . '</td>' : '' ?><td><?= e($t['name']) ?></td><td class="muted"><?= e($t['club'] ?? '') ?></td>
         <?= !empty($lob['distances']) ? '<td>' . e(distnavn($lob, $t['distance'] ?? '')) . '</td>' : '' ?></tr><?php endforeach; ?>
     </table></div><?php else: ?><p class="muted">Ingen endnu – vær den første!</p><?php endif; ?>
   <?php endif; ?>

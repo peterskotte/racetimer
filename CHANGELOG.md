@@ -4,6 +4,9 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Ændret**
+- **Startnummer ved online tilmelding:** hjemmesiden giver startnummeret i selve tilmeldingen og viser det på kvitteringen og deltagerlisten. Pi'en sender de numre, den allerede har brugt, så de ikke gives igen, og beholder hjemmesidens nummer, når tilmeldingen hentes. Er nummeret alligevel optaget (fx givet manuelt på Pi'en i samme minut), får løberen et nyt, og admin får en advarsel. Upload den nye `tilmeld.php`.
+
 ## [1.4.0] – 2026-10-25
 
 **Til eksisterende installationer:** upload `tilmeld.php` og de nye `index.php` og `modtag.php` til webhotellet (husk jeres nøgle i `modtag.php`). Uden dem virker resultaterne som før, men hjemmesiden viser ikke distancer, nedtæller og tilmelding.

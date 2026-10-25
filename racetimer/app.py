@@ -909,6 +909,7 @@ async def add_participant(rid: int, request: Request, u=Depends(admin)):
                 (rid, f["bib"], f["name"], f["sex"], f["club"], f["chip"], f["dogs"], f["dog1"], f["dog2"], f["distance"],
                  f["birth_year"], f["email"]))
     _relink(rid)
+    _bibs_changed(rid)
     return {"id": pid}
 
 
@@ -927,6 +928,8 @@ async def update_participant(pid: int, request: Request, u=Depends(admin)):
           (f["bib"], f["name"], f["sex"], f["club"], f["chip"], None if so in ("", None) else float(so),
            f["dogs"], f["dog1"], f["dog2"], f["distance"], f["birth_year"], f["email"], pid))
     _relink(p["race_id"])
+    if f["bib"] != p["bib"]:
+        _bibs_changed(p["race_id"])
     return {"ok": True}
 
 
@@ -944,6 +947,13 @@ async def set_status(pid: int, request: Request, u=Depends(admin)):
         raise HTTPException(400, "Ugyldig status")
     db.ex("UPDATE participants SET status=?, status_at=? WHERE id=?", (st, time.time() if st else None, pid))
     return {"ok": True}
+
+
+def _bibs_changed(rid):
+    """Startnumre på Pi'en ændret – åben tilmelding: hjemmesiden skal kende de optagne numre med det samme."""
+    race = db.race(rid)
+    if race and signup.is_open(race, signup.settings(race)):
+        sync_mgr.poke_state()
 
 
 def _relink(rid):
@@ -1025,6 +1035,7 @@ async def import_participants(rid: int, file: UploadFile = File(...), u=Depends(
                    f["birth_year"], f["email"]))
             added += 1
     _relink(rid)
+    _bibs_changed(rid)
     return {"added": added, "updated": updated, "errors": errors}
 
 
