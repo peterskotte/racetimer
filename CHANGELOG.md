@@ -5,6 +5,9 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 ## [Ikke udgivet]
 
 **Nyt**
+- **Browser-udgave til små løb uden Pi og RFID** ([docs/browser.md](docs/browser.md)): race director trykker på løberens felt (op til 12 deltagere). Samme løbstyper, regler, resultatskærm, splash, testløb, arkiv og hjemmeside som på Pi'en. Data gemmes i browseren med sikkerhedskopi, og den virker offline. Løbsmotoren findes nu også i JavaScript, og en test tjekker, at begge regner ens.
+- `modtag.php` tillader afsendelse fra browser-udgaven (CORS). Nøglen kræves stadig.
+- Resultatskærmen kan få sine data fra et andet browservindue (`display.html?local=1`).
 - **Nedtæller med ring:** tidsløb og custom backyard med samlet tid viser *Tid tilbage* som en stor `00:00:00`-nedtæller med en ring, der tømmes. Backyard viser det samme for tiden til næste start. Ringen bliver orange de sidste 10 % og rød det sidste kvarter. Nedtælleren vises også på hjemmesiden (PHP og FTP) og spejlserveren. Upload den nye `index.php` til webhotellet.
 
 ## [1.3.0] – 2026-10-24

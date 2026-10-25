@@ -6,7 +6,7 @@
 <title>RaceTimer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="static/style.css">
 <style>
   main { padding: clamp(14px, 2.4vw, 32px); max-width: 1400px; margin: 0 auto; }
 
@@ -246,10 +246,23 @@ function beep(freq = 880, dur = .25, times = 1) {
 $("sound").onclick = () => { actx = actx || new AudioContext(); actx.resume(); $("sound").hidden = true; beep(660, .12); };
 
 // ---------------- data
+// Browser-udgaven (?local=1): data kommer fra race director-vinduet på samme enhed i stedet for fra Pi'en
+const LOCAL = new URLSearchParams(location.search).has("local");
+let localData = null;
+if (LOCAL) {
+  const bc = new BroadcastChannel("racetimer-lite");
+  bc.onmessage = e => { if (e.data?.type === "live") { localData = e.data.data; load(); } };
+  bc.postMessage({type: "hello"});
+}
 async function load() {
   try {
-    const r = await fetch("/api/live", {cache: "no-store"});
-    data = await r.json();
+    if (LOCAL) {
+      if (!localData) return;
+      data = localData;
+    } else {
+      const r = await fetch("/api/live", {cache: "no-store"});
+      data = await r.json();
+    }
     // Pi'en er blevet opdateret → hent den nye side (ingen F5 nødvendig på kiosk-skærmen)
     if (version && data.version && data.version !== version) return location.reload();
     version = version || data.version;

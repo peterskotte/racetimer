@@ -1,0 +1,11 @@
+{
+  "name": "RaceTimer – Race director",
+  "short_name": "RaceTimer",
+  "description": "Manuel tidtagning i browseren til små løb – uden Raspberry Pi og RFID.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#111814",
+  "theme_color": "#0c1b14",
+  "lang": "da",
+  "icons": [{"src": "static/splash/racetiming.webp", "sizes": "512x512", "type": "image/webp"}]
+}

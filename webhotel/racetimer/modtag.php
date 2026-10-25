@@ -13,6 +13,15 @@
 $RACETIMER_KEY = 'SKIFT-MIG-TIL-EN-LANG-HEMMELIG-NOEGLE';
 
 header('Content-Type: application/json; charset=utf-8');
+// Browser-udgaven af RaceTimer sender direkte fra browseren (fra en anden adresse). Det er sikkert at
+// tillade, fordi hver forespørgsel stadig skal have den rigtige nøgle.
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, X-RaceTimer-Key, Authorization');
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
 
 function svar($kode, $tekst, $ekstra = []) {
     http_response_code($kode);

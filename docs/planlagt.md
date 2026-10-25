@@ -17,7 +17,7 @@ Idéer:
 - Farven skifter mod slutningen, fx orange de sidste 10 % og rød det sidste kvarter.
 - Samme visning på hjemmesiden (PHP/FTP/spejl) og i admin.
 
-## 2. Browser-udgave til små løb (uden Pi og RFID)
+## 2. Browser-udgave til små løb (uden Pi og RFID) ✅ bygget (25.10.2026) – se [browser.md](browser.md)
 
 En **billig udgave, der kun kræver en browser**: ingen Raspberry Pi, ingen RFID-læsere eller andet hardware. Til klubber og enkeltpersoner med små løb.
 

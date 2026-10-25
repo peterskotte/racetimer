@@ -43,6 +43,8 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 - **Tidligere resultater** som en liste under splash eller tabellen.
 - **Arkiverede løb vises ikke.** Arkiverer du et løb i RaceTimer, forsvinder det fra siden med det samme. Gendanner du det, kommer det tilbage.
 
+> **Browser-udgaven** af RaceTimer (uden Pi) sender til den samme `modtag.php`. Det kræver den nyeste version, som tillader afsendelse fra en browser.
+
 > Har du en ældre version af `modtag.php` og `index.php` på webhotellet, så upload de nye. Ellers vises arkiverede løb stadig, og splash mangler. Husk at sætte din nøgle i den nye `modtag.php`.
 
 Vil du vise resultaterne inde på en eksisterende side (fx i WordPress), kan du indsætte dem med en iframe:

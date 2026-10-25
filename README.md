@@ -7,6 +7,8 @@ Pi'en er både server, viser resultatskærmen og har en kodebeskyttet admin-side
   `?kiosk=1` får lange lister til at rulle automatisk.
 - **Admin**: `http://<pi>:8000/admin`. Første login er `admin` og en tilfældig **førstegangskode**, der står på Pi'ens skærm (og i `racetimer-kode.txt` på SD-kortet).
 
+**Ingen Raspberry Pi?** Til små løb med op til 12 deltagere kan race director tage tid manuelt i browseren. Se [docs/browser.md](docs/browser.md).
+
 **Ny klub? Start med [Kom i gang-vejledningen](docs/vejledning.md)**: indkøb, SD-kort, opsætning, første løb og fejlfinding.
 
 ## Løbstyper
@@ -298,6 +300,7 @@ racetimer/
   outcome.py   Vurdering af hver læsning: talt / ignoreret (og hvorfor) / ukendt
   events.py    Hændelser til moduler og skærmens scan-besked
   modules/     Eksterne enheder (USB-højttaler …)
+web/           Browser-udgaven: engine.js (motoren i JavaScript), lite.js (RD-app); byg med tools/build-web.sh
   db.py        SQLite-skema, brugere (PBKDF2), sessioner
   static/      display.html (resultatskærm), admin.html, style.css
 deploy/        install.sh, systemd-services (Pi + spejlserver), kiosk-script, Caddyfile

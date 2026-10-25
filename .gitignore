@@ -21,3 +21,4 @@ image/build.log
 # privat signeringsnøgle til opdateringer – må ALDRIG i repoet (læg den i GitHub Secrets + en sikker backup)
 signing/
 dist/
+site/

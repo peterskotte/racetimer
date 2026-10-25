@@ -16,6 +16,8 @@ Denne vejledning er til klubber og arrangører, der vil bruge RaceTimer til egne
 
 ---
 
+> **Har I ikke en Raspberry Pi?** Til små løb (op til 12 deltagere) kan I bruge [browser-udgaven](browser.md), hvor race director tager tid ved at trykke på en skærm.
+
 ## 1. Det skal I bruge
 
 | Del | Krav | Bemærk |

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RaceTimer – Race director</title>
+<meta name="theme-color" content="#0c1b14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="static/splash/racetiming.webp">
+<link rel="stylesheet" href="static/style.css">
+<style>
+  main { padding: 16px clamp(12px, 3vw, 32px) 80px; max-width: 1400px; margin: 0 auto; }
+  nav.tabs { display: flex; flex-wrap: wrap; gap: 2px; background: var(--nav); padding: 0 clamp(12px, 3vw, 32px); }
+  nav.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--muted); padding: 12px; }
+  nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  h2 { font-size: 19px; margin: 24px 0 10px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  .card.pad { padding: 16px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  label.chk { flex-direction: row; align-items: center; gap: 8px; }
+  input, select, textarea { font: inherit; font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; min-width: 0; }
+  table { width: 100%; border-collapse: collapse; } th { text-align: left; color: var(--muted); font-weight: 600; padding: 8px 10px; background: var(--card-head); }
+  td { padding: 8px 10px; border-top: 1px solid var(--line); }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--card-head); color: var(--muted); }
+  .pill.test { background: #2f6fd6; color: #fff; }
+  .row-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .row-item:first-child { border-top: 0; }
+  .rh { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rname { font-size: 20px; font-weight: 700; }
+  /* de store felter: ét pr. løber – tryk = passage */
+  #tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; margin-top: 14px; }
+  .tile { position: relative; }
+  .tile .tap { width: 100%; min-height: 150px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; text-align: left;
+    background: var(--card); border: 2px solid var(--line); border-radius: 16px; color: var(--text); touch-action: manipulation; transition: transform .06s, border-color .2s; }
+  .tile .tap:active { transform: scale(.97); }
+  .tile .tbib { font-size: 15px; font-weight: 700; color: var(--muted); }
+  .tile .tname { font-size: clamp(20px, 2.2vw, 26px); font-weight: 800; line-height: 1.1; padding-right: 30px; }
+  .tile .tmain { font-size: clamp(30px, 3.4vw, 42px); font-weight: 800; line-height: 1.05; margin-top: auto; }
+  .tile .tmain small { font-size: .45em; color: var(--muted); font-weight: 600; }
+  .tile .tsub { font-size: 13px; color: var(--muted); }
+  .tile .tflash { position: absolute; left: 10px; right: 10px; bottom: 10px; padding: 6px 10px; border-radius: 10px; font-weight: 800; font-size: 15px; text-align: center; }
+  .tile.ok .tap { border-color: var(--green); } .tile.ok .tflash { background: #1f9d4f; color: #fff; }
+  .tile.warn .tap { border-color: var(--gold); } .tile.warn .tflash { background: #f2c14e; color: #1b1e23; }
+  .tile.out .tap { opacity: .5; }
+  .tile.st-winner .tap { border-color: var(--gold); }
+  .tile .tmenu { position: absolute; top: 8px; right: 8px; padding: 2px 10px; font-size: 18px; line-height: 1; border-radius: 8px; background: transparent; }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 18px; width: min(360px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  #menuBtns { display: grid; gap: 8px; margin-top: 12px; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--card); border: 1px solid var(--line); padding: 10px 16px;
+    border-radius: 12px; z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,.4); max-width: 92vw; }
+  #toast.err, .err-text { color: #ff8a8a; }
+  .note { background: var(--card-head); border-radius: 12px; padding: 10px 14px; font-size: 14px; color: var(--muted); }
+  @media (max-width: 600px) {  /* mobil: to felter pr. række, så alle 12 løbere kan ses med lidt scroll */
+    header.top { flex-wrap: wrap; row-gap: 8px; }
+    #tiles { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tile .tap { min-height: 112px; padding: 10px 12px; border-radius: 14px; }
+    .tile .tname { font-size: 17px; padding-right: 26px; } .tile .tmain { font-size: 28px; } .tile .tsub { font-size: 11px; }
+    .tile .tmenu { top: 4px; right: 4px; padding: 0 8px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 class="logo" id="brand"></h1><span class="muted" style="font-weight:600">Race director</span>
+  <div class="spacer"></div>
+  <button id="openScreen" title="Åbn resultatskærmen i et nyt vindue – fx på en ekstern skærm eller et TV">🖥️ Resultatskærm</button>
+</header>
+<nav class="tabs">
+  <button data-tab="race" class="on">Løb</button>
+  <button data-tab="setup">Opsæt løb</button>
+  <button data-tab="people">Deltagere</button>
+  <button data-tab="archive">Arkiv</button>
+  <button data-tab="settings">⚙ Indstillinger</button>
+</nav>
+<main>
+  <section class="tab" id="tab-race">
+    <div class="card pad" id="raceHead"></div>
+    <div id="tiles"></div>
+    <p class="muted small" style="margin-top:14px">Tryk på løberens felt, hver gang løberen passerer. <b>↶ Fortryd sidste</b> fjerner det seneste tryk, og <b>⋯</b> giver manuel tid og RTC/DNS/DSQ.</p>
+  </section>
+
+  <section class="tab" id="tab-setup" hidden>
+    <h2 style="margin-top:4px">Løb</h2>
+    <div class="card" id="raceList"></div>
+    <h2>Nyt løb</h2>
+    <form class="card pad" id="newRace">
+      <div class="grid">
+        <label>Navn<input name="name" required placeholder="fx Tirsdagstræning"></label>
+        <label>Løbstype<select name="type"></select></label>
+      </div>
+      <div id="newCfg" style="margin-top:12px"></div>
+      <label class="chk" style="margin-top:12px"><input type="checkbox" name="test"> 🧪 Testløb – hurtigere tid og færre begrænsninger (sendes ikke til hjemmesiden)</label>
+      <div id="newTest" class="grid" hidden style="margin-top:8px"></div>
+      <div style="margin-top:14px"><button class="primary">Opret løb</button></div>
+    </form>
+  </section>
+
+  <section class="tab" id="tab-people" hidden>
+    <h2 style="margin-top:4px">Deltagere i <span id="peopleRace"></span></h2>
+    <div class="card" id="peopleList"></div>
+    <p class="note" id="peopleFull" hidden>Browser-udgaven har plads til 12 deltagere. Brug RaceTimer på en Raspberry Pi med RFID til større løb.</p>
+    <form class="card pad" id="addPerson" style="margin-top:12px">
+      <div class="grid">
+        <label>Startnr<input name="bib" type="number" min="1" value="1"></label>
+        <label>Navn<input name="name" required></label>
+        <label>Køn<select name="sex"><option value=""></option><option>Kvinde</option><option>Mand</option><option>Andet</option></select></label>
+        <label>Klub<input name="club"></label>
+      </div>
+      <div class="grid" id="dogFields" hidden style="margin-top:12px"><label>Hund 1<input name="dog1"></label><label>Hund 2 (valgfri)<input name="dog2"></label></div>
+      <div style="margin-top:12px"><button class="primary">Tilføj deltager</button></div>
+    </form>
+  </section>
+
+  <section class="tab" id="tab-archive" hidden>
+    <h2 style="margin-top:4px">Afsluttede og arkiverede løb</h2>
+    <div class="card" id="archiveList"></div>
+  </section>
+
+  <section class="tab" id="tab-settings" hidden>
+    <form id="settingsForm">
+      <h2 style="margin-top:4px">Udseende</h2>
+      <div class="card pad">
+        <div class="grid">
+          <label>Klubbens / løbets navn<input name="bname" maxlength="60"></label>
+          <label>Logo (PNG/JPG/WebP)<input name="logo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:10px"><div id="logoPrev"></div><button type="button" id="logoDel">Fjern logo</button></div>
+        <div class="grid" style="margin-top:12px">
+          <label>Splash-skærm (når der ikke kører et løb)<select name="splash"><option value="builtin:racetiming">RaceTiming – trail og løber</option>
+            <option value="builtin:plain">Ensfarvet med klubnavn</option><option value="upload">Eget billede</option></select></label>
+          <label>Eget splash-billede<input name="splash_file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+        </div>
+        <label style="margin-top:12px">Tekst på splash-skærmen (valgfri)<textarea name="splash_text" rows="2" maxlength="160" placeholder="Venter på næste løb"></textarea></label>
+        <label class="chk" style="margin-top:10px"><input type="checkbox" name="scan_banner"> Vis stor besked på resultatskærmen ved hver registrering</label>
+      </div>
+      <h2>Hjemmeside</h2>
+      <div class="card pad">
+        <p class="muted small" style="margin-top:0">Send resultaterne til klubbens hjemmeside med den samme <code>modtag.php</code> som RaceTimer på Pi'en (nyeste version, se webhotel/LÆS-MIG.md).</p>
+        <div class="grid">
+          <label>Adresse til modtag.php<input name="url" placeholder="https://ditdomæne.dk/racetimer/modtag.php"></label>
+          <label>Nøgle<input name="key" type="password" autocomplete="off"></label>
+          <label>Send automatisk<select name="interval"><option value="0">Kun manuelt</option><option value="30">Hvert 30. sek</option><option value="60">Hvert minut</option><option value="300">Hvert 5. minut</option></select></label>
+        </div>
+        <label class="chk" style="margin-top:10px"><input type="checkbox" name="on_finish"> Send de endelige resultater, når løbet afsluttes</label>
+        <div class="btns" style="margin-top:10px;align-items:center"><button type="button" id="sendNow">Send nu</button><span id="syncStatus" class="small"></span></div>
+      </div>
+      <div style="margin-top:14px"><button class="primary">Gem indstillinger</button></div>
+    </form>
+    <h2>Sikkerhedskopi</h2>
+    <div class="card pad">
+      <p class="muted small" style="margin-top:0">Alt gemmes kun i <b>denne browser på denne enhed</b>. Ryd ikke browserdata midt i et løb, og tag gerne en sikkerhedskopi før og efter.</p>
+      <p class="small" id="storageInfo"></p>
+      <div class="btns"><button id="exportBtn">⬇ Gem sikkerhedskopi</button><label class="btn" style="flex-direction:row;cursor:pointer">⬆ Indlæs sikkerhedskopi<input id="importFile" type="file" accept="application/json" hidden></label>
+        <button class="danger" id="wipeBtn">Slet alt i browseren</button></div>
+    </div>
+    <p class="muted small" style="margin-top:20px">RaceTimer browser-udgave · til små løb uden Raspberry Pi og RFID · <a href="https://github.com/peterskotte/racetimer" target="_blank" rel="noopener">github.com/peterskotte/racetimer</a></p>
+  </section>
+</main>
+<dialog id="menu"><b id="menuTitle"></b><div id="menuBtns"></div></dialog>
+<div id="toast" hidden></div>
+<script type="module" src="lite.js"></script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
+</body>
+</html>
