@@ -299,6 +299,8 @@ def standings(race, now=None):
         cls = {p["id"]: signup.age_class(p, race, s) for p in parts}
         for r in rows:
             r["class"] = cls.get(r["id"])
+    if race["type"] == "timed" and not info.get("distances"):  # vis den valgte varighed, fx "Tidsbaseret · 6 timer"
+        info["type_label"] = f"Tidsbaseret · {hours_label(engine.merged_config('timed', race['config'])['duration_h'])}"
     t = teaser(race, info, parts, now)
     if t:
         info["teaser"] = t
@@ -308,6 +310,14 @@ def standings(race, now=None):
         db.ex("UPDATE races SET status='finished', finished_at=? WHERE id=?", (fin, race["id"]))
         bus.publish({"type": "race.finished", "race": race["name"]})
     return rows, info
+
+
+def hours_label(h):
+    """6 → "6 timer", 1 → "1 time", 1.5 → "90 min"."""
+    h = float(h or 0)
+    if h == int(h):
+        return f"{int(h)} {'time' if int(h) == 1 else 'timer'}"
+    return f"{round(h * 60)} min"
 
 
 TEASER_DEFAULT_SEC = 30 * 60  # uden indtjekning vises startlisten 30 min før start

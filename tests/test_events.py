@@ -362,6 +362,12 @@ def test_teaser_before_checkin():
           (now + 2 * 3600, json.dumps(engine.merged_config("p2p", {"checkin_min": 0})), rid))
     assert app.standings(db.race(rid), now)[1]["teaser"]["list_at"] == now + 2 * 3600 - 1800  # uden indtjekning: 30 min
 
+
+def test_timed_label_shows_duration():
+    rid = race("timed", {"duration_h": 6})
+    assert app.standings(db.race(rid))[1]["type_label"] == "Tidsbaseret · 6 timer"
+    assert app.hours_label(1) == "1 time" and app.hours_label(1.5) == "90 min"
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

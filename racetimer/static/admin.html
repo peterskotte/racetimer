@@ -1046,11 +1046,12 @@ $("newForm").onsubmit = async e => {
 };
 
 // ------------------------------------------------ aktivt løb
+const hoursLabel = h => (h = +h || 0) === Math.round(h) ? `${h} ${h === 1 ? "time" : "timer"}` : `${Math.round(h * 60)} min`;
 async function loadRaces() {
   races = (await api("/api/races")).filter(r => !r.archived_at);
   checkClock();
   if (!races.find(r => r.id === curId)) curId = (races.find(r => r.is_active) || races[0])?.id ?? null;
-  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${r.test ? "🧪 " : ""}${esc(r.name)} – ${esc(TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
+  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${r.test ? "🧪 " : ""}${esc(r.name)} – ${esc(r.type === "timed" && !r.config?.distances?.length ? `Tidsbaseret · ${hoursLabel(r.config.duration_h)}` : TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
     : `<option>Ingen løb – opret et under “Nyt løb”</option>`;
   await loadRace(true);
 }
@@ -1082,7 +1083,7 @@ async function loadRace(full) {
   $("raceHead").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center">
     <div><div style="font-size:20px;font-weight:700">${esc(r.name)} ${r.is_active ? '<span class="pill">PÅ SKÆRMEN</span>' : ""}
       ${r.test ? `<span class="pill test" title="Sendes ikke til hjemmesiden">🧪 TESTLØB${r.test.speed > 1 ? ` · ${r.test.speed}× tid` : ""}${r.test.no_minimum ? " · ingen minimumstid" : ""}${r.test.no_checkin ? " · ingen indtjekning" : ""}${r.test.no_dedup ? " · intet dublet-filter" : ""}</span>` : ""}</div>
-      <div class="muted small" style="margin-top:4px"><span class="pill ${r.status}">${status}</span> ${esc(TYPES[r.type].label)}
+      <div class="muted small" style="margin-top:4px"><span class="pill ${r.status}">${status}</span> ${esc(i.type_label || TYPES[r.type].label)}
       · Start: ${clock(r.started_at || r.scheduled_start)}${r.finished_at ? " · Slut: " + clock(r.finished_at) : ""}${extra}</div></div>
     <div class="btns">
       ${r.status === "planned" ? `<button class="go" data-act="start">▶ Start nu</button><input type="datetime-local" id="startAt" value="${toLocalInput(r.scheduled_start)}"><button data-act="startAt">Start kl.</button>` : ""}
