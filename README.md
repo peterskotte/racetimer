@@ -3,6 +3,8 @@
 Et enkelt RFID-tidtagningssystem til løbetræning og løb, der kører på en Raspberry Pi 3, 4 eller 5.
 Pi'en er både server, viser resultatskærmen og har en kodebeskyttet admin-side.
 
+![Resultatskærmen under et tidsløb](docs/img/resultatskaerm-nedtaeller.webp)
+
 - **Resultatskærm** (dark mode): `http://<pi>:8000/` – virker på Pi-skærmen, en TV-skærm og på mobilen.
   `?kiosk=1` får lange lister til at rulle automatisk.
 - **Admin**: `http://<pi>:8000/admin`. Første login er `admin` og en tilfældig **førstegangskode**, der står på Pi'ens skærm (og i `racetimer-kode.txt` på SD-kortet).

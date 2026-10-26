@@ -2,6 +2,9 @@
 
 Denne vejledning er til klubber og arrangører, der vil bruge RaceTimer til egne løb. Den går fra indkøb til første løb. Du skal ikke kunne programmere, og en Raspberry Pi kan sættes op på en aften.
 
+![Resultatskærmen under et 6-timersløb](img/resultatskaerm-nedtaeller.webp)
+*Resultatskærmen under et tidsløb: nedtælling med ring, de fire førende og resten af feltet.*
+
 **Indhold**
 1. [Det skal I bruge](#1-det-skal-i-bruge)
 2. [Skriv SD-kortet](#2-skriv-sd-kortet)
@@ -101,6 +104,9 @@ En ny installation har ét demoløb, *Demoløb (kan slettes)*, med tre testløbe
 3. Prøv også jeres rigtige læser: tildel jeres egen chip til en testløber under **Deltagere → 📡 Scan**, og hold den mod læseren.
 4. Afslut demoløbet, og slet det, når I er trygge ved systemet.
 
+![Admin: Aktivt løb](img/admin-aktivt-lob.webp)
+*Admin på en computer: løbet øverst, tæller og indstillinger til venstre, ⚙ Opsætning til højre. På en mobil ligger Opsætning i menuen.*
+
 > **Prøv løbstypen først:** sæt flueben i **🧪 Testløb** under *Nyt løb*, og vælg fx *60× hurtigere*. Så varer en backyard-time 1 minut, og du kan øve hele forløbet med rigtige armbånd på få minutter. Testløb sendes ikke til hjemmesiden.
 
 ## 5. Opret jeres eget løb
@@ -110,6 +116,9 @@ Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 **Start fra** gør det nemmere:
 - **🧩 Byg selv** stiller et par spørgsmål (hvordan vinder man, hvordan startes der, flere distancer, cutoff, armbånd eller manuel) og vælger løbstype og indstillinger for jer. Alt kan justeres bagefter.
 - **Skabeloner:** vælg et eksempel (fx *Nytårsløb: 5, 10 og 15 km*, *6- og 12-timersløb* eller *Trailløb med cutoff*) eller en af jeres egne. Et løb, I har sat op, gemmes som skabelon under **Aktivt løb → Indstillinger → 💾 Gem som skabelon**, så næste års udgave er klar med ét valg. Skabeloner kan hentes som fil (⬇) og importeres på en anden Pi eller i en anden klub. Deltagere og tider kommer ikke med.
+
+![Byg selv under Nyt løb](img/admin-byg-selv.webp)
+*🧩 Byg selv: svar på spørgsmålene, så sættes løbstype og indstillinger nedenunder.*
 
 **Cutoff:** A til B og intervalstart kan have en maksimal tid. En løber, der ikke er i mål inden da, bliver *DNF · over tid*, og senere læsninger tæller ikke. Ved flere distancer kan hver distance have sin egen cutoff.
 
@@ -128,9 +137,15 @@ Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 2. **Distancerne**, der hver består af en eller flere ruter i træk, fx *5 km* = Kort, *10 km* = Lang og *15 km* = Kort → Lang. Ved 15 km er løberen i mål efter anden passage.
 3. **Start + min** giver en distance sin egen start, fx 30 min efter løbets start. Startknappen starter løbet, og senere distancer starter selv.
 
+![Ruter og distancer](img/admin-distancer.webp)
+*Nytårsløbet: to ruter, og tre distancer, hvor 15 km er kort + lang rute i træk og starter 30 min før de andre.*
+
 Hver deltager vælger distance i deltagerlisten (eller kolonnen *Distance* i Excel). Stilling, resultatskærm, hjemmeside og CSV deles op pr. distance, og resultatskærmen skifter selv mellem distancerne hvert 15. sekund. Alle bruger de samme læsere. *Tidsbaseret* kan på samme måde have flere varigheder, fx 6 og 12 timer.
 
 **Tæller:** vælg **📶 Armbånd**, når løberne har RFID-armbånd, eller **👆 Manuel**, når der ikke er læsere, fx til en lille træning. Ved *Manuel* viser **Aktivt løb** et felt pr. løber, og I trykker på feltet, hver gang løberen passerer (et nyt tryk inden for 3 sekunder tæller ikke, og **↶ Fortryd sidste tryk** fjerner det seneste). Der kan skiftes mellem de to når som helst, også under løbet, fx hvis en læser fejler. Resultatskærm og hjemmeside virker ens for begge.
+
+![Manuel tidtagning med felter](img/admin-manuel.webp)
+*Tæller: 👆 Manuel – ét felt pr. løber, tryk ved hver passage.*
 
 Reglerne for hver type og backyards tidsvinduer står i [README](../README.md#løbstyper).
 
@@ -149,6 +164,12 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 **Manuelt:** Tilføj enkelte deltagere med formularen, fx eftertilmeldinger på dagen.
 
 **Tilmelding på hjemmesiden:** Har I `modtag.php` og `tilmeld.php` på webhotellet (se [webhotel/LÆS-MIG.md](../webhotel/LÆS-MIG.md)), kan løberne tilmelde sig selv. Under **Deltagere → 🌐 Tilmelding på hjemmesiden** åbner I tilmeldingen og vælger frist, om fødselsår skal udfyldes, om de tilmeldte vises på siden, om startnummeret gives ved tilmeldingen, om løberen får en bekræftelse på e-mail med startnummeret (svar går til klubbens svar-adresse – sæt klubbens mailkonto op under **⚙ Opsætning → Synkronisering → ✉ Mail til tilmeldinger**, og tryk **✉ Send testmail**) og en tekst til siden og mailen (fx pris og betaling). Pi'en henter nye tilmeldinger hvert minut, mens den er på nettet, og de står som deltagere med en orange kant. **⟳ Hent nu** henter med det samme. E-mail og fødselsår vises aldrig offentligt, og tilmeldingerne slettes fra webhotellet automatisk efter løbet.
+
+![Tilmelding i admin](img/admin-tilmelding.webp)
+*Tilmelding på hjemmesiden og aldersklasser sættes op pr. løb under Deltagere.*
+
+![Tilmeldingssiden på hjemmesiden](img/hjemmeside-tilmelding.webp)
+*Tilmeldingssiden (`tilmeld.php`), som løberne ser den.*
 
 **Aldersklasser:** Vælg 5- eller 10-års klasser i samme boks. Klassen (fx *M40*, *K45*, *K Senior*, *M Junior*) beregnes ud fra køn og fødselsår på løbsdagen og vises i resultaterne på hjemmesiden og i CSV-filen. Fødselsår kan også komme fra Excel (kolonnen *Fødselsår*).
 
@@ -169,6 +190,16 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 - I backyard viser **⚑ Til vurdering** læsninger i flagzonen, som en official skal godkende eller afvise.
 - **Løberen kan se, om scanningen talte.** En stor bjælke på skærmen er grøn, når den talte, gul, når den ikke talte (med årsagen), og rød ved et ukendt armbånd. Med en **USB-højttaler** ved læseren kan det også høres: sæt den i, og tilføj den under **⚙ Opsætning → Moduler**. Tryk **▶ Test** for at høre den.
 
+![Stilling i admin](img/admin-stilling.webp)
+*Stillingen i admin, delt op pr. distance. Knapperne ud for løberen: passage nu, indtast tid, RTC/DNS/DSQ og fortryd.*
+
+<img src="img/admin-mobil.webp" alt="Admin på mobil" width="300">
+
+*Admin på en mobil – praktisk ved målet.*
+
+![Resultatskærm med distancer](img/resultatskaerm-distancer.webp)
+*Resultatskærmen ved flere distancer: én fane pr. distance, som skifter af sig selv.*
+
 **Efter løbet**
 - Afslut løbet, og hent resultaterne som **CSV** (åbnes i Excel).
 - Tryk **🗄 Arkivér**, når I er færdige med løbet. Det forsvinder fra løbslisten, skærmen og hjemmesiden, men ligger under fanen **Arkiv**, hvor det kan ses, hentes som CSV og gendannes.
@@ -186,6 +217,9 @@ RaceTimer kører fint helt uden internet. Har Pi'en net (fx via mobil-hotspot), 
 | Kun FTP-adgang til klubbens webhotel | **FTP-upload**: Pi'en laver selv en færdig resultatside |
 | Et webhotel med PHP | **Egen hjemmeside (JSON)** med de færdige filer i [`webhotel/`](../webhotel/LÆS-MIG.md) |
 | En lille Linux-server | **RaceTimer-spejlserver**: præcis samme live-skærm offentligt |
+
+![Resultater på hjemmesiden](img/hjemmeside-resultater.webp)
+*Resultatsiden på hjemmesiden (`index.php`) med link til åben tilmelding, distancer og aldersklasser.*
 
 Vælg hvor ofte der sendes, fx hvert minut, og sæt flueben i *ved afslutning*. Detaljer i [README](../README.md#send-resultater-til-en-webserver).
 
