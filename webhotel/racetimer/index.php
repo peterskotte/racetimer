@@ -205,7 +205,8 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 .cd svg{width:72px;height:72px;transform:rotate(-90deg);flex:none}.cd circle{fill:none;stroke-width:10}.cd .bg{stroke:var(--line)}.cd .fg{stroke:#3fc56b;stroke-linecap:round}
 .cdk{color:var(--muted);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}.cdv{font-size:clamp(30px,6vw,52px);font-weight:700;font-variant-numeric:tabular-nums}
 .cd.soon .fg{stroke:var(--orange)}.cd.soon .cdv{color:var(--orange)}.cd.last .fg{stroke:#ef5b5b}.cd.last .cdv{color:#ef5b5b}
-.splash{position:relative;min-height:70vh;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
+.skaerm{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}.skaerm .splash{flex:1}
+.splash{position:relative;min-height:320px;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
 .splash.plain{align-items:center;justify-content:center;flex-direction:column;text-align:center}
 .splash .pn{font-weight:800;font-style:italic;font-size:clamp(36px,8vw,110px);letter-spacing:-.03em;line-height:1.05;padding:0 5vw}
 .splash .txt{width:100%;padding:12vh 5vw 8vh;background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,.45) 55%,transparent);color:#fff;
@@ -223,12 +224,14 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 </head>
 <body>
 <?php if ($splash): ?>
+<div class="skaerm"><!-- splash fylder altid hele browservinduet; arkivet ligger nedenunder -->
 <header><?= $logo ?></header><?= $tilmlink ?>
 <?php if ($splashfil): ?>
 <div class="splash" style="background-image:url('<?= e($splashfil) ?>')"><?= $teaser ? teaser_html($teaser) : '' ?><?php if ($splashtekst !== '' && !$teaser): ?><div class="txt"><?= e($splashtekst) ?></div><?php endif; ?></div>
 <?php else: ?>
 <div class="splash plain"><div class="pn"><?= e($brand) ?></div><?= $teaser ? teaser_html($teaser) : '<div class="txt">' . e($splashtekst !== '' ? $splashtekst : 'Venter på næste løb') . '</div>' ?></div>
 <?php endif; ?>
+</div>
 <main>
 <?php else: ?>
 <header><?= $logo ?></header><?= $tilmlink ?>

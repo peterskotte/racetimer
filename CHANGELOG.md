@@ -4,6 +4,9 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Ændret**
+- **Splash fylder hele browservinduet** på hjemmesiden (`index.php` og FTP-siden), også på mobil. Listen over tidligere resultater ligger nedenunder.
+
 **Nyt**
 - **Tilmelding vælges pr. løb:** når et løb oprettes (og senere under *Deltagere*), vælges *Ingen tilmelding*, *Formular på hjemmesiden* eller *Link andetsteds* (fx en Facebook-begivenhed).
   - **Formular:** vælg for køn, fødselsår, klub og e-mail, om feltet skal udfyldes, er valgfrit eller ikke er med. Navn er altid med, og distance, når løbet har flere. Samtykketeksten på siden følger de valgte felter.

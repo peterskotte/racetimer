@@ -73,10 +73,10 @@ SPLASH_CSS = """
 .fb{width:1.15em;height:1.15em;vertical-align:-.22em}.teaser .tsu{margin-top:14px}.teaser .tsu a{display:inline-block;background:var(--orange);color:#fff;font-weight:700;padding:10px 22px;border-radius:12px;text-decoration:none}
 .teaser .tc{font-size:clamp(26px,5vw,48px);font-weight:800;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}.teaser .ts{opacity:.75;margin-top:8px}
 :root{--bg:#111814;--orange:#e5682a;--cream:#f6efe3}*{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 header{background:var(--cream);border-bottom:3px solid var(--orange);padding:14px 20px}header img{height:40px;display:block}
 .brand{font-weight:800;font-size:26px;color:#0c1b14;font-style:italic}
-.splash{position:relative;flex:1;min-height:60vh;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
+.splash{position:relative;flex:1;min-height:320px;background:#0c0e11 center/cover no-repeat;display:flex;align-items:flex-end}
 .splash.plain{align-items:center;justify-content:center;flex-direction:column;text-align:center}
 .splash.plain .pn{font-weight:800;font-style:italic;font-size:clamp(36px,8vw,110px);letter-spacing:-.03em;line-height:1.05;padding:0 5vw}
 .txt{width:100%;padding:12vh 5vw 8vh;background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,.45) 55%,transparent);
