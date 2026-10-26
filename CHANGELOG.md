@@ -4,6 +4,10 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+## [1.4.2] – 2026-10-26
+
+**Til eksisterende installationer:** upload den nye `index.php` til webhotellet, så hjemmesiden viser teaseren.
+
 **Nyt**
 - **Teaser for planlagte løb:** et løb med planlagt starttidspunkt viser ikke længere deltagerlisten på skærm og hjemmeside, før indtjekningen åbner. I stedet vises splash med en teaser: navn, dato, nedtælling, antal tilmeldte og distancer. Teaseren står i stedet for jeres splash-tekst (fx *Venter på næste løb*). Startlisten kommer frem, når indtjekningen åbner (eller 30 min før start uden indtjekning), og navnene sendes heller ikke til hjemmesiden før. Admin viser, hvornår det sker. Upload den nye `index.php`.
 - **Tidsløbets varighed i headeren:** resultatskærm, admin og hjemmeside viser fx *Tidsbaseret · 6 timer* i stedet for *Tidsbaseret (6/12/24/48 t)*.
