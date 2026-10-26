@@ -368,6 +368,53 @@ def test_timed_label_shows_duration():
     assert app.standings(db.race(rid))[1]["type_label"] == "Tidsbaseret · 6 timer"
     assert app.hours_label(1) == "1 time" and app.hours_label(1.5) == "90 min"
 
+
+def test_signup_modes_fields_and_link():
+    import asyncio
+    from types import SimpleNamespace as N
+    from fastapi import HTTPException
+    from racetimer import signup
+
+    def req(body):
+        async def j():
+            return body
+        return N(json=j)
+    # oprettelse med formular og valgte felter: formularen åbnes med det samme
+    rid = asyncio.run(app.create_race(req({"name": "Formularløb", "type": "p2p",
+                                           "signup": {"mode": "form", "fields": {"club": "off", "email": "optional", "sex": "x"}}}), u={}))["id"]
+    s = signup.settings(db.race(rid))
+    assert s["mode"] == "form" and s["open"] and s["fields"] == {"sex": "required", "birth_year": "required", "club": "off", "email": "optional"}
+    one = next(x for x in signup.public_list() if x["id"] == rid)
+    assert one["mode"] == "form" and one["fields"]["club"] == "off"
+    # link andetsteds: vises på hjemmesiden, og der hentes ikke tilmeldinger
+    rid2 = asyncio.run(app.create_race(req({"name": "Facebookløb", "type": "p2p", "signup": {
+        "mode": "link", "link_url": "https://www.facebook.com/events/123", "link_text": "Tilmeld dig på Facebook"}}), u={}))["id"]
+    two = next(x for x in signup.public_list() if x["id"] == rid2)
+    assert two == {**two, "mode": "link", "link_url": "https://www.facebook.com/events/123", "open": True}
+    assert str(rid2) not in signup._wanted()
+    for bad in ("javascript:alert(1)", "ftp://x.dk", "www.facebook.com"):
+        try:
+            asyncio.run(app.put_signup(rid2, req({"link_url": bad}), u={}))
+            raise AssertionError("ugyldigt link skulle afvises")
+        except HTTPException as e:
+            assert e.status_code == 400
+    n = db.q1("SELECT COUNT(*) n FROM races")["n"]
+    try:
+        asyncio.run(app.create_race(req({"name": "X", "type": "p2p", "signup": {"mode": "link", "link_url": "nope"}}), u={}))
+        raise AssertionError("løbet skulle ikke oprettes med et ugyldigt link")
+    except HTTPException:
+        assert db.q1("SELECT COUNT(*) n FROM races")["n"] == n
+    # teaseren har linket med
+    db.ex("UPDATE races SET scheduled_start=? WHERE id=?", (__import__("time").time() + 86400 * 5, rid2))
+    t = app.standings(db.race(rid2))[1]["teaser"]
+    assert t["signup"] == {"url": "https://www.facebook.com/events/123", "text": "Tilmeld dig på Facebook"}
+    # ingen tilmelding: ikke på hjemmesiden
+    asyncio.run(app.put_signup(rid2, req({"mode": "none"}), u={}))
+    assert not any(x["id"] == rid2 for x in signup.public_list())
+    # ældre indstillinger uden "mode": en åben tilmelding var en formular
+    assert signup.settings({"signup": json.dumps({"open": True, "birth_year": "off"})})["mode"] == "form"
+    assert signup.settings({"signup": json.dumps({"open": True, "birth_year": "off"})})["fields"]["birth_year"] == "off"
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

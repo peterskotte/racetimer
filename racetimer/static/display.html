@@ -185,6 +185,7 @@
   #splashTeaser .tc:empty { display: none; }
   #splashTeaser .ts { font-size: clamp(13px, 1.3vw, 20px); opacity: .75; margin-top: 8px; }
   #splashTeaser .ts:empty { display: none; }
+  .fb { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
   #splashPlain .pn { font-weight: 800; font-style: italic; font-size: clamp(40px, 8vw, 130px); letter-spacing: -0.03em; line-height: 1.05;
                      color: var(--brand-cream); }
   #splashPlain .ps { margin-top: 18px; color: var(--brand-orange); font-size: clamp(16px, 2vw, 28px); font-weight: 600; letter-spacing: .04em; }
@@ -444,6 +445,10 @@ function applyBrand(b) {
   $("splashPlain").querySelector(".ps").textContent = t || "Venter på næste løb";
 }
 
+// Ikon foran tilmeldingen: Facebooks logo ved et Facebook-link, ellers det almindelige
+const FB_ICON = '<svg class="fb" viewBox="0 0 24 24" aria-label="Facebook" role="img"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="#fff" d="M15.1 12.5h-2.3V20H9.7v-7.5H8.2V9.8h1.5V8.1c0-1.4.7-3.3 3.3-3.3h2.3v2.6h-1.7c-.3 0-.8.2-.8.8v1.6h2.6z"/></svg>';
+const signupIcon = url => { let h = ""; try { h = new URL(url).hostname.toLowerCase(); } catch (_) {}
+  return /(^|\.)(facebook\.com|fb\.com|fb\.me|fb\.watch)$/.test(h) ? FB_ICON : "📝"; };
 function teaserCountdown(t) {
   if (!t.start) return "";
   const left = t.start - now();
@@ -458,7 +463,9 @@ function renderTeaser(t) {
     ? new Date(t.start * 1000).toLocaleString("da-DK", {weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"}).replace(/^./, c => c.toUpperCase())
     : "Starttidspunktet kommer snart";
   el.querySelector(".tc").textContent = teaserCountdown(t);
-  el.querySelector(".ts").textContent = [t.count ? `${t.count} tilmeldte` : "", (t.distances || []).join(" · ")].filter(Boolean).join("  ·  ");
+  // tilmelding: på storskærmen kan man ikke klikke – vis hvor man tilmelder sig
+  const su = t.signup ? (t.signup.url ? `${signupIcon(t.signup.url)} Tilmelding: ${esc(t.signup.text || t.signup.url.replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0])}` : "📝 Tilmelding åben på hjemmesiden") : "";
+  el.querySelector(".ts").innerHTML = [t.count ? `${t.count} tilmeldte` : "", esc((t.distances || []).join(" · ")), su].filter(Boolean).join("  ·  ");
 }
 
 function render() {

@@ -19,6 +19,7 @@ foreach (($info['loeb'] ?? []) as $l) {
         @unlink("$mappe/tilmeld-" . (int)$l['id'] . '.php');
         continue;
     }
+    if (($l['mode'] ?? 'form') !== 'form') continue;  // tilmelding via et link andetsteds – vises på index.php
     $alle[(int)$l['id']] = $l;
 }
 $brand = $info['brand'] ?? 'Tilmelding';
@@ -33,6 +34,14 @@ function tilmeldinger($mappe, $lob) {
     }
     return $ud;
 }
+// Formularens felter er valgt i RaceTimer: "required", "optional" eller "off" (navn er altid med)
+function felt($l, $k) {
+    $std = ['sex' => 'required', 'birth_year' => $l['birth_year'] ?? 'required', 'club' => 'optional', 'email' => 'required'];
+    $v = $l['fields'][$k] ?? $std[$k];
+    return in_array($v, ['required', 'optional', 'off'], true) ? $v : $std[$k];
+}
+function valgfri($l, $k) { return felt($l, $k) === 'optional' ? ' <small>(valgfrit)</small>' : ''; }
+function kraevet($l, $k) { return felt($l, $k) === 'required' ? 'required' : ''; }
 function aaben($l) { return !empty($l['open']) && (empty($l['deadline']) || time() <= $l['deadline']); }
 function dato($ts, $kl = false) { return $ts ? date($kl ? 'd.m.Y \k\l. H:i' : 'd.m.Y', (int)$ts) : ''; }
 function distnavn($l, $id) {
@@ -95,21 +104,26 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     // robotter udfylder det skjulte felt eller sender formularen på under 3 sekunder
     if (($_POST['website'] ?? '') !== '' || $nu - (int)($_POST['t'] ?? 0) < 3) $fejl[] = 'Prøv igen om lidt.';
     if (mb_strlen($v['name']) < 2 || mb_strlen($v['name']) > 100) $fejl[] = 'Skriv dit fulde navn.';
-    if (!in_array($v['sex'], ['Mand', 'Kvinde', 'Andet'], true)) $fejl[] = 'Vælg køn.';
-    if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL) || strlen($v['email']) > 200) $fejl[] = 'Skriv en gyldig e-mail.';
-    $by = ($lob['birth_year'] ?? 'required');
-    if ($by === 'off') $v['birth_year'] = '';
-    elseif ($v['birth_year'] !== '' || $by === 'required') {
+    foreach (['sex', 'birth_year', 'club', 'email'] as $k) if (felt($lob, $k) === 'off') $v[$k] = '';
+    if (felt($lob, 'sex') !== 'off' && ($v['sex'] !== '' || felt($lob, 'sex') === 'required')
+        && !in_array($v['sex'], ['Mand', 'Kvinde', 'Andet'], true)) $fejl[] = 'Vælg køn.';
+    if (felt($lob, 'email') !== 'off' && ($v['email'] !== '' || felt($lob, 'email') === 'required')
+        && (!filter_var($v['email'], FILTER_VALIDATE_EMAIL) || strlen($v['email']) > 200)) $fejl[] = 'Skriv en gyldig e-mail.';
+    if (felt($lob, 'birth_year') !== 'off' && ($v['birth_year'] !== '' || felt($lob, 'birth_year') === 'required')) {
         $aar = (int)$v['birth_year'];
         if ($aar < 1900 || $aar > (int)date('Y')) $fejl[] = 'Skriv dit fødselsår (fx 1985).';
     }
+    if (felt($lob, 'club') === 'required' && $v['club'] === '') $fejl[] = 'Skriv din klub.';
     if (mb_strlen($v['club']) > 100) $fejl[] = 'Klubnavnet er for langt.';
     if (!empty($lob['distances']) && distnavn($lob, $v['distance']) === '') $fejl[] = 'Vælg distance.';
     if (empty($lob['distances'])) $v['distance'] = '';
     if (empty($_POST['samtykke'])) $fejl[] = 'Sæt flueben ved samtykket.';
     $alle_t = $fejl ? [] : tilmeldinger($mappe, $lob_id);
     foreach ($alle_t as $t) {
-        if (mb_strtolower($t['email']) === mb_strtolower($v['email']) && mb_strtolower($t['name']) === mb_strtolower($v['name'])) {
+        // samme navn og samme e-mail (eller fødselsår, hvis der ikke spørges om e-mail) = allerede tilmeldt
+        $id_ny = $v['email'] !== '' ? mb_strtolower($v['email']) : $v['birth_year'];
+        $id_t = $v['email'] !== '' ? mb_strtolower($t['email'] ?? '') : (string)($t['birth_year'] ?? '');
+        if ($id_ny === $id_t && mb_strtolower($t['name']) === mb_strtolower($v['name'])) {
             $fejl[] = 'Du er allerede tilmeldt.';
             break;
         }
@@ -142,7 +156,8 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             fwrite($fp, json_encode($t, JSON_UNESCAPED_UNICODE) . "\n");
             fflush($fp); flock($fp, LOCK_UN); fclose($fp);
             $tak = $t;
-            $mail = !empty($lob['confirm_email']) && is_file(__DIR__ . '/mailer.php') ? send_bekraeftelse($mappe, $lob, $t, $brand) : null;
+            $mail = !empty($lob['confirm_email']) && $t['email'] !== '' && is_file(__DIR__ . '/mailer.php')
+                ? send_bekraeftelse($mappe, $lob, $t, $brand) : null;
         }
     }
 }
@@ -205,25 +220,38 @@ a{color:var(--text)}ul.loeb{list-style:none;padding:0}ul.loeb li{margin:10px 0}
       <input type="hidden" name="t" value="<?= time() ?>">
       <label class="hp" aria-hidden="true">Lad dette felt stå tomt<input name="website" tabindex="-1" autocomplete="off"></label>
       <label>Navn<input name="name" required maxlength="100" autocomplete="name" value="<?= e($v['name']) ?>"></label>
+      <?php if (felt($lob, 'sex') !== 'off' || felt($lob, 'birth_year') !== 'off'): ?>
       <div class="row">
-        <label>Køn<select name="sex" required><option value="">Vælg</option>
+        <?php if (felt($lob, 'sex') !== 'off'): ?>
+        <label>Køn<?= valgfri($lob, 'sex') ?><select name="sex" <?= kraevet($lob, 'sex') ?>><option value="">Vælg</option>
           <?php foreach (['Mand', 'Kvinde', 'Andet'] as $k): ?><option <?= $v['sex'] === $k ? 'selected' : '' ?>><?= $k ?></option><?php endforeach; ?></select></label>
-        <?php if (($lob['birth_year'] ?? 'required') !== 'off'): ?>
-        <label>Fødselsår<?= $lob['birth_year'] === 'optional' ? ' <small>(valgfrit)</small>' : '' ?>
+        <?php endif; ?>
+        <?php if (felt($lob, 'birth_year') !== 'off'): ?>
+        <label>Fødselsår<?= valgfri($lob, 'birth_year') ?>
           <input name="birth_year" inputmode="numeric" pattern="(19|20)[0-9]{2}" maxlength="4" placeholder="fx 1985"
-                 <?= $lob['birth_year'] === 'required' ? 'required' : '' ?> value="<?= e($v['birth_year']) ?>"></label>
+                 <?= kraevet($lob, 'birth_year') ?> value="<?= e($v['birth_year']) ?>"></label>
         <?php endif; ?>
       </div>
+      <?php endif; ?>
       <?php if (!empty($lob['distances'])): ?>
       <label>Distance<select name="distance" required><option value="">Vælg</option>
         <?php foreach ($lob['distances'] as $d): ?><option value="<?= e($d['id']) ?>" <?= $v['distance'] === $d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option><?php endforeach; ?></select></label>
       <?php endif; ?>
-      <label>Klub <small>(valgfrit)</small><input name="club" maxlength="100" value="<?= e($v['club']) ?>"></label>
-      <label>E-mail<input name="email" type="email" required maxlength="200" autocomplete="email" value="<?= e($v['email']) ?>"></label>
+      <?php if (felt($lob, 'club') !== 'off'): ?>
+      <label>Klub<?= valgfri($lob, 'club') ?><input name="club" maxlength="100" <?= kraevet($lob, 'club') ?> value="<?= e($v['club']) ?>"></label>
+      <?php endif; ?>
+      <?php if (felt($lob, 'email') !== 'off'): ?>
+      <label>E-mail<?= valgfri($lob, 'email') ?><input name="email" type="email" <?= kraevet($lob, 'email') ?> maxlength="200" autocomplete="email" value="<?= e($v['email']) ?>"></label>
+      <?php endif; ?>
       <label class="chk"><input type="checkbox" name="samtykke" value="1" required>
-        <span>Jeg giver samtykke til, at mine oplysninger bruges til tidtagning og resultater for dette løb. Navn, køn, klub og
-        <?= !empty($lob['distances']) ? 'distance' : 'resultat' ?> vises i resultatlisten<?= $vis_liste ? ' og på deltagerlisten herunder' : '' ?>.
-        <?= !empty($lob['confirm_email']) ? 'Du får en bekræftelse på e-mail. ' : '' ?>E-mail og fødselsår vises aldrig offentligt og slettes fra hjemmesiden senest <?= (int)($lob['delete_days'] ?? 30) ?> dage efter løbet.</span></label>
+<?php
+        $offentlig = array_merge(['Navn'], felt($lob, 'sex') !== 'off' ? ['køn'] : [], felt($lob, 'club') !== 'off' ? ['klub'] : []);
+        $privat = array_merge(felt($lob, 'email') !== 'off' ? ['E-mail'] : [], felt($lob, 'birth_year') !== 'off' ? ['fødselsår'] : []);
+        $liste = function ($a) { return count($a) > 1 ? implode(', ', array_slice($a, 0, -1)) . ' og ' . end($a) : implode('', $a); };
+      ?>
+        <span>Jeg giver samtykke til, at mine oplysninger bruges til tidtagning og resultater for dette løb. <?= $liste(array_merge($offentlig, [!empty($lob['distances']) ? 'distance' : 'resultat'])) ?>
+        vises i resultatlisten<?= $vis_liste ? ' og på deltagerlisten herunder' : '' ?>.
+        <?= !empty($lob['confirm_email']) && felt($lob, 'email') !== 'off' ? 'Du får en bekræftelse på e-mail. ' : '' ?><?= $privat ? ucfirst($liste($privat)) . ' vises aldrig offentligt og slettes fra hjemmesiden senest ' . (int)($lob['delete_days'] ?? 30) . ' dage efter løbet.' : '' ?></span></label>
       <button>Tilmeld</button>
     </form>
   <?php endif; ?>

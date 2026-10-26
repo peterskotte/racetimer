@@ -51,7 +51,9 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 
 ## Tilmelding på hjemmesiden
 
-Med `tilmeld.php` kan løbere tilmelde sig direkte på hjemmesiden:
+I RaceTimer vælges pr. løb, om der er tilmelding: *ingen*, en *formular* her på hjemmesiden, eller et *link* andetsteds (fx en Facebook-begivenhed). Et link vises øverst på `index.php` og som knap i teaseren – det kræver ikke `tilmeld.php`.
+
+Med `tilmeld.php` kan løbere tilmelde sig direkte på hjemmesiden (felterne vælges i RaceTimer):
 
 1. Læg `tilmeld.php` i samme mappe som `modtag.php`. Der skal ikke sættes noget op i filen.
 2. I RaceTimer: **Deltagere → 🌐 Tilmelding på hjemmesiden** → sæt flueben i *Åben for tilmelding*, vælg frist m.m. og tryk **Gem tilmelding**. Pi'en sender med det samme løbets navn, dato, frist og distancer til hjemmesiden.

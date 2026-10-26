@@ -4,6 +4,13 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Nyt**
+- **Tilmelding vælges pr. løb:** når et løb oprettes (og senere under *Deltagere*), vælges *Ingen tilmelding*, *Formular på hjemmesiden* eller *Link andetsteds* (fx en Facebook-begivenhed).
+  - **Formular:** vælg for køn, fødselsår, klub og e-mail, om feltet skal udfyldes, er valgfrit eller ikke er med. Navn er altid med, og distance, når løbet har flere. Samtykketeksten på siden følger de valgte felter.
+  - **Link:** linket (og en valgfri linktekst) vises på hjemmesiden og som knap i teaseren om løbet, indtil løbet starter eller fristen er nået. Resultatskærmen skriver, hvor man tilmelder sig. Går linket til Facebook, vises Facebooks logo, ellers 📝.
+  - **Aktivt løb** viser løbets tilmelding med en *ret*-knap, der hopper direkte til indstillingen under Deltagere.
+  - Upload den nye `index.php` og `tilmeld.php`.
+
 ## [1.4.2] – 2026-10-26
 
 **Til eksisterende installationer:** upload den nye `index.php` til webhotellet, så hjemmesiden viser teaseren.

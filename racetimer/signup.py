@@ -11,15 +11,29 @@ import time
 
 from . import db, engine
 
-DEFAULTS = {"open": False, "deadline": None, "birth_year": "required", "public_list": True, "auto_bib": True,
-            "bib_from": 1, "delete_days": 30, "note": "", "age_step": 0, "age_from": 35,
-            "confirm_email": True, "reply_to": ""}
+# Tilmelding pr. løb: "none" (ingen), "form" (formular på hjemmesiden) eller "link" (fx en Facebook-begivenhed)
+MODES = ("none", "form", "link")
+# Felter i formularen ud over navnet: "required" (skal udfyldes), "optional" (valgfrit) eller "off" (ikke med)
+FIELDS = ("sex", "birth_year", "club", "email")
+FIELD_STATES = ("required", "optional", "off")
+DEFAULT_FIELDS = {"sex": "required", "birth_year": "required", "club": "optional", "email": "required"}
+DEFAULTS = {"mode": "none", "open": False, "deadline": None, "birth_year": "required", "public_list": True,
+            "auto_bib": True, "bib_from": 1, "delete_days": 30, "note": "", "age_step": 0, "age_from": 35,
+            "confirm_email": True, "reply_to": "", "fields": DEFAULT_FIELDS, "link_url": "", "link_text": ""}
 FETCH_EVERY = 60  # sek. mellem hentninger, mens der er tilmeldinger på hjemmesiden
 
 
 def settings(race):
     s = json.loads(race["signup"]) if race.get("signup") else {}
-    return {**DEFAULTS, **s}
+    out = {**DEFAULTS, **s}
+    if "mode" not in s:  # fra før valget fandtes: en åben eller brugt tilmelding var altid en formular
+        out["mode"] = "form" if s.get("open") or s.get("fetched") else "none"
+    fields = {**DEFAULT_FIELDS, **(s.get("fields") or {})}
+    if "fields" not in s and "birth_year" in s:
+        fields["birth_year"] = s["birth_year"]
+    out["fields"] = fields
+    out["birth_year"] = fields["birth_year"]  # ældre tilmeldingssider læser dette felt
+    return out
 
 
 def clean(b, old):
@@ -28,8 +42,25 @@ def clean(b, old):
     for k in ("open", "public_list", "auto_bib", "confirm_email"):
         if k in b:
             out[k] = bool(b[k])
-    if "birth_year" in b:
-        out["birth_year"] = b["birth_year"] if b["birth_year"] in ("required", "optional", "off") else "required"
+    if "mode" in b:
+        out["mode"] = b["mode"] if b["mode"] in MODES else "none"
+    elif b.get("open") and out.get("mode", "none") == "none":  # "åben" uden valg = formular (som før valget fandtes)
+        out["mode"] = "form"
+    fields = dict(out.get("fields") or DEFAULT_FIELDS)
+    if "birth_year" in b and "fields" not in b:  # ældre klienter sender kun fødselsår
+        fields["birth_year"] = b["birth_year"]
+    for k, v in (b.get("fields") or {}).items():
+        if k in FIELDS:
+            fields[k] = v if v in FIELD_STATES else DEFAULT_FIELDS[k]
+    out["fields"] = fields
+    out["birth_year"] = fields["birth_year"]
+    if "link_url" in b:
+        u = str(b["link_url"] or "").strip()[:500]
+        if u and not re.fullmatch(r"https?://[^\s<>\"']+", u):
+            raise ValueError("Linket skal starte med https:// – fx https://www.facebook.com/events/…")
+        out["link_url"] = u
+    if "link_text" in b:
+        out["link_text"] = re.sub(r"[\r\n]+", " ", str(b["link_text"] or "")).strip()[:80]
     if "deadline" in b:
         out["deadline"] = float(b["deadline"]) if b["deadline"] else None
     for k, lo, hi in (("bib_from", 1, 99999), ("delete_days", 1, 365), ("age_from", 20, 90)):
@@ -62,8 +93,10 @@ def purge_at(race, s):
 
 
 def is_open(race, s, now=None):
+    """Kan man tilmelde sig nu? Formular: når den er åbnet. Link: så længe der er et link."""
     now = now or time.time()
-    return bool(s["open"]) and race["status"] != "finished" and not (s.get("deadline") and now > s["deadline"])
+    on = bool(s["open"]) if s["mode"] == "form" else bool(s.get("link_url")) if s["mode"] == "link" else False
+    return on and race["status"] != "finished" and not (s.get("deadline") and now > s["deadline"])
 
 
 def _signup_races():
@@ -80,13 +113,22 @@ def public_list(now=None):
     for r in _signup_races():
         s = settings(r)
         pa = purge_at(r, s)
+        if s["mode"] == "link":  # tilmelding andetsteds: hjemmesiden viser bare linket, så længe det er relevant
+            if is_open(r, s, now):
+                out.append({"id": r["id"], "name": r["name"], "date": race_date(r), "mode": "link", "open": True,
+                            "deadline": s["deadline"], "link_url": s["link_url"], "link_text": s["link_text"],
+                            "purge_at": None})
+            continue
+        if s["mode"] != "form" and not s.get("fetched"):
+            continue
         if not (s["open"] or s.get("fetched")) or (pa and now > pa):
             continue
         ds = engine.distances(r["type"], engine.merged_config(r["type"], r["config"]))
         # startnumre tildeles på hjemmesiden ved tilmeldingen – den skal kende de numre, Pi'en allerede har brugt
         taken = [x["bib"] for x in db.q("SELECT bib FROM participants WHERE race_id=? AND bib IS NOT NULL ORDER BY bib",
                                          (r["id"],))]
-        out.append({"id": r["id"], "name": r["name"], "date": race_date(r), "open": is_open(r, s, now),
+        out.append({"id": r["id"], "name": r["name"], "date": race_date(r), "mode": "form", "fields": s["fields"],
+                    "open": s["mode"] == "form" and is_open(r, s, now),
                     "deadline": s["deadline"], "distances": [{"id": d["id"], "name": d["name"]} for d in ds],
                     "birth_year": s["birth_year"], "public_list": s["public_list"], "note": s["note"],
                     "delete_days": s["delete_days"], "purge_at": pa,
@@ -101,7 +143,7 @@ def _wanted(now=None):
     out = {}
     for r in _signup_races():
         s = settings(r)
-        if s["open"] or (s.get("deadline") and now < s["deadline"] + 86400):
+        if s["mode"] == "form" and (s["open"] or (s.get("deadline") and now < s["deadline"] + 86400)):
             out[str(r["id"])] = s.get("fetched", 0)
     return out
 

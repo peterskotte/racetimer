@@ -70,6 +70,7 @@ SPLASH_CSS = """
 .splash.plain .teaser{position:static;transform:none;margin:22px auto 0}
 .teaser .tk{color:var(--orange);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:13px}
 .teaser .tn{font-weight:800;font-size:clamp(26px,5vw,52px);line-height:1.1;margin-top:4px}.teaser .tw{font-size:clamp(15px,2.2vw,22px);font-weight:600;opacity:.9;margin-top:6px}
+.fb{width:1.15em;height:1.15em;vertical-align:-.22em}.teaser .tsu{margin-top:14px}.teaser .tsu a{display:inline-block;background:var(--orange);color:#fff;font-weight:700;padding:10px 22px;border-radius:12px;text-decoration:none}
 .teaser .tc{font-size:clamp(26px,5vw,48px);font-weight:800;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}.teaser .ts{opacity:.75;margin-top:8px}
 :root{--bg:#111814;--orange:#e5682a;--cream:#f6efe3}*{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -88,6 +89,15 @@ DAGE = ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"
 MDR = ("januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december")
 
 
+FB_ICON = ('<svg class="fb" viewBox="0 0 24 24" aria-label="Facebook" role="img"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="#fff" d="M15.1 12.5h-2.3V20H9.7v-7.5H8.2V9.8h1.5V8.1c0-1.4.7-3.3 3.3-3.3h2.3v2.6h-1.7c-.3 0-.8.2-.8.8v1.6h2.6z"/></svg>')
+
+
+def signup_icon(url):
+    """Facebooks logo ved et Facebook-link, ellers det almindelige ikon."""
+    host = (urlparse(url or "").hostname or "").lower()
+    return FB_ICON if re.search(r"(^|\.)(facebook\.com|fb\.com|fb\.me|fb\.watch)$", host) else "📝"
+
+
 def _teaser_html(t):
     """Planlagt løb før indtjekningen: navn, starttid, nedtælling og antal tilmeldte – ingen deltagerliste."""
     e = html.escape
@@ -102,8 +112,11 @@ def _teaser_html(t):
           'function p(n){return(n<10?"0":"")+n}function t(){var l=Math.max(0,Math.round(s-Date.now()/1000)),d=Math.floor(l/86400);'
           'el.textContent=l<=0?"":d>=1?"om "+d+(d===1?" dag":" dage"):p(Math.floor(l/3600))+":"+p(Math.floor(l%3600/60))+":"+p(l%60)}'
           't();setInterval(t,1000)})();</script>') if start else ""
+    su = t.get("signup") or {}  # FTP-siden har ingen formular – kun et link andetsteds, fx en Facebook-begivenhed
+    btn = (f'<div class="tsu"><a href="{e(su["url"])}" target="_blank" rel="noopener">{signup_icon(su["url"])} {e(su.get("text") or "Tilmeld dig")}</a></div>'
+           if str(su.get("url") or "").startswith(("http://", "https://")) else "")
     return (f'<div class="teaser"><div class="tk">Næste løb</div><div class="tn">{e(t.get("name") or "")}</div><div class="tw">{e(when)}</div>'
-            f'{cd}' + (f'<div class="ts">{sub}</div>' if sub else "") + "</div>")
+            f'{cd}' + (f'<div class="ts">{sub}</div>' if sub else "") + btn + "</div>")
 
 
 def render_splash_html(payload, image=None, refresh_sec=0, teaser=None):

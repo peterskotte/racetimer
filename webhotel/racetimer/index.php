@@ -52,8 +52,28 @@ $tilm = is_file("$mappe/tilmelding.json") ? json_decode(file_get_contents("$mapp
 $aabne = array_filter($tilm['loeb'] ?? [], function ($l) {
     return !empty($l['open']) && (empty($l['deadline']) || time() <= $l['deadline']);
 });
-$tilmlink = $aabne ? '<div class="tilm">📝 Tilmelding er åben: ' . implode(' · ', array_map(function ($l) {
-    return '<a href="tilmeld.php?lob=' . (int)$l['id'] . '">' . e($l['name']) . '</a>'
+// Tilmeldingens adresse: formularen her (tilmeld.php) eller et link andetsteds, fx en Facebook-begivenhed
+function tilm_href($l) {
+    if (($l['mode'] ?? 'form') === 'link') {
+        $u = (string)($l['link_url'] ?? '');
+        return preg_match('#^https?://#i', $u) ? $u : '';
+    }
+    return 'tilmeld.php?lob=' . (int)$l['id'];
+}
+// Ikon foran tilmeldingen: Facebooks logo ved et Facebook-link, ellers det almindelige
+function tilm_ikon($l) {
+    $host = strtolower((string)parse_url((string)($l['link_url'] ?? ''), PHP_URL_HOST));
+    $fb = ($l['mode'] ?? 'form') === 'link' && preg_match('/(^|\.)(facebook\.com|fb\.com|fb\.me|fb\.watch)$/', $host);
+    return $fb ? '<svg class="fb" viewBox="0 0 24 24" aria-label="Facebook" role="img"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="#fff" d="M15.1 12.5h-2.3V20H9.7v-7.5H8.2V9.8h1.5V8.1c0-1.4.7-3.3 3.3-3.3h2.3v2.6h-1.7c-.3 0-.8.2-.8.8v1.6h2.6z"/></svg>' : '📝';
+}
+function tilm_a($l, $tekst) {
+    $href = tilm_href($l);
+    if ($href === '') return e($tekst);
+    $ekstern = ($l['mode'] ?? 'form') === 'link' ? ' target="_blank" rel="noopener"' : '';
+    return '<a href="' . e($href) . '"' . $ekstern . '>' . e($tekst) . '</a>';
+}
+$tilmlink = $aabne ? '<div class="tilm">Tilmelding er åben: ' . implode(' · ', array_map(function ($l) {
+    return tilm_ikon($l) . ' ' . tilm_a($l, $l['name']) . (($l['mode'] ?? 'form') === 'link' && !empty($l['link_text']) ? ' <span>– ' . e($l['link_text']) . '</span>' : '')
         . (!empty($l['deadline']) ? ' <span>(senest ' . date('d.m', (int)$l['deadline']) . ')</span>' : '');
 }, $aabne)) . '</div>' : '';
 function hms($sek, $tvungen = false) {
@@ -82,7 +102,13 @@ function teaser_html($t) {
     $info = array_filter([!empty($t['count']) ? (int)$t['count'] . ' tilmeldte' : '', implode(' · ', array_map('e', $t['distances'] ?? []))]);
     return '<div class="teaser"><div class="tk">Næste løb</div><div class="tn">' . e($t['name'] ?? '') . '</div><div class="tw">' . e($hvornaar) . '</div>'
         . ($start ? '<div class="tc" data-start="' . $start . '" data-now="' . time() . '"></div>' : '')
-        . ($info ? '<div class="ts">' . implode('  ·  ', $info) . '</div>' : '') . '</div>'
+        . ($info ? '<div class="ts">' . implode('  ·  ', $info) . '</div>' : '')
+        . (!empty($t['signup']) ? (function ($su) {
+            $l = !empty($su['url']) ? ['mode' => 'link', 'link_url' => $su['url']] : ['mode' => 'form', 'id' => $su['race_id'] ?? 0];
+            $href = tilm_href($l);
+            return $href === '' ? '' : '<div class="tsu"><a href="' . e($href) . '"' . ($l['mode'] === 'link' ? ' target="_blank" rel="noopener"' : '')
+                . '>' . tilm_ikon($l) . ' ' . e(!empty($su['text']) ? $su['text'] : 'Tilmeld dig') . '</a></div>';
+          })($t['signup']) : '') . '</div>'
         . ($start ? '<script>(function(){var el=document.querySelector(".teaser .tc"),s=+el.dataset.start,off=+el.dataset.now-Date.now()/1000;'
         . 'function p(n){return(n<10?"0":"")+n}function t(){var l=Math.max(0,Math.round(s-(Date.now()/1000+off))),d=Math.floor(l/86400);'
         . 'el.textContent=l<=0?"":d>=1?"om "+d+(d===1?" dag":" dage"):p(Math.floor(l/3600))+":"+p(Math.floor(l%3600/60))+":"+p(l%60)}t();setInterval(t,1000)})();</script>' : '');
@@ -189,6 +215,8 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 .splash.plain .teaser{position:static;transform:none;margin:22px auto 0}
 .teaser .tk{color:var(--orange);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:13px}
 .teaser .tn{font-weight:800;font-size:clamp(26px,5vw,52px);line-height:1.1;margin-top:4px}.teaser .tw{font-size:clamp(15px,2.2vw,22px);font-weight:600;opacity:.9;margin-top:6px}
+.fb{width:1.15em;height:1.15em;vertical-align:-.22em}.tilm .fb{background:#fff;border-radius:50%}
+.teaser .tsu{margin-top:14px}.teaser .tsu a{display:inline-block;background:var(--orange);color:#fff;font-weight:700;padding:10px 22px;border-radius:12px;text-decoration:none}
 .teaser .tc{font-size:clamp(26px,5vw,48px);font-weight:800;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}.teaser .ts{opacity:.75;margin-top:8px}
 .splash.plain .txt{background:none;padding:18px 5vw 0;color:var(--orange);font-size:clamp(16px,2.4vw,30px);font-weight:600}
 </style>

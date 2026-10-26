@@ -335,8 +335,12 @@ def teaser(race, info, parts, now):
     if now >= start - window:
         return None
     ds = info.get("distances") or []
+    s = signup.settings(race)
+    link = None  # tilmelding: formularen på hjemmesiden eller et link andetsteds (fx Facebook)
+    if signup.is_open(race, s, now):
+        link = {"form": True, "race_id": race["id"]} if s["mode"] == "form" else {"url": s["link_url"], "text": s["link_text"]}
     return {"name": race["name"], "start": start, "list_at": start - window,
-            "count": len(parts), "distances": [d["name"] for d in ds]}
+            "count": len(parts), "distances": [d["name"] for d in ds], "signup": link}
 
 
 sync_mgr = sync.SyncManager(standings)
@@ -632,11 +636,22 @@ async def create_race(request: Request, u=Depends(admin)):
     cfg = engine.clean_distances(b["type"], engine.merged_config(b["type"], b.get("config")))
     test = _test_opts(b.get("test"))
     timing = "manual" if b.get("timing") == "manual" else "armband"
+    su = None
+    if isinstance(b.get("signup"), dict):  # tilmelding vælges allerede, når løbet oprettes
+        try:
+            su = signup.clean(b["signup"], signup.settings({"signup": None}))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        if su["mode"] == "form" and not test:
+            su["open"] = True
     rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at, test, timing) VALUES (?,?,?,?,?,?,?)",
                 (b.get("name") or "Nyt løb", b["type"], json.dumps(cfg), b.get("scheduled_start"), time.time(),
                  json.dumps(test) if test else None, timing))
+    if su:
+        signup.save(rid, su)
     if b.get("activate") or not db.active_race():
         _activate(rid)
+    sync_mgr.poke_state()
     return {"id": rid}
 
 
@@ -853,8 +868,11 @@ def get_signup(rid: int, u=Depends(admin)):
 @app.put("/api/races/{rid}/signup")
 async def put_signup(rid: int, request: Request, u=Depends(admin)):
     race = db.race(rid) or _404()
-    s = signup.clean(await request.json(), signup.settings(race))
-    if s["open"] and race.get("test"):
+    try:
+        s = signup.clean(await request.json(), signup.settings(race))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    if s["open"] and s["mode"] == "form" and race.get("test"):
         raise HTTPException(400, "Testløb kan ikke åbnes for tilmelding")
     signup.save(rid, s)
     sync_mgr.poke_state()  # hjemmesiden får besked med det samme
