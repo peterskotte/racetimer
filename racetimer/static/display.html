@@ -459,9 +459,6 @@ function renderTeaser(t) {
     : "Starttidspunktet kommer snart";
   el.querySelector(".tc").textContent = teaserCountdown(t);
   el.querySelector(".ts").textContent = [t.count ? `${t.count} tilmeldte` : "", (t.distances || []).join(" · ")].filter(Boolean).join("  ·  ");
-  // nederst – men over jeres egen splash-tekst, hvis der er en
-  const txt = $("splashText");
-  el.style.bottom = txt.hidden ? "" : `${txt.offsetHeight - parseFloat(getComputedStyle(txt).paddingTop) + 24}px`;
 }
 
 function render() {
@@ -480,6 +477,10 @@ function render() {
   const idle = !data.race || !!teaser;
   $("splash").hidden = !idle;
   $("splashTeaser").hidden = !teaser;
+  // teaseren står i stedet for jeres splash-tekst ("Venter på næste løb" giver ingen mening, når næste løb er kendt)
+  const stxt = (data.brand?.splash_text || "").trim();
+  $("splashText").hidden = !data.brand?.splash || !stxt || !!teaser;
+  $("splashPlain").querySelector(".ps").textContent = teaser ? "" : (stxt || "Venter på næste løb");
   if (teaser) renderTeaser(teaser);
   document.body.classList.toggle("splash-on", idle);
   const test = !!data.race?.test;  // testløb: orange ramme + mærkat

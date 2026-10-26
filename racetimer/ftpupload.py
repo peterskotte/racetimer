@@ -66,8 +66,8 @@ def slug(name):
 
 
 SPLASH_CSS = """
-.teaser{position:absolute;top:24px;left:50%;transform:translateX(-50%);width:min(92%,760px);padding:20px 28px;border-radius:20px;text-align:center;color:#fff;background:rgba(10,16,13,.74);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 60px rgba(0,0,0,.45)}
-.splash.plain .teaser{position:static;transform:none;margin:0 auto}
+.teaser{position:absolute;bottom:6vh;left:50%;transform:translateX(-50%);width:min(92%,760px);padding:20px 28px;border-radius:20px;text-align:center;color:#fff;background:rgba(10,16,13,.74);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 60px rgba(0,0,0,.45)}
+.splash.plain .teaser{position:static;transform:none;margin:22px auto 0}
 .teaser .tk{color:var(--orange);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:13px}
 .teaser .tn{font-weight:800;font-size:clamp(26px,5vw,52px);line-height:1.1;margin-top:4px}.teaser .tw{font-size:clamp(15px,2.2vw,22px);font-weight:600;opacity:.9;margin-top:6px}
 .teaser .tc{font-size:clamp(26px,5vw,48px);font-weight:800;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}.teaser .ts{opacity:.75;margin-top:8px}
@@ -114,10 +114,11 @@ def render_splash_html(payload, image=None, refresh_sec=0, teaser=None):
     refresh = f'<meta http-equiv="refresh" content="{int(refresh_sec)}">' if refresh_sec else ""
     tz = _teaser_html(teaser) if teaser else ""
     if image:
-        body = f'<div class="splash" style="background-image:url(\'{image}\')">{tz}' + (f'<div class="txt">{e(text)}</div>' if text else "") + "</div>"
+        # teaseren står i stedet for splash-teksten
+        body = f'<div class="splash" style="background-image:url(\'{image}\')">{tz}' + (f'<div class="txt">{e(text)}</div>' if text and not tz else "") + "</div>"
     else:
-        body = (f'<div class="splash plain">{tz or f"<div class=pn>{e(_brand_name())}</div>"}'
-                f'<div class="txt">{e(text or ("" if teaser else "Venter på næste løb"))}</div></div>')
+        body = (f'<div class="splash plain"><div class="pn">{e(_brand_name())}</div>'
+                + (tz or f'<div class="txt">{e(text or "Venter på næste løb")}</div>') + "</div>")
     return f"""<!doctype html>
 <html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 {refresh}<title>{e(_brand_name())}</title><style>{SPLASH_CSS}</style></head><body>

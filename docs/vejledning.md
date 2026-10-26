@@ -113,7 +113,7 @@ En ny installation har ét demoløb, *Demoløb (kan slettes)*, med tre testløbe
 
 Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 
-**Planlagt løb på skærm og hjemmeside:** Har løbet et planlagt starttidspunkt, viser resultatskærmen og hjemmesiden stadig splash, nu med en **teaser** om løbet: navn, dato, nedtælling, antal tilmeldte og distancer. Startlisten med navne vises først, når indtjekningen åbner (*Indtjekning: min. før start*, eller 30 min før start, hvis indtjekning er slået fra). Under **Aktivt løb** står, hvornår startlisten kommer frem. Løb uden planlagt starttidspunkt viser startlisten som hidtil.
+**Planlagt løb på skærm og hjemmeside:** Har løbet et planlagt starttidspunkt, viser resultatskærmen og hjemmesiden stadig splash, men med en **teaser** om løbet i stedet for jeres splash-tekst: navn, dato, nedtælling, antal tilmeldte og distancer. Startlisten med navne vises først, når indtjekningen åbner (*Indtjekning: min. før start*, eller 30 min før start, hvis indtjekning er slået fra). Under **Aktivt løb** står, hvornår startlisten kommer frem. Løb uden planlagt starttidspunkt viser startlisten som hidtil.
 
 ![Teaser om næste løb på resultatskærmen](img/resultatskaerm-teaser.webp)
 *Teaser på splash: deltagerlisten vises først, når indtjekningen åbner.*
