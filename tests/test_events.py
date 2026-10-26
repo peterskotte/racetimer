@@ -343,6 +343,25 @@ def test_mail_settings():
     asyncio.run(app.put_mail(req({"clear": True}), u={}))
     assert not sync.mail_config().get("host") and not app.get_mail(u={})["password_set"]
 
+
+def test_teaser_before_checkin():
+    import time as _t
+    rid = race("p2p", {"checkin_min": 30})
+    now = _t.time()
+    db.ex("UPDATE races SET scheduled_start=?, started_at=NULL, status='planned' WHERE id=?", (now + 2 * 3600, rid))
+    rows, info = app.standings(db.race(rid), now)
+    t = info["teaser"]
+    assert t["count"] == 2 and t["list_at"] == now + 2 * 3600 - 1800 and t["name"] == "Test"
+    payload = app.sync_mgr._results_payload(db.race(rid), False)
+    assert payload["results"] == [] and payload["info"]["teaser"]  # ingen deltagerliste til hjemmesiden
+    rows, info = app.standings(db.race(rid), now + 2 * 3600 - 1700)  # indtjekningen er åben
+    assert "teaser" not in info and len(rows) == 2
+    db.ex("UPDATE races SET scheduled_start=NULL WHERE id=?", (rid,))  # intet planlagt starttidspunkt
+    assert "teaser" not in app.standings(db.race(rid), now)[1]
+    db.ex("UPDATE races SET scheduled_start=?, config=? WHERE id=?",
+          (now + 2 * 3600, json.dumps(engine.merged_config("p2p", {"checkin_min": 0})), rid))
+    assert app.standings(db.race(rid), now)[1]["teaser"]["list_at"] == now + 2 * 3600 - 1800  # uden indtjekning: 30 min
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

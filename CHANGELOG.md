@@ -4,6 +4,10 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Nyt**
+- **Teaser for planlagte løb:** et løb med planlagt starttidspunkt viser ikke længere deltagerlisten på skærm og hjemmeside, før indtjekningen åbner. I stedet vises splash med en teaser: navn, dato, nedtælling, antal tilmeldte og distancer. Startlisten kommer frem, når indtjekningen åbner (eller 30 min før start uden indtjekning), og navnene sendes heller ikke til hjemmesiden før. Admin viser, hvornår det sker. Upload den nye `index.php`.
+- **Vejledningen har screenshots** af admin, resultatskærm og hjemmeside.
+
 ## [1.4.1] – 2026-10-25
 
 **Til eksisterende installationer:** upload den nye `mailer.php` og de nye `tilmeld.php` og `modtag.php` til webhotellet (husk jeres nøgle i `modtag.php`). Sæt derefter klubbens mailkonto op under *⚙ Opsætning → Synkronisering*, og send en testmail.

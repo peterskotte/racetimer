@@ -70,6 +70,23 @@ $rows = $data['results'] ?? [];
 $final = ($data['event'] ?? '') === 'final';
 $omgang = $race && in_array($race['type'], ['backyard', 'backyard_custom', 'timed', 'record'], true);
 $medtid = $omgang && !empty($info['continuous']);
+// Planlagt løb, hvor indtjekningen ikke er åbnet: splash med en teaser om løbet – ingen deltagerliste
+$teaser = (!$splash && $vis === '' && !empty($info['teaser'])) ? $info['teaser'] : null;
+if ($teaser) $splash = true;
+function teaser_html($t) {
+    $dage = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
+    $mdr = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
+    $start = !empty($t['start']) ? (int)$t['start'] : null;
+    $hvornaar = $start ? ucfirst($dage[(int)date('w', $start)]) . ' ' . date('j', $start) . '. ' . $mdr[(int)date('n', $start) - 1]
+        . ' kl. ' . date('H.i', $start) : 'Starttidspunktet kommer snart';
+    $info = array_filter([!empty($t['count']) ? (int)$t['count'] . ' tilmeldte' : '', implode(' · ', array_map('e', $t['distances'] ?? []))]);
+    return '<div class="teaser"><div class="tk">Næste løb</div><div class="tn">' . e($t['name'] ?? '') . '</div><div class="tw">' . e($hvornaar) . '</div>'
+        . ($start ? '<div class="tc" data-start="' . $start . '" data-now="' . time() . '"></div>' : '')
+        . ($info ? '<div class="ts">' . implode('  ·  ', $info) . '</div>' : '') . '</div>'
+        . ($start ? '<script>(function(){var el=document.querySelector(".teaser .tc"),s=+el.dataset.start,off=+el.dataset.now-Date.now()/1000;'
+        . 'function p(n){return(n<10?"0":"")+n}function t(){var l=Math.max(0,Math.round(s-(Date.now()/1000+off))),d=Math.floor(l/86400);'
+        . 'el.textContent=l<=0?"":d>=1?"om "+d+(d===1?" dag":" dage"):p(Math.floor(l/3600))+":"+p(Math.floor(l%3600/60))+":"+p(l%60)}t();setInterval(t,1000)})();</script>' : '');
+}
 $live = !$splash && $race && !$final && ($race['status'] ?? '') === 'running' && $vis === '';
 ?>
 <?php
@@ -167,6 +184,12 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 .splash .pn{font-weight:800;font-style:italic;font-size:clamp(36px,8vw,110px);letter-spacing:-.03em;line-height:1.05;padding:0 5vw}
 .splash .txt{width:100%;padding:12vh 5vw 8vh;background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,.45) 55%,transparent);color:#fff;
   text-align:center;font-weight:800;font-size:clamp(24px,4.6vw,64px);line-height:1.12;white-space:pre-line;text-shadow:0 2px 18px rgba(0,0,0,.5)}
+.teaser{position:absolute;top:24px;left:50%;transform:translateX(-50%);width:min(92%,760px);padding:20px 28px;border-radius:20px;text-align:center;color:#fff;
+  background:rgba(10,16,13,.74);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 60px rgba(0,0,0,.45);backdrop-filter:blur(10px)}
+.splash.plain .teaser{position:static;transform:none;margin:0 auto}
+.teaser .tk{color:var(--orange);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:13px}
+.teaser .tn{font-weight:800;font-size:clamp(26px,5vw,52px);line-height:1.1;margin-top:4px}.teaser .tw{font-size:clamp(15px,2.2vw,22px);font-weight:600;opacity:.9;margin-top:6px}
+.teaser .tc{font-size:clamp(26px,5vw,48px);font-weight:800;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}.teaser .ts{opacity:.75;margin-top:8px}
 .splash.plain .txt{background:none;padding:18px 5vw 0;color:var(--orange);font-size:clamp(16px,2.4vw,30px);font-weight:600}
 </style>
 </head>
@@ -174,9 +197,9 @@ footer{color:var(--muted);font-size:13px;padding:14px 4px}.tom{padding:40px;text
 <?php if ($splash): ?>
 <header><?= $logo ?></header><?= $tilmlink ?>
 <?php if ($splashfil): ?>
-<div class="splash" style="background-image:url('<?= e($splashfil) ?>')"><?php if ($splashtekst !== ''): ?><div class="txt"><?= e($splashtekst) ?></div><?php endif; ?></div>
+<div class="splash" style="background-image:url('<?= e($splashfil) ?>')"><?= $teaser ? teaser_html($teaser) : '' ?><?php if ($splashtekst !== ''): ?><div class="txt"><?= e($splashtekst) ?></div><?php endif; ?></div>
 <?php else: ?>
-<div class="splash plain"><div class="pn"><?= e($brand) ?></div><div class="txt"><?= e($splashtekst !== '' ? $splashtekst : 'Venter på næste løb') ?></div></div>
+<div class="splash plain"><?= $teaser ? teaser_html($teaser) : '<div class="pn">' . e($brand) . '</div>' ?><div class="txt"><?= e($splashtekst !== '' ? $splashtekst : ($teaser ? '' : 'Venter på næste løb')) ?></div></div>
 <?php endif; ?>
 <main>
 <?php else: ?>

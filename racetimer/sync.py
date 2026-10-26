@@ -229,7 +229,7 @@ class SyncManager(threading.Thread):
                 results=[{k: r.get(k) for k in ("place", "bib", "name", "sex", "club", "status", "status_label",
                                                  "laps", "distance_km", "total_time", "last_lap", "best_lap", "dogs",
                                                  "distance", "distance_name", "class")}
-                         for r in rows])
+                         for r in rows if not info.get("teaser")])  # teaser: ingen deltagerliste endnu
         return payload
 
     def _send_mirror(self, d, race, images=False):

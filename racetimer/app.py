@@ -299,12 +299,34 @@ def standings(race, now=None):
         cls = {p["id"]: signup.age_class(p, race, s) for p in parts}
         for r in rows:
             r["class"] = cls.get(r["id"])
+    t = teaser(race, info, parts, now)
+    if t:
+        info["teaser"] = t
     # Afslut løbet automatisk når motoren siger det er afgjort
     if not MIRROR and race["status"] == "running" and info.get("phase") == "ended" and not race.get("finished_at"):
         fin = info.get("resolved_at") or info.get("end_at") or now
         db.ex("UPDATE races SET status='finished', finished_at=? WHERE id=?", (fin, race["id"]))
         bus.publish({"type": "race.finished", "race": race["name"]})
     return rows, info
+
+
+TEASER_DEFAULT_SEC = 30 * 60  # uden indtjekning vises startlisten 30 min før start
+
+
+def teaser(race, info, parts, now):
+    """Planlagt løb, hvor indtjekningen ikke er åbnet endnu: skærm og hjemmeside viser splash med en
+    teaser om løbet – ikke deltagerlisten. Returnerer teaserens data eller None."""
+    if race.get("started_at") or info.get("phase") != "before":
+        return None
+    start = race.get("scheduled_start")
+    if not start:  # intet planlagt starttidspunkt: startlisten vises som hidtil
+        return None
+    window = engine.checkin_window(race, engine.effective_config(race)) or TEASER_DEFAULT_SEC
+    if now >= start - window:
+        return None
+    ds = info.get("distances") or []
+    return {"name": race["name"], "start": start, "list_at": start - window,
+            "count": len(parts), "distances": [d["name"] for d in ds]}
 
 
 sync_mgr = sync.SyncManager(standings)
@@ -343,6 +365,8 @@ def live(request: Request):
     if not race:
         return {"race": None, "now": now, **extra}
     rows, info = standings(race, now)
+    if info.get("teaser"):
+        rows = []  # teaser: deltagerlisten vises først, når indtjekningen åbner
     # kun de læsere, der er valgt – kører man med én læser, vises der ingen "backup"
     rd = [] if MIRROR else [{"role": r["role"], "connected": r["connected"]} for r in reader_mgr.status() if r["path"]]
     return {"race": race_public(race), "info": info, "rows": rows, "now": now, "readers": rd, **extra}

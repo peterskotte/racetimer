@@ -113,6 +113,11 @@ En ny installation har ét demoløb, *Demoløb (kan slettes)*, med tre testløbe
 
 Under **Nyt løb** vælger I type, navn og eventuelt et planlagt starttidspunkt.
 
+**Planlagt løb på skærm og hjemmeside:** Har løbet et planlagt starttidspunkt, viser resultatskærmen og hjemmesiden stadig splash, nu med en **teaser** om løbet: navn, dato, nedtælling, antal tilmeldte og distancer. Startlisten med navne vises først, når indtjekningen åbner (*Indtjekning: min. før start*, eller 30 min før start, hvis indtjekning er slået fra). Under **Aktivt løb** står, hvornår startlisten kommer frem. Løb uden planlagt starttidspunkt viser startlisten som hidtil.
+
+![Teaser om næste løb på resultatskærmen](img/resultatskaerm-teaser.webp)
+*Teaser på splash: deltagerlisten vises først, når indtjekningen åbner.*
+
 **Start fra** gør det nemmere:
 - **🧩 Byg selv** stiller et par spørgsmål (hvordan vinder man, hvordan startes der, flere distancer, cutoff, armbånd eller manuel) og vælger løbstype og indstillinger for jer. Alt kan justeres bagefter.
 - **Skabeloner:** vælg et eksempel (fx *Nytårsløb: 5, 10 og 15 km*, *6- og 12-timersløb* eller *Trailløb med cutoff*) eller en af jeres egne. Et løb, I har sat op, gemmes som skabelon under **Aktivt løb → Indstillinger → 💾 Gem som skabelon**, så næste års udgave er klar med ét valg. Skabeloner kan hentes som fil (⬇) og importeres på en anden Pi eller i en anden klub. Deltagere og tider kommer ikke med.

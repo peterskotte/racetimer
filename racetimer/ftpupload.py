@@ -66,6 +66,11 @@ def slug(name):
 
 
 SPLASH_CSS = """
+.teaser{position:absolute;top:24px;left:50%;transform:translateX(-50%);width:min(92%,760px);padding:20px 28px;border-radius:20px;text-align:center;color:#fff;background:rgba(10,16,13,.74);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 60px rgba(0,0,0,.45)}
+.splash.plain .teaser{position:static;transform:none;margin:0 auto}
+.teaser .tk{color:var(--orange);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:13px}
+.teaser .tn{font-weight:800;font-size:clamp(26px,5vw,52px);line-height:1.1;margin-top:4px}.teaser .tw{font-size:clamp(15px,2.2vw,22px);font-weight:600;opacity:.9;margin-top:6px}
+.teaser .tc{font-size:clamp(26px,5vw,48px);font-weight:800;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}.teaser .ts{opacity:.75;margin-top:8px}
 :root{--bg:#111814;--orange:#e5682a;--cream:#f6efe3}*{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 header{background:var(--cream);border-bottom:3px solid var(--orange);padding:14px 20px}header img{height:40px;display:block}
@@ -79,16 +84,40 @@ header{background:var(--cream);border-bottom:3px solid var(--orange);padding:14p
 """
 
 
-def render_splash_html(payload, image=None, refresh_sec=0):
-    """Ingen aktive løb: splash-billede (eller klubnavnet) med den valgte tekst."""
+DAGE = ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag")
+MDR = ("januar", "februar", "marts", "april", "maj", "juni", "juli", "august", "september", "oktober", "november", "december")
+
+
+def _teaser_html(t):
+    """Planlagt løb før indtjekningen: navn, starttid, nedtælling og antal tilmeldte – ingen deltagerliste."""
+    e = html.escape
+    start = t.get("start")
+    if start:
+        lt = time.localtime(start)
+        when = f"{DAGE[lt.tm_wday].capitalize()} {lt.tm_mday}. {MDR[lt.tm_mon - 1]} kl. {time.strftime('%H.%M', lt)}"
+    else:
+        when = "Starttidspunktet kommer snart"
+    sub = "  ·  ".join(x for x in (f"{t['count']} tilmeldte" if t.get("count") else "", " · ".join(e(d) for d in t.get("distances") or [])) if x)
+    cd = (f'<div class="tc" data-start="{int(start)}"></div><script>(function(){{var el=document.querySelector(".teaser .tc"),s=+el.dataset.start;'
+          'function p(n){return(n<10?"0":"")+n}function t(){var l=Math.max(0,Math.round(s-Date.now()/1000)),d=Math.floor(l/86400);'
+          'el.textContent=l<=0?"":d>=1?"om "+d+(d===1?" dag":" dage"):p(Math.floor(l/3600))+":"+p(Math.floor(l%3600/60))+":"+p(l%60)}'
+          't();setInterval(t,1000)})();</script>') if start else ""
+    return (f'<div class="teaser"><div class="tk">Næste løb</div><div class="tn">{e(t.get("name") or "")}</div><div class="tw">{e(when)}</div>'
+            f'{cd}' + (f'<div class="ts">{sub}</div>' if sub else "") + "</div>")
+
+
+def render_splash_html(payload, image=None, refresh_sec=0, teaser=None):
+    """Ingen aktive løb: splash-billede (eller klubnavnet) med den valgte tekst – evt. med en teaser om næste løb."""
     e = html.escape
     b = payload.get("branding") or {}
     text = b.get("splash_text") or ""
     refresh = f'<meta http-equiv="refresh" content="{int(refresh_sec)}">' if refresh_sec else ""
+    tz = _teaser_html(teaser) if teaser else ""
     if image:
-        body = f'<div class="splash" style="background-image:url(\'{image}\')">' + (f'<div class="txt">{e(text)}</div>' if text else "") + "</div>"
+        body = f'<div class="splash" style="background-image:url(\'{image}\')">{tz}' + (f'<div class="txt">{e(text)}</div>' if text else "") + "</div>"
     else:
-        body = f'<div class="splash plain"><div class="pn">{e(_brand_name())}</div><div class="txt">{e(text or "Venter på næste løb")}</div></div>'
+        body = (f'<div class="splash plain">{tz or f"<div class=pn>{e(_brand_name())}</div>"}'
+                f'<div class="txt">{e(text or ("" if teaser else "Venter på næste løb"))}</div></div>')
     return f"""<!doctype html>
 <html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 {refresh}<title>{e(_brand_name())}</title><style>{SPLASH_CSS}</style></head><body>
@@ -260,7 +289,8 @@ def upload(dest, payload, splash_file=False):
         data = {k: v for k, v in payload.items() if k != "branding"}
         data["branding"] = {k: v for k, v in (payload.get("branding") or {}).items() if k != "images"}
         files = {"resultater.json": json.dumps(data, ensure_ascii=False, indent=1)}
-        if payload.get("race"):
+        teaser = (payload.get("info") or {}).get("teaser") if payload.get("race") else None
+        if payload.get("race") and not teaser:
             files["index.html"] = render_html(payload, refresh_sec=max(refresh, 15) if refresh else 0)
         else:
             image = None
@@ -271,7 +301,7 @@ def upload(dest, payload, splash_file=False):
                     with open(path, "rb") as f:
                         files[image] = f.read()
                 image += f"?v={branding.get()['v']}"
-            files["index.html"] = render_splash_html(payload, image, refresh_sec=max(refresh, 15) if refresh else 60)
+            files["index.html"] = render_splash_html(payload, image, refresh_sec=max(refresh, 15) if refresh else 60, teaser=teaser)
         if payload["event"] == "final" and payload.get("race"):
             files[f"slut-{slug(payload['race']['name'])}.html"] = files["index.html"]
         for name, text in files.items():

@@ -172,6 +172,19 @@
     font-weight: 800; font-size: clamp(26px, 4.6vw, 76px); line-height: 1.12; letter-spacing: -0.01em; white-space: pre-line;
     text-shadow: 0 2px 18px rgba(0,0,0,.5); }
   #splashText[hidden] { display: none; }
+  /* planlagt løb før indtjekningen: teaser oven på splash (ingen deltagerliste endnu) */
+  #splashTeaser { position: absolute; bottom: clamp(64px, 11vh, 130px); left: 50%; transform: translateX(-50%); width: min(92vw, 760px);
+    padding: clamp(14px, 2.2vh, 26px) clamp(20px, 3vw, 40px); border-radius: 22px; text-align: center; color: #fff;
+    background: rgba(10, 16, 13, .72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 18px 60px rgba(0, 0, 0, .45); }
+  #splashTeaser[hidden] { display: none; }
+  #splashTeaser .tk { color: var(--brand-orange); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; font-size: clamp(12px, 1.2vw, 18px); }
+  #splashTeaser .tn { font-weight: 800; font-size: clamp(26px, 3.6vw, 56px); line-height: 1.08; letter-spacing: -.01em; margin-top: 4px; }
+  #splashTeaser .tw { font-size: clamp(16px, 1.9vw, 30px); font-weight: 600; opacity: .9; margin-top: 6px; }
+  #splashTeaser .tc { font-size: clamp(26px, 3.6vw, 58px); font-weight: 800; margin-top: 8px; color: var(--brand-cream); }
+  #splashTeaser .tc:empty { display: none; }
+  #splashTeaser .ts { font-size: clamp(13px, 1.3vw, 20px); opacity: .75; margin-top: 8px; }
+  #splashTeaser .ts:empty { display: none; }
   #splashPlain .pn { font-weight: 800; font-style: italic; font-size: clamp(40px, 8vw, 130px); letter-spacing: -0.03em; line-height: 1.05;
                      color: var(--brand-cream); }
   #splashPlain .ps { margin-top: 18px; color: var(--brand-orange); font-size: clamp(16px, 2vw, 28px); font-weight: 600; letter-spacing: .04em; }
@@ -212,6 +225,7 @@
   <img class="fg" id="splashFg" alt="">
   <div id="splashPlain" hidden><div class="pn"></div><div class="ps">Venter på næste løb</div></div>
   <div id="splashText" hidden></div>
+  <div id="splashTeaser" hidden><div class="tk">Næste løb</div><div class="tn"></div><div class="tw"></div><div class="tc num"></div><div class="ts"></div></div>
   <div id="splashHost" class="num"></div>
   <div id="splashClock" class="num"></div>
 </div>
@@ -430,6 +444,26 @@ function applyBrand(b) {
   $("splashPlain").querySelector(".ps").textContent = t || "Venter på næste løb";
 }
 
+function teaserCountdown(t) {
+  if (!t.start) return "";
+  const left = t.start - now();
+  if (left <= 0) return "";
+  const days = Math.floor(left / 86400);
+  return days >= 1 ? `om ${days} ${days === 1 ? "dag" : "dage"}` : hms(left, true);
+}
+function renderTeaser(t) {
+  const el = $("splashTeaser");
+  el.querySelector(".tn").textContent = t.name;
+  el.querySelector(".tw").textContent = t.start
+    ? new Date(t.start * 1000).toLocaleString("da-DK", {weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"}).replace(/^./, c => c.toUpperCase())
+    : "Starttidspunktet kommer snart";
+  el.querySelector(".tc").textContent = teaserCountdown(t);
+  el.querySelector(".ts").textContent = [t.count ? `${t.count} tilmeldte` : "", (t.distances || []).join(" · ")].filter(Boolean).join("  ·  ");
+  // nederst – men over jeres egen splash-tekst, hvis der er en
+  const txt = $("splashText");
+  el.style.bottom = txt.hidden ? "" : `${txt.offsetHeight - parseFloat(getComputedStyle(txt).paddingTop) + 24}px`;
+}
+
 function render() {
   applyBrand(data.brand);
   // Pi'ens adresse (skifter når den kommer på et andet WiFi)
@@ -442,8 +476,11 @@ function render() {
     $("firstCode").querySelector(".fc-code").textContent = data.first_code;
     $("firstCode").querySelector(".fc-s").textContent = `Åbn ${h?.ip ? `http://${h.ip}:8000/admin` : "http://racetimer.local:8000/admin"} på en mobil eller computer · brugernavn: admin · kode: som ovenfor`;
   }
-  const idle = !data.race;
+  const teaser = data.race && data.info?.teaser;  // planlagt løb: splash med teaser, indtil indtjekningen åbner
+  const idle = !data.race || !!teaser;
   $("splash").hidden = !idle;
+  $("splashTeaser").hidden = !teaser;
+  if (teaser) renderTeaser(teaser);
   document.body.classList.toggle("splash-on", idle);
   const test = !!data.race?.test;  // testløb: orange ramme + mærkat
   document.body.classList.toggle("testrace", test);
@@ -512,6 +549,7 @@ function tick() {
   $("clock").textContent = new Date(t * 1000).toLocaleTimeString("da-DK");
   $("splashClock").textContent = new Date(t * 1000).toLocaleTimeString("da-DK", {hour: "2-digit", minute: "2-digit"});
   if (!data?.race) return;
+  if (data.info?.teaser) { $("splashTeaser").querySelector(".tc").textContent = teaserCountdown(data.info.teaser); return; }
   const {info, race} = view();
   if (info.phase !== "before") $("hero").innerHTML = hero(info, race);
   const alert = $("alert");

@@ -1073,6 +1073,7 @@ async function loadRace(full) {
   if (i.winner) extra = ` · 🏆 Vinder: ${esc(i.winner)}`;
   if (i.no_winner) extra = " · Ingen vinder";
   if (i.checkin) extra += ` · ${i.checkin.count}/${i.checkin.total} tjekket ind`;
+  if (i.teaser) extra += `<br>📺 Skærm og hjemmeside viser splash med en teaser om løbet – startlisten vises fra ${clock(i.teaser.list_at)}, når indtjekningen åbner.`;
   if (i.solo) extra += i.solo.state === "running" ? ` · ${esc(i.solo.name)} løber solo-runden` : ` · ${esc(i.solo.name)} skal løbe solo-runden ved næste start`;
   if (i.continuous && i.phase === "running") extra = i.end_mode === "duration"
     ? ` · ${hms(i.remaining)} tilbage · ${i.on_course} på ruten` : ` · ${i.finishers} færdige · ${i.on_course} på ruten`;
