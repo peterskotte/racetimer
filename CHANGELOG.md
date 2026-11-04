@@ -4,6 +4,14 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Rettet**
+- **Ens RFID-læsere i andre USB-porte:** to ens læsere kendes på USB-porten. Flyttes de, fx til en USB-hub, blinkede statuslampen rød ×1, selvom begge sad i. Nu finder RaceTimer dem selv i de nye porte (samme model, læser 1 i den første port), og klar-tjekket og admin viser, at de er flyttet. Sættes de tilbage, bruges de gemte porte igen.
+- Hver læser stod to gange i listen over læsere på Pi 5 (samme port har to navne).
+
+**Nyt**
+- **Klar-tjek ved opstart:** har Pi'en en skærm, starter den på et klar-tjek i stedet for resultatskærmen. Netværk, ur, RFID-læsere, moduler, hjemmeside og løbet vises med grøn, gul eller rød, og de kan rettes direkte fra touchskærmen eller et tastatur: vælg WiFi (med skærmtastatur til koden), vælg og test læsere, tilføj og test højttaler og statuslampe, se hjemmesidens seneste afsendelse eller fejl og tryk *Send nu*, og vælg løbet. **START** skifter til splash eller det aktive løb, og ⚙ på resultatskærmen fører tilbage. En ny Pi viser førstegangskoden her. Klar-tjekket virker kun på Pi'ens egen skærm (ikke via netværket eller fjernadgang).
+- **Admin-armbånd:** scan et admin-armbånd ved læseren for at skifte Pi'ens skærm til klar-tjekket og tilbage igen. Sættes op under *Opsætning → Brugere*. Armbåndet tæller aldrig i et løb og kan ikke tildeles en løber; statuslampen blinker blåt.
+
 **Ændret**
 - **Splash fylder hele browservinduet** på hjemmesiden (`index.php` og FTP-siden), også på mobil. Listen over tidligere resultater ligger nedenunder.
 

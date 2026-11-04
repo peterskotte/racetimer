@@ -173,6 +173,11 @@
     text-shadow: 0 2px 18px rgba(0,0,0,.5); }
   #splashText[hidden] { display: none; }
   /* planlagt løb før indtjekningen: teaser oven på splash (ingen deltagerliste endnu) */
+  /* kun på Pi'ens egen skærm: tilbage til klar-tjekket */
+  #klarBtn { position: fixed; left: 10px; bottom: 10px; z-index: 30; width: 44px; height: 44px; border-radius: 50%; display: grid;
+             place-items: center; font-size: 22px; text-decoration: none; color: #fff; background: rgba(0, 0, 0, .35); opacity: .45; }
+  #klarBtn:hover, #klarBtn:focus { opacity: 1; }
+  body.splash-on #klarBtn { bottom: clamp(48px, 7vh, 80px); }  /* over admin-adressen på splash */
   #splashTeaser { position: absolute; bottom: clamp(64px, 11vh, 130px); left: 50%; transform: translateX(-50%); width: min(92vw, 760px);
     padding: clamp(14px, 2.2vh, 26px) clamp(20px, 3vw, 40px); border-radius: 22px; text-align: center; color: #fff;
     background: rgba(10, 16, 13, .72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -232,6 +237,7 @@
 </div>
 <div id="alert"><div class="big num" id="alertBig"></div><div class="txt" id="alertTxt"></div></div>
 <button id="sound" hidden>🔈 Slå lyd til</button>
+<a id="klarBtn" href="/klar" hidden title="Klar-tjek: tjek og ret udstyret">⚙</a>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -468,10 +474,17 @@ function renderTeaser(t) {
   el.querySelector(".ts").innerHTML = [t.count ? `${t.count} tilmeldte` : "", esc((t.distances || []).join(" · ")), su].filter(Boolean).join("  ·  ");
 }
 
+let adminScan;  // seneste scanning af admin-armbåndet, da siden blev åbnet
 function render() {
   applyBrand(data.brand);
   // Pi'ens adresse (skifter når den kommer på et andet WiFi)
   const h = data.host;
+  $("klarBtn").hidden = !h;  // data.host sendes kun til Pi'ens egen skærm
+  // admin-armbånd scannet → klar-tjekket (værdien sendes kun til Pi'ens egen skærm)
+  if (h) {
+    if (adminScan !== undefined && data.admin_scan && data.admin_scan !== adminScan) { location.href = "/klar"; return; }
+    adminScan = data.admin_scan ?? null;
+  }
   $("splashHost").textContent = h ? `Admin: ${h.name}:8000/admin${h.ip ? ` · ${h.ip}:8000/admin` : ""}${h.wifi ? ` · WiFi: ${h.wifi}` : ""}` : "";
   $("hostInfo").textContent = h?.ip ? `${h.ip}${h.wifi ? ` · ${h.wifi}` : ""}` : h ? "intet netværk" : "";
   // ny installation: vis førstegangskoden (sendes kun til Pi'ens egen skærm), indtil den er skiftet

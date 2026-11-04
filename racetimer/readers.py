@@ -60,7 +60,7 @@ def _name(path):
 
 def _port(path):
     """USB-porten i en by-path-sti, fx '...-usb-0:1.3:1.0-event-kbd' → '1.3'."""
-    m = re.search(r"-usb-\d+:([\d.]+):", os.path.basename(path))
+    m = re.search(r"-usb(?:v\d+)?-\d+:([\d.]+):", os.path.basename(path))
     return m.group(1) if m else None
 
 
@@ -94,6 +94,8 @@ def list_devices():
     seen = set()
     for p in bypath:
         real = os.path.realpath(p)
+        if real in seen:  # samme port har flere navne (fx "usb-0:2.2" og "usbv2-0:2.2") – vis den kun én gang
+            continue
         seen.add(real)
         if count[names[real]] == 1 and real in byid:
             out.append({"path": byid[real], "label": os.path.basename(byid[real])})
@@ -111,6 +113,39 @@ def list_devices():
             except OSError:
                 pass
     return out
+
+
+def device_name(path):
+    """Læserens modelnavn (gemmes sammen med valget, så en ens læser kan genkendes i en anden port)."""
+    if not path or path.startswith("serial:"):
+        return None
+    return _name(path) if os.path.exists(path) else None
+
+
+def resolve(paths, names=None):
+    """De stier, læserne faktisk skal bruge. En læser valgt på USB-port (ens læsere) kan være flyttet til en
+    anden port, fx når de sættes i en hub. Mangler den gemte port, bruges en ledig, tilsluttet læser af samme
+    model i stedet – i portrækkefølge, så læser 1 får den første. Den gemte port bruges igen, når den kommer tilbage."""
+    names = names or {}
+    eff = {r: (paths or {}).get(r) for r in ROLES}
+    _, bypath, devnames = _keyboards()
+    count = collections.Counter(devnames.values())
+    free = {}  # fysisk enhed → by-path, sorteret efter port
+    for p in sorted(bypath, key=lambda p: [int(x) for x in (_port(p) or "0").split(".")]):
+        free.setdefault(os.path.realpath(p), p)
+    used = {os.path.realpath(p) for p in eff.values() if p and not p.startswith("serial:") and os.path.exists(p)}
+    for role in ROLES:
+        p = eff[role]
+        if not p or p.startswith("serial:") or os.path.exists(p) or "/by-path/" not in p:
+            continue
+        want = names.get(role)
+        for real, cand in free.items():
+            # samme model som gemt – eller (ældre valg uden navn) en af flere ens læsere
+            if real not in used and (devnames.get(real) == want if want else count[devnames.get(real)] > 1):
+                eff[role] = cand
+                used.add(real)
+                break
+    return eff
 
 
 class Reader(threading.Thread):
@@ -195,14 +230,29 @@ class Reader(threading.Thread):
 
 
 class ReaderManager:
+    WATCH_SEC = 3  # hvor ofte der tjekkes, om en ens læser er flyttet til en anden USB-port
+
     def __init__(self, on_read):
         self.on_read = on_read
         self.readers = {}
+        self.wanted, self.names = {}, {}
+        self._lock = threading.Lock()
+        self._watch = None
 
-    def configure(self, paths):
-        """paths: {"primary": "/dev/input/by-id/...", "backup": "..."}"""
+    def configure(self, paths, names=None):
+        """paths: {"primary": "/dev/input/by-id/...", "backup": "..."}; names: modelnavn pr. rolle (valgfrit)."""
+        with self._lock:
+            self.wanted = {r: (paths or {}).get(r) for r in ROLES}
+            self.names = dict(names or {})
+            self._apply()
+        if not self._watch:
+            self._watch = threading.Thread(target=self._watch_loop, daemon=True, name="reader-watch")
+            self._watch.start()
+
+    def _apply(self):
+        eff = resolve(self.wanted, self.names)
         for role in ROLES:
-            path = (paths or {}).get(role)
+            path = eff.get(role)
             old = self.readers.get(role)
             if old and old.path == path:
                 continue
@@ -214,6 +264,23 @@ class ReaderManager:
                 self.readers[role] = r
                 r.start()
 
+    def _watch_loop(self):
+        while True:
+            time.sleep(self.WATCH_SEC)
+            try:
+                with self._lock:
+                    eff = resolve(self.wanted, self.names)
+                    if any((self.readers.get(r).path if r in self.readers else None) != eff.get(r) for r in ROLES):
+                        self._apply()
+            except Exception:  # noqa: BLE001 – overvågningen må aldrig stoppe læserne
+                pass
+
     def status(self):
-        return [self.readers[r].status() if r in self.readers else {"role": r, "path": None, "connected": False}
-                for r in ROLES]
+        out = []
+        for role in ROLES:
+            st = self.readers[role].status() if role in self.readers else {"role": role, "path": None, "connected": False}
+            want = self.wanted.get(role)
+            if st.get("path") and want and st["path"] != want:  # fulgt med til en anden USB-port
+                st["moved_from"], st["port"] = _port(want), _port(st["path"])
+            out.append(st)
+        return out

@@ -42,6 +42,7 @@ FLASH = {
     "read.ignored": (("blink", YELLOW, 5), 1.6, "Gult blink (tæller ikke)"),
     "read.unknown": (("blink", RED, 5), 2.0, "Rødt blink (ukendt armbånd)"),
     "chip.registered": (("blink", BLUE, 5), 1.2, "Blåt blink (chip tildelt)"),
+    "admin.chip": (("blink", BLUE, 5), 1.2, "Blåt blink (admin-armbånd)"),
     "race.started": (("solid", GREEN, 0), 3.0, "Grønt lys (start)"),
 }
 SCAN_SIDES = [("front", "Forsiden"), ("both", "Begge sider"), ("off", "Ingen (kun status)")]

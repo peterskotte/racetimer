@@ -19,7 +19,7 @@ import threading
 import time
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import branding, db, engine, events, health, modules, outcome, readers, signup, sync, updater
@@ -132,6 +132,14 @@ bus = events.EventBus()  # hændelser til moduler og skærmens scan-besked
 _capture = {"until": 0, "chip": None}
 _cap_lock = threading.Lock()
 _devtest = {"until": 0, "reads": []}  # udstyrstest: scanninger opsamles her og tæller ikke i løbet
+# admin-armbånd: en scanning skifter Pi'ens skærm mellem resultatskærmen og klar-tjekket.
+# "at" er tidspunktet for seneste skift; "last" er seneste læsning (læseren gentager, mens armbåndet holdes der)
+_admin_scan = {"at": None, "last": 0}
+ADMIN_CHIP_GAP = 3  # sek. uden læsning, før armbåndet tæller som en ny scanning
+
+
+def admin_chips():
+    return db.setting("admin_chips", []) or []
 
 
 # ------------------------------------------------------------------ chip-læsninger
@@ -152,6 +160,13 @@ def handle_read(chip, reader, ts=None):
         if _devtest["until"] > ts:
             _devtest["reads"] = (_devtest["reads"] + [{"reader": reader, "chip": chip, "ts": ts}])[-50:]
             return {"test": True}
+        if any(c["chip"] == chip for c in admin_chips()):
+            fresh = ts - _admin_scan["last"] > ADMIN_CHIP_GAP
+            _admin_scan["last"] = ts
+            if fresh:
+                _admin_scan["at"] = ts
+                bus.publish({"type": "admin.chip", "reader": reader})
+            return {"admin": True}  # tæller aldrig i løbet
 
     race = db.active_race()
     race_id = race["id"] if race else None
@@ -186,7 +201,7 @@ def _startup():
         env = os.environ.get(f"RACETIMER_{role.upper()}")
         if env:
             paths[role] = env
-    reader_mgr.configure(paths)
+    reader_mgr.configure(paths, db.setting("reader_names", {}) or {})
 
 
 # ------------------------------------------------------------------ auth
@@ -198,6 +213,31 @@ def admin(request: Request):
     if not u:
         raise HTTPException(401, "Log ind")
     return u
+
+
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
+
+def kiosk_screen(request):
+    """Kommer forespørgslen fra Pi'ens egen skærm og intet andet sted? Strengere end on_pi_screen, fordi den
+    giver adgang uden login: kun localhost, ingen tunnel- eller proxy-headere, og Host skal være localhost
+    (cloudflared og en reverse proxy sender den rigtige adresse videre)."""
+    if MIRROR or not request.client or request.client.host not in ("127.0.0.1", "::1"):
+        return False
+    h = request.headers
+    if any(k in h for k in ("cf-ray", "cf-connecting-ip", "cf-visitor", "x-forwarded-for", "x-forwarded-host",
+                            "x-real-ip", "forwarded")):
+        return False
+    host = (h.get("host") or "").lower()
+    host = host.split("]")[0] + "]" if host.startswith("[") else host.split(":")[0]  # uden port
+    return host in LOCAL_HOSTS
+
+
+def admin_or_screen(request: Request):
+    """Admin – eller Pi'ens egen skærm (klar-tjekket ved opstart), hvor man står ved Pi'en og ikke er logget ind."""
+    if kiosk_screen(request):
+        return {"id": None, "username": "Pi'ens skærm"}
+    return admin(request)
 
 
 def is_remote(request):
@@ -289,6 +329,14 @@ def admin_page():
     return FileResponse(os.path.join(STATIC, "admin.html"))
 
 
+@app.get("/klar")
+def ready_page(request: Request):
+    """Klar-tjek: Pi'ens skærm starter her ved opstart (tjek og ret problemer, tryk START)."""
+    if not kiosk_screen(request):
+        return RedirectResponse("/admin")
+    return FileResponse(os.path.join(STATIC, "klar.html"))
+
+
 def standings(race, now=None):
     now = now or time.time()
     parts = db.q("SELECT * FROM participants WHERE race_id=?", (race["id"],))
@@ -374,6 +422,7 @@ def live(request: Request):
         extra["host"] = host_info()
         if db.first_code():  # ny installation: vis førstegangskoden på Pi'ens egen skærm
             extra["first_code"] = db.first_code()
+        extra["admin_scan"] = _admin_scan["at"]  # skærmen skifter til klar-tjekket, når værdien ændres
     if not MIRROR:
         extra["clock"] = clock_info()
         extra["events"] = bus.recent()
@@ -527,7 +576,7 @@ def delete_destination(did: str, u=Depends(admin)):
 
 
 @app.post("/api/destinations/{did}/send")
-def send_destination(did: str, u=Depends(admin)):
+def send_destination(did: str, u=Depends(admin_or_screen)):
     """Manuel afsendelse. Er løbet afsluttet, sendes det som endelige resultater."""
     d = next((d for d in sync.destinations() if d["id"] == did), None) or _404()
     if not d.get("url"):
@@ -608,7 +657,7 @@ def export_template(tid: str, u=Depends(admin)):
 
 
 @app.get("/api/races")
-def races(u=Depends(admin)):
+def races(u=Depends(admin_or_screen)):
     rows = db.q("SELECT r.*, (SELECT COUNT(*) FROM participants p WHERE p.race_id=r.id) AS n "
                 "FROM races r ORDER BY r.created_at DESC")
     for r in rows:
@@ -689,7 +738,7 @@ def _activate(rid):
 
 
 @app.post("/api/races/deactivate")
-def deactivate(u=Depends(admin)):
+def deactivate(u=Depends(admin_or_screen)):
     """Intet aktivt løb → resultatskærmen viser splash-billedet."""
     db.ex("UPDATE races SET is_active=0")
     sync_mgr.poke_state()
@@ -697,7 +746,7 @@ def deactivate(u=Depends(admin)):
 
 
 @app.post("/api/races/{rid}/activate")
-def activate(rid: int, u=Depends(admin)):
+def activate(rid: int, u=Depends(admin_or_screen)):
     db.ex("UPDATE races SET archived_at=NULL WHERE id=?", (rid,))  # det, der vises, hører ikke til i arkivet
     _activate(rid)
     return {"ok": True}
@@ -1196,10 +1245,122 @@ def capture_cancel(u=Depends(admin)):
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ admin-armbånd
+
+@app.get("/api/admin_chips")
+def admin_chips_list(u=Depends(admin)):
+    return admin_chips()
+
+
+@app.post("/api/admin_chips")
+async def admin_chips_add(request: Request, u=Depends(admin)):
+    b = await request.json()
+    chip = readers.normalize(str(b.get("chip") or ""))
+    if not chip:
+        raise HTTPException(400, "Scan armbåndet først")
+    race = db.active_race()
+    p = race and db.q1("SELECT name FROM participants WHERE race_id=? AND chip=?", (race["id"], chip))
+    if p:
+        raise HTTPException(400, f"Armbåndet er tildelt {p['name']} i det aktive løb – brug et andet")
+    label = re.sub(r"\s+", " ", str(b.get("label") or "")).strip()[:40] or "Admin-armbånd"
+    chips = [c for c in admin_chips() if c["chip"] != chip] + [{"chip": chip, "label": label, "added": time.time()}]
+    db.set_setting("admin_chips", chips)
+    return chips
+
+
+@app.delete("/api/admin_chips/{chip}")
+def admin_chips_delete(chip: str, u=Depends(admin)):
+    chips = [c for c in admin_chips() if c["chip"] != readers.normalize(chip)]
+    db.set_setting("admin_chips", chips)
+    return chips
+
+
+# ------------------------------------------------------------------ klar-tjek på Pi'ens skærm ved opstart
+
+def ready_checks():
+    """Er Pi'en klar til et løb? Én linje pr. emne: ok, warn (virker, men bør rettes), error eller info."""
+    out = []
+    add = lambda k, title, state, text, fix=None: out.append({"id": k, "title": title, "state": state, "text": text, "fix": fix})  # noqa: E731
+    h = host_info()
+    if h.get("ip"):
+        add("net", "Netværk", "ok", f"{'WiFi ' + h['wifi'] if h.get('wifi') else 'Forbundet'} · {h['ip']}", "wifi")
+    else:
+        add("net", "Netværk", "warn", "Intet netværk. Tidtagningen virker uden, men hjemmeside, ur og fjernadgang kræver net.", "wifi")
+    c = clock_info().get("synced")
+    add("clock", "Ur", "ok" if c else "warn" if c is False else "info",
+        "Stillet via internettet" if c else "Ikke stillet via internettet – giv Pi'en net et par minutter før start"
+        if c is False else "Kan ikke afgøres her")
+    race = db.active_race()
+    manual = bool(race and race.get("timing") == "manual")
+    st = {r["role"]: r for r in reader_mgr.status()}
+    chosen = [r for r in st.values() if r.get("path")]
+    if manual:
+        add("readers", "RFID-læsere", "info", "Løbet tages manuelt (tryk på felter) – læsere bruges ikke", "readers")
+    elif not chosen:
+        add("readers", "RFID-læsere", "error" if readers.list_devices() else "warn",
+            "Ingen læser valgt – vælg den herunder" if readers.list_devices() else "Ingen læser fundet – sæt en RFID-læser i USB",
+            "readers")
+    else:
+        bad = [r for r in chosen if not r.get("connected")]
+        names = {"primary": "Læser 1", "backup": "Læser 2"}
+        def line(r):
+            moved = f" (flyttet fra USB-port {r['moved_from']} til {r['port']})" if r.get("moved_from") else ""
+            return f"{names[r['role']]}: {'forbundet' if r.get('connected') else 'ikke forbundet'}{moved}"
+        add("readers", "RFID-læsere", "error" if bad else "ok", ", ".join(line(r) for r in chosen), "readers")
+    try:
+        mods = module_mgr.overview()["modules"]
+    except Exception:  # noqa: BLE001
+        mods = []
+    on = [m for m in mods if m.get("enabled")]
+    if on:
+        bad = [m for m in on if m["status"]["state"] != "ok"]
+        add("modules", "Moduler", "warn" if bad else "ok",
+            ", ".join(f"{m.get('name') or m['kind']}: {m['status']['text'].lower()}" for m in on), "modules")
+    else:
+        add("modules", "Moduler", "info", "Ingen højttaler eller statuslampe (valgfrit)", "modules")
+    dests = [d for d in sync.destinations() if d.get("enabled") and d.get("url")]
+    if dests:
+        errs = [d.get("name") or d["url"] for d in dests if sync_mgr.status.get(d["id"], {}).get("last_error")]
+        last = max((sync_mgr.status.get(d["id"], {}).get("last_ok") or 0 for d in dests), default=0)
+        add("sync", "Hjemmeside", "warn" if errs else "ok",
+            "Kunne ikke sende til " + ", ".join(errs) if errs
+            else f"Sendt kl. {time.strftime('%H.%M', time.localtime(last))}" if last else "Ikke sendt endnu – tryk Send nu", "sync")
+    else:
+        add("sync", "Hjemmeside", "info", "Ingen hjemmeside sat op (valgfrit – sættes op i admin under Synkronisering)")
+    if race:
+        add("race", "Løb på skærmen", "ok", f"{race['name']} ({ {'planned': 'planlagt', 'running': 'kører', 'finished': 'afsluttet'}.get(race['status'], race['status']) })", "race")
+    else:
+        add("race", "Løb på skærmen", "info", "Intet aktivt løb – START viser splash", "race")
+    return out
+
+
+@app.get("/api/klar/sync")
+def ready_sync(u=Depends(admin_or_screen)):
+    """Til klar-tjekket: hjemmesiderne med seneste afsendelse og fejl (uden adresser, nøgler og koder)."""
+    out = []
+    for d in sync.destinations():
+        st = sync_mgr.status.get(d["id"], {})
+        out.append({"id": d["id"], "name": d.get("name") or {"webhook": "Hjemmeside", "ftp": "FTP", "mirror": "Spejlserver"}.get(d["type"], d["type"]),
+                    "type": d["type"], "enabled": bool(d.get("enabled") and d.get("url")),
+                    "last_ok": st.get("last_ok"), "last_error": st.get("last_error"), "last_event": st.get("last_event")})
+    return out
+
+
+@app.get("/api/klar")
+def ready_status(request: Request, u=Depends(admin_or_screen)):
+    checks = ready_checks()
+    worst = "error" if any(c["state"] == "error" for c in checks) else "warn" if any(c["state"] == "warn" for c in checks) else "ok"
+    return {"checks": checks, "overall": worst, "host": host_info(), "version": APP_VERSION, "now": time.time(),
+            "brand": branding.public(),
+            # ny installation: førstegangskoden står kun på Pi'ens egen skærm (aldrig til en browser andetsteds)
+            "first_code": db.first_code() if kiosk_screen(request) else None,
+            "admin_scan": _admin_scan["at"] if kiosk_screen(request) else None}
+
+
 # ------------------------------------------------------------------ udstyrstest
 
 @app.post("/api/devtest/start")
-def devtest_start(u=Depends(admin)):
+def devtest_start(u=Depends(admin_or_screen)):
     """Lyt efter scanninger i 2 min. De gemmes ikke som læsninger og tæller ikke i noget løb."""
     with _cap_lock:
         _devtest.update(until=time.time() + 120, reads=[])
@@ -1207,7 +1368,7 @@ def devtest_start(u=Depends(admin)):
 
 
 @app.get("/api/devtest")
-def devtest_poll(u=Depends(admin)):
+def devtest_poll(u=Depends(admin_or_screen)):
     with _cap_lock:
         active = _devtest["until"] > time.time()
         reads = list(_devtest["reads"])
@@ -1216,7 +1377,7 @@ def devtest_poll(u=Depends(admin)):
 
 
 @app.post("/api/devtest/stop")
-def devtest_stop(u=Depends(admin)):
+def devtest_stop(u=Depends(admin_or_screen)):
     with _cap_lock:
         _devtest.update(until=0)
     return {"ok": True}
@@ -1251,7 +1412,8 @@ def capture_poll(u=Depends(admin)):
     race = db.active_race()
     if chip and race:
         owner = db.q1("SELECT id, name, bib FROM participants WHERE race_id=? AND chip=?", (race["id"], chip))
-    return {"chip": chip, "waiting": waiting, "owner": owner}
+    adm = next((c["label"] for c in admin_chips() if c["chip"] == chip), None) if chip else None
+    return {"chip": chip, "waiting": waiting, "owner": owner, "admin": adm}
 
 
 # ------------------------------------------------------------------ læsninger
@@ -1348,23 +1510,25 @@ async def sim_read(request: Request, u=Depends(admin)):
 # ------------------------------------------------------------------ læsere + indstillinger
 
 @app.get("/api/readers")
-def reader_status(u=Depends(admin)):
+def reader_status(u=Depends(admin_or_screen)):
     return {"status": reader_mgr.status(), "devices": readers.list_devices(), "ambiguous": readers.ambiguous_paths(),
             "config": db.setting("readers", {}), "dedup_sec": db.setting("dedup_sec", 30),
             "evdev": readers.evdev is not None}
 
 
 @app.put("/api/readers")
-async def set_readers(request: Request, u=Depends(admin)):
+async def set_readers(request: Request, u=Depends(admin_or_screen)):
     b = await request.json()
     paths = {r: (b.get(r) or None) for r in readers.ROLES}
     if paths["primary"] and paths["backup"] and \
             os.path.realpath(paths["primary"]) == os.path.realpath(paths["backup"]):
         raise HTTPException(400, "Primær og backup er den samme læser – vælg to forskellige")
     db.set_setting("readers", paths)
+    names = {r: readers.device_name(p) for r, p in paths.items() if p}  # så en ens læser kan findes i en anden port
+    db.set_setting("reader_names", names)
     if b.get("dedup_sec") is not None:
         db.set_setting("dedup_sec", float(b["dedup_sec"]))
-    reader_mgr.configure(paths)
+    reader_mgr.configure(paths, names)
     return {"ok": True}
 
 
@@ -1447,18 +1611,18 @@ def _wifi(*args, stdin=None):
 
 
 @app.get("/api/wifi")
-def wifi_status(u=Depends(admin)):
+def wifi_status(u=Depends(admin_or_screen)):
     return _wifi("status")
 
 
 @app.put("/api/wifi")
-async def wifi_save(request: Request, u=Depends(admin)):
+async def wifi_save(request: Request, u=Depends(admin_or_screen)):
     b = await request.json()
     return _wifi("apply", stdin=json.dumps({"networks": b.get("networks") or []}))
 
 
 @app.post("/api/wifi/connect/{slot}")
-def wifi_connect(slot: int, u=Depends(admin)):
+def wifi_connect(slot: int, u=Depends(admin_or_screen)):
     if not 1 <= slot <= 5:
         raise HTTPException(400, "Ugyldig plads")
     return _wifi("connect", str(slot))
@@ -1594,12 +1758,12 @@ def _mod(fn, *a):
 
 
 @app.get("/api/modules")
-def modules_overview(u=Depends(admin)):
+def modules_overview(u=Depends(admin_or_screen)):
     return module_mgr.overview()
 
 
 @app.post("/api/modules")
-async def modules_add(request: Request, u=Depends(admin)):
+async def modules_add(request: Request, u=Depends(admin_or_screen)):
     b = await request.json()
     return _mod(module_mgr.add, b.get("kind"), str(b.get("device") or ""), b.get("name"))
 
@@ -1616,7 +1780,7 @@ def modules_remove(mid: str, u=Depends(admin)):
 
 
 @app.post("/api/modules/{mid}/test")
-def modules_test(mid: str, u=Depends(admin)):
+def modules_test(mid: str, u=Depends(admin_or_screen)):
     try:
         return {"ok": True, "text": _mod(module_mgr.test, mid)}
     except RuntimeError as e:

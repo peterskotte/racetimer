@@ -182,10 +182,19 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 
 ## 7. På løbsdagen
 
+**Klar-tjek på Pi'ens skærm:** Har Pi'en en skærm, starter den på et **klar-tjek** i stedet for resultatskærmen. Her står netværk, ur, RFID-læsere, moduler (højttaler, statuslampe), hjemmeside og løbet på skærmen med grøn, gul eller rød. Tryk på et punkt for at rette det direkte på touchskærmen eller med et tastatur:
+- **Netværk:** vælg et WiFi og skriv koden på skærmtastaturet.
+- **RFID-læsere:** vælg læser 1 og 2, og hold et armbånd mod læseren for at se, at den læser (det tæller ikke i noget løb).
+- **Moduler:** tilføj en fundet højttaler eller statuslampe, og tryk *Test*.
+- **Hjemmeside:** se hvornår der sidst blev sendt, eller hvilken fejl der kom, og tryk *Send nu*.
+- **Løb på skærmen:** vælg løbet, eller *Intet løb* for splash.
+
+Tryk **START**, når alt er klar. Så skifter skærmen til splash eller det aktive løb. Det lille ⚙ nederst i hjørnet af resultatskærmen fører tilbage til klar-tjekket. Med et **admin-armbånd** behøver I ikke røre skærmen: scan det ved læseren, så skifter skærmen til klar-tjekket, og scan det igen for at komme tilbage. Armbåndet sættes op i admin under *Opsætning → Brugere → Admin-armbånd* (tryk *Scan armbånd* og hold det mod læseren). Det tæller aldrig i et løb, kan ikke tildeles en løber og giver ikke adgang til admin-siden. På en ny Pi står førstegangskoden øverst i klar-tjekket. Klar-tjekket kan kun bruges på Pi'ens egen skærm – fra andre enheder kræver det login i admin.
+
 **Før start**
 - [ ] Tænd Pi'en i god tid. Under **Aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
 - [ ] Kør **⚙ Opsætning → Udstyrstest**. Den beder dig holde et armbånd mod læser 1 og læser 2, og den tester højttalere og resultatskærm. Scanninger under testen tæller ikke. Læserne vælges under **⚙ Opsætning → RFID-læsere**.
-- [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2". Har I to ens læsere, kendes de på USB-porten, så sæt dem i de samme porte hver gang (mærk gerne portene).
+- [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2". Har I to ens læsere, kendes de på USB-porten. Sættes de i andre porte (fx en USB-hub), finder RaceTimer dem selv og skriver det i klar-tjekket – men mærk gerne portene, så I ved, hvilken der er læser 1.
 - [ ] Bed løberne scanne for at tjekke ind. Skærmen viser, hvor mange der er tjekket ind, fx 18/20.
 - [ ] Hav en mobil med admin åben, så I kan rette undervejs.
 

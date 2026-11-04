@@ -559,6 +559,16 @@
             <button class="primary">Opret</button>
           </form>
         </div>
+        <h2>Admin-armbånd</h2>
+        <div class="card pad">
+          <p class="muted small" style="margin-top:0">Scan et admin-armbånd ved læseren, så skifter Pi'ens skærm til klar-tjekket. Scan det igen for at komme tilbage til resultatskærmen.
+            Armbåndet tæller aldrig i et løb. Det giver ikke adgang til admin-siden.</p>
+          <div id="adminChips"></div>
+          <div class="row" style="margin-top:10px">
+            <label>Navn <span class="muted small">(valgfrit)</span><input id="adminChipLabel" maxlength="40" placeholder="Fx Peters armbånd" autocomplete="off"></label>
+            <button type="button" id="adminChipScan">📡 Scan armbånd</button>
+          </div>
+        </div>
         <h2>Pi'ens egen kode</h2>
         <div class="card pad" id="piPwBox">Henter…</div>
       </section>
@@ -675,7 +685,7 @@ function loadTab(tab) {
   if (tab === "modules") loadModules();
   if (tab === "readers") loadReaders();
   if (tab === "devtest") loadDevtest();
-  if (tab === "users") { loadUsers(); loadPiPw(); }
+  if (tab === "users") { loadUsers(); loadPiPw(); loadAdminChips(); }
 }
 function markNav(tab) { document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === tab)); }
 function openSetup(tab, toggle) {
@@ -1536,7 +1546,7 @@ async function loadReads() {
 // status-prikker for læserne (deles af Aktivt løb og RFID-læsere)
 function readerDots(d) {
   return d.status.map(s => `<div style="margin-bottom:6px"><i class="dot ${s.connected ? "active" : ""}" style="background:${s.connected ? "var(--green)" : "var(--red)"}"></i>
-    <b>${s.role === "primary" ? "Primær" : "Backup"}</b>: ${s.connected ? "forbundet" : (s.path ? "ikke forbundet" : "ikke valgt")}
+    <b>${s.role === "primary" ? "Primær" : "Backup"}</b>: ${s.connected ? "forbundet" : (s.path ? "ikke forbundet" : "ikke valgt")}${s.moved_from ? ` <span class="muted small">(flyttet fra USB-port ${esc(s.moved_from)} til ${esc(s.port)})</span>` : ""}
     ${s.reads ? ` · ${s.reads} læsninger` : ""}${s.last_read ? ` · senest ${new Date(s.last_read * 1000).toLocaleTimeString("da-DK")}` : ""}${s.error ? ` <span class="muted small">(${esc(s.error)})</span>` : ""}</div>`).join("");
 }
 async function loadReaderStatus() {
@@ -1626,13 +1636,14 @@ $("timeForm").onsubmit = async e => {
 };
 
 // ------------------------------------------------ chip-scan (capture)
-async function scanChip(onChip) {
+async function scanChip(onChip, forAdmin) {
   await api("/api/capture/start", {body: {}});
   toast("Hold armbåndet mod læseren… (30 sek.)");
   for (let i = 0; i < 62; i++) {
     await new Promise(r => setTimeout(r, 500));
     const c = await api("/api/capture");
     if (c.chip) {
+      if (c.admin) { toast(forAdmin ? `Armbåndet er allerede admin-armbånd (${c.admin})` : `Det er et admin-armbånd (${c.admin}) – brug et andet`, true); return; }
       if (c.owner && !confirm(`Chip ${c.chip} tilhører allerede ${c.owner.name}. Brug den alligevel?`)) return;
       return onChip(c.chip);
     }
@@ -2295,6 +2306,25 @@ async function loadUsers() {
     } else if (confirm("Slet brugeren?")) { await api(`/api/users/${b.dataset.uid}`, {method: "DELETE"}); loadUsers(); }
   });
 }
+function showAdminChips(list) {
+  $("adminChips").innerHTML = list.length ? `<table><tbody>${list.map(c => `<tr><td><b>${esc(c.label)}</b></td><td class="muted small">${esc(c.chip)}</td>
+    <td style="text-align:right"><button type="button" class="danger" data-chip="${esc(c.chip)}">Fjern</button></td></tr>`).join("")}</tbody></table>`
+    : `<p class="muted small" style="margin:0">Intet admin-armbånd endnu.</p>`;
+  $("adminChips").querySelectorAll("button").forEach(b => b.onclick = async () => {
+    if (confirm("Fjern admin-armbåndet? Det kan derefter bruges som almindeligt armbånd igen."))
+      showAdminChips(await api(`/api/admin_chips/${encodeURIComponent(b.dataset.chip)}`, {method: "DELETE"}));
+  });
+}
+async function loadAdminChips() { showAdminChips(await api("/api/admin_chips").catch(() => [])); }
+$("adminChipScan").onclick = () => {
+  $("adminChipScan").innerHTML = '<span class="scan">Venter på armbånd…</span>';
+  scanChip(async chip => {
+    try {
+      showAdminChips(await api("/api/admin_chips", {body: {chip, label: $("adminChipLabel").value}}));
+      $("adminChipLabel").value = ""; toast("Admin-armbånd gemt");
+    } catch (e) { toast(e.message, true); }
+  }, true).finally(() => $("adminChipScan").textContent = "📡 Scan armbånd");
+};
 async function loadPiPw() {
   const d = await api("/api/system/pi").catch(() => ({available: false}));
   if (!d.available) { $("piPwBox").innerHTML = `<span class="muted">Pi'ens kode styres ikke af RaceTimer på denne enhed. Skift den på Pi'en med kommandoen <code>passwd</code>.</span>`; return; }

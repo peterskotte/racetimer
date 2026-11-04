@@ -38,7 +38,7 @@ Er der flere problemer på én gang, vises det vigtigste: rød ×1 → rød ×4 
 | 🟢 Grønt blink | Talt: omgang, mål, tjekket ind, afgang |
 | 🟡 Gult blink | Læst, men tæller ikke (fx for tidligt eller allerede registreret) |
 | 🔴 Rødt blink | Ukendt armbånd, kontakt en official |
-| 🔵 Blåt blink | Chip tildelt under *Deltagere → Scan* |
+| 🔵 Blåt blink | Chip tildelt under *Deltagere → Scan*, eller admin-armbånd scannet |
 | ⚪ Hvide blink ×3, ×2, ×1 | Nedtælling 3-2-1 minutter |
 | 🟢 Grønt lys i 3 sek. | Start |
 

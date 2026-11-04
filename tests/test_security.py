@@ -105,6 +105,47 @@ def test_system_helper():
     assert not _helper(["noget-andet"], **env)["ok"]
 
 
+
+def test_kiosk_screen_only_from_pi_itself():
+    def req(ip, headers=None, host="localhost:8000"):
+        return N(client=N(host=ip), headers={"host": host, **(headers or {})}, cookies={})
+    assert app.kiosk_screen(req("127.0.0.1"))
+    assert app.kiosk_screen(req("::1", host="[::1]:8000"))
+    assert not app.kiosk_screen(req("192.168.1.20"))  # en anden på netværket
+    assert not app.kiosk_screen(req("127.0.0.1", {"cf-connecting-ip": "1.2.3.4"}))  # via Cloudflare-tunnelen
+    assert not app.kiosk_screen(req("127.0.0.1", {"x-forwarded-for": "1.2.3.4"}))  # via en proxy
+    assert not app.kiosk_screen(req("127.0.0.1", host="abc.trycloudflare.com"))
+    # uden for Pi'ens skærm kræver klar-tjekket login
+    try:
+        app.admin_or_screen(req("192.168.1.20"))
+        raise AssertionError("skulle kræve login")
+    except HTTPException as e:
+        assert e.status_code == 401
+    assert app.admin_or_screen(req("127.0.0.1"))["id"] is None
+    assert app.ready_page(req("192.168.1.20")).status_code == 307  # /klar viderestiller til /admin
+    r = app.ready_status(req("127.0.0.1"), u={})
+    assert r["overall"] in ("ok", "warn", "error") and {c["id"] for c in r["checks"]} >= {"net", "clock", "readers", "race"}
+
+
+def test_admin_chip_switches_pi_screen_and_never_counts():
+    def req(ip, host="localhost:8000"):
+        return N(client=N(host=ip), headers={"host": host}, cookies={})
+    chips = asyncio.run(app.admin_chips_add(_req("127.0.0.1", {"chip": "ab 12 cd", "label": "Peters"}), u={}))
+    assert chips[0]["chip"] == "AB12CD" and chips[0]["label"] == "Peters"
+    before = db.q1("SELECT COUNT(*) n FROM reads")["n"]
+    t = 1_900_000_000
+    assert app.handle_read("AB12CD", "primary", t) == {"admin": True}
+    assert db.q1("SELECT COUNT(*) n FROM reads")["n"] == before  # gemmes ikke som læsning
+    assert app.live(req("127.0.0.1"))["admin_scan"] == t
+    assert "admin_scan" not in app.live(req("192.168.1.20"))  # kun Pi'ens egen skærm
+    assert app.ready_status(req("192.168.1.20"), u={})["admin_scan"] is None
+    app.handle_read("AB12CD", "primary", t + 1)  # læseren gentager, mens armbåndet holdes der
+    assert app._admin_scan["at"] == t
+    app.handle_read("AB12CD", "primary", t + 6)  # ny scanning
+    assert app._admin_scan["at"] == t + 6
+    assert app.admin_chips_delete("AB12CD", u={}) == []
+    assert "admin" not in app.handle_read("AB12CD", "primary", t + 20)
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

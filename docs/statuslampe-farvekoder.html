@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Statuslampens farvekoder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Layout: ét A4-ark – sidehoved, så fire bokse (opstart, blinkkoder, scanninger, nedlukning) i to kolonner; én kolonne på mobil.
+     Arket er bevidst lyst i begge temaer, fordi det skal printes. */
+  :root {
+    --paper: #fbfaf7;
+    --ink: #15201a;
+    --soft: #5d6a62;
+    --rule: #d9dcd5;
+    --panel: #f1f0ea;
+    --brand: #e5682a;
+    /* lampens egne farver */
+    --l-white: #ffffff; --l-blue: #2f7df6; --l-green: #23b14d; --l-yellow: #f4c20d; --l-red: #e53935; --l-purple: #9b4dca; --l-off: #2b2f2c;
+    --display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+    --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+  body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.4;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { max-width: 210mm; margin: 0 auto; padding-block: 28px 32px;
+           padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+           border-bottom: 3px solid var(--brand); padding-bottom: 10px; margin-bottom: 16px; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .kicker { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; color: var(--brand); margin: 0 0 4px; }
+  .sides { display: flex; gap: 14px; font-size: 12.5px; color: var(--soft); max-width: 330px; }
+  .sides b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid > * { min-width: 0; }
+  section { background: var(--panel); border-radius: 10px; padding: 12px 14px 10px; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 19px; margin: 0 0 2px; }
+  h2 + p { margin: 0 0 8px; color: var(--soft); font-size: 12.5px; }
+  .row { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--rule); }
+  .row:first-of-type { border-top: 0; }
+  .what { font-weight: 600; }
+  .what small { display: block; font-weight: 400; color: var(--soft); font-size: 12.5px; }
+  /* lampen tegnet som runde LED'er; blink = flere prikker og en pause-streg */
+  .lamp { display: flex; align-items: center; gap: 4px; }
+  .led { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+  .led.big { width: 26px; height: 26px; }
+  .led.ring { box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 0 0 0 3px rgba(47,125,246,.25); }
+  .led.dim { opacity: .35; }
+  .pause { width: 18px; height: 3px; border-radius: 2px; background: var(--rule); margin-left: 2px; }
+  .w { background: var(--l-white); } .b { background: var(--l-blue); } .g { background: var(--l-green); } .y { background: var(--l-yellow); }
+  .r { background: var(--l-red); } .p { background: var(--l-purple); } .o { background: var(--l-off); }
+  .codes { width: 100%; border-collapse: collapse; }
+  .codes th { text-align: left; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 11px;
+              color: var(--soft); padding: 4px 8px 4px 0; }
+  .codes td { border-top: 1px solid var(--rule); padding: 7px 8px 7px 0; vertical-align: middle; }
+  .codes td:first-child { width: 200px; white-space: nowrap; }
+  .codes .code { font-family: var(--display); font-weight: 800; font-size: 17px; margin-left: 6px; white-space: nowrap; }
+  .yes { color: #1f7a3c; font-weight: 600; } .no { color: #b3261e; font-weight: 700; }
+  .tablewrap { overflow-x: auto; }
+  .note { margin: 8px 0 0; font-size: 12.5px; color: var(--soft); }
+  footer { margin-top: 12px; font-size: 11.5px; color: var(--soft); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 28px; }
+    .codes td:first-child { width: 120px; }
+  }
+  @media print {
+    @page { size: A4; margin: 9mm; }
+    body { background: #fff; font-size: 11.5px; line-height: 1.3; }
+    .sheet { max-width: none; padding: 0; }
+    header { margin-bottom: 10px; padding-bottom: 8px; } h1 { font-size: 28px; }
+    .grid { gap: 10px; } section { break-inside: avoid; padding: 9px 12px 7px; }
+    h2 { font-size: 16px; } h2 + p { margin-bottom: 4px; font-size: 11px; }
+    .row { padding: 4px 0; grid-template-columns: 84px 1fr; } .what small, .note, .sides { font-size: 11px; }
+    .codes td { padding: 5px 8px 5px 0; } .codes .code { font-size: 15px; }
+    .led { width: 15px; height: 15px; } .led.big { width: 21px; height: 21px; }
+    footer { margin-top: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <header>
+    <div>
+      <p class="kicker">RaceTimer · Luxafor Flag</p>
+      <h1>Statuslampens farvekoder</h1>
+    </div>
+    <div class="sides">
+      <div><b>Bagsiden</b> (mod jer) viser altid Pi'ens tilstand.</div>
+      <div><b>Forsiden</b> (mod løberne) viser det samme og blinker ved hver scanning.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section>
+      <h2>Opstart</h2>
+      <p>Fra strømmen sættes til, til Pi'en er klar.</p>
+      <div class="row"><div class="lamp"><i class="led big w"></i></div><div class="what">Hvid<small>Pi'en er tændt og starter</small></div></div>
+      <div class="row"><div class="lamp"><i class="led big b ring"></i></div><div class="what">Blå, pulserende<small>RaceTimer starter</small></div></div>
+      <div class="row"><div class="lamp"><i class="led b"></i><i class="led b dim"></i><i class="led b"></i><i class="led b dim"></i></div><div class="what">Blå, blinker roligt<small>Søger netværk (op til 2 min. efter opstart)</small></div></div>
+      <div class="row"><div class="lamp"><i class="led big g"></i></div><div class="what">Grøn<small><b>Klar.</b> Læsere, netværk og ur er i orden</small></div></div>
+    </section>
+
+    <section>
+      <h2>Nedlukning</h2>
+      <p>Når Pi'en lukkes ned fra admin eller med knappen.</p>
+      <div class="row"><div class="lamp"><i class="led big p"></i></div><div class="what">Lilla<small>Pi'en lukker ned. <b>Tag ikke strømmen endnu.</b></small></div></div>
+      <div class="row"><div class="lamp"><i class="led big o"></i></div><div class="what">Slukket<small>Nu kan strømmen fjernes</small></div></div>
+      <h2 style="margin-top:12px">Scanninger <span style="font-weight:600;color:var(--soft);font-size:15px">· forsiden</span></h2>
+      <div class="row"><div class="lamp"><i class="led g"></i></div><div class="what">Grønt blink<small>Talt: omgang, mål, tjekket ind, afgang</small></div></div>
+      <div class="row"><div class="lamp"><i class="led y"></i></div><div class="what">Gult blink<small>Læst, men tæller ikke (fx for tidligt)</small></div></div>
+      <div class="row"><div class="lamp"><i class="led r"></i></div><div class="what">Rødt blink<small>Ukendt armbånd – kontakt en official</small></div></div>
+      <div class="row"><div class="lamp"><i class="led b"></i></div><div class="what">Blåt blink<small>Chip tildelt, eller admin-armbånd scannet</small></div></div>
+      <div class="row"><div class="lamp"><i class="led w"></i><i class="led w"></i><i class="led w"></i></div><div class="what">Hvide blink ×3, ×2, ×1<small>Nedtælling 3-2-1 minutter til start</small></div></div>
+      <div class="row"><div class="lamp"><i class="led big g"></i></div><div class="what">Grønt lys i 3 sek.<small>Start</small></div></div>
+    </section>
+
+    <section class="wide">
+      <h2>Blinkkoder ved fejl</h2>
+      <p>Lampen blinker et antal gange, holder en pause og gentager. Tæl blinkene.</p>
+      <div class="tablewrap">
+        <table class="codes">
+          <thead><tr><th>Kode</th><th>Hvad er galt</th><th>Tidtagning virker?</th><th>Gør dette</th></tr></thead>
+          <tbody>
+            <tr><td><span class="lamp" style="display:inline-flex"><i class="led r"></i><i class="pause"></i></span><span class="code">Rød ×1</span></td>
+              <td>En valgt RFID-læser er ikke tilsluttet</td><td class="no">Nej, ikke på den læser</td><td>Tjek USB-stikket. Klar-tjekket på skærmen viser hvilken læser.</td></tr>
+            <tr><td><span class="lamp" style="display:inline-flex"><i class="led y"></i><i class="led y"></i><i class="pause"></i></span><span class="code">Gul ×2</span></td>
+              <td>Intet netværk</td><td class="yes">Ja</td><td>Tænd mobilens hotspot, eller sæt et netværkskabel i.</td></tr>
+            <tr><td><span class="lamp" style="display:inline-flex"><i class="led y"></i><i class="led y"></i><i class="led y"></i><i class="pause"></i></span><span class="code">Gul ×3</span></td>
+              <td>Uret er ikke stillet</td><td class="yes">Ja, men tiderne kan være forkerte</td><td>Vent et par minutter med net, før løbet startes.</td></tr>
+            <tr><td><span class="lamp" style="display:inline-flex"><i class="led r"></i><i class="led r"></i><i class="led r"></i><i class="led r"></i><i class="pause"></i></span><span class="code">Rød ×4</span></td>
+              <td>Databasen kan ikke læses</td><td class="no">Nej</td><td>Genstart Pi'en. Fortsætter det, er SD-kortet måske fyldt eller defekt.</td></tr>
+            <tr><td><span class="lamp" style="display:inline-flex"><i class="led r"></i><i class="led r"></i><i class="led r"></i><i class="led r"></i><i class="led r"></i><i class="pause"></i></span><span class="code">Rød ×5</span></td>
+              <td>RaceTimer kunne ikke starte</td><td class="no">Nej</td><td>Genstart Pi'en. Fortsætter det, så kør opdateringen igen eller skriv et nyt SD-kort.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Gule koder vises kun på bagsiden – forsiden er stadig grøn, så løberne ikke forvirres. Røde koder blinker på begge sider.
+        Ved flere problemer vises det vigtigste først: rød ×1, rød ×4, gul ×2, gul ×3.</p>
+    </section>
+  </div>
+
+  <footer><span>RaceTimer · github.com/peterskotte/racetimer</span><span>Hæng arket ved målet eller i tidtagerkassen</span></footer>
+</div>
+</body>
+</html>

@@ -6,6 +6,7 @@ Pi'en er både server, viser resultatskærmen og har en kodebeskyttet admin-side
 ![Resultatskærmen under et tidsløb](docs/img/resultatskaerm-nedtaeller.webp)
 
 - **Resultatskærm** (dark mode): `http://<pi>:8000/` – virker på Pi-skærmen, en TV-skærm og på mobilen.
+- **Klar-tjek** på Pi'ens egen skærm ved opstart (`/klar`): netværk, ur, læsere, moduler og løb med grøn/gul/rød – ret dem med touch eller tastatur (skærmtastatur til WiFi-koden), og tryk **START** for resultatskærmen. Kun fra Pi'en selv; ellers kræves login.
   `?kiosk=1` får lange lister til at rulle automatisk.
 - **Admin**: `http://<pi>:8000/admin`. Første login er `admin` og en tilfældig **førstegangskode**, der står på Pi'ens skærm (og i `racetimer-kode.txt` på SD-kortet).
 

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RaceTimer – klar-tjek</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  /* Klar-tjek på Pi'ens egen skærm: store felter til touch, virker også med tastatur (Tab/Enter) */
+  body { font-size: 18px; user-select: none; -webkit-user-select: none; }
+  header.top { padding: 14px 24px; }
+  header.top .logo { margin: 0; font-size: 26px; font-weight: 800; font-style: italic; }
+  header.top .logo img { height: 40px; display: block; }
+  header.top .spacer { flex: 1; }
+  header.top .clock { font-size: 24px; font-weight: 700; }
+  main { max-width: 1100px; margin: 0 auto; padding: 18px 24px 140px; }
+  .overall { display: flex; align-items: center; gap: 18px; padding: 18px 24px; border-radius: var(--radius); margin-bottom: 16px;
+             background: var(--card); border: 2px solid var(--line); }
+  .overall .ico { font-size: 44px; line-height: 1; }
+  .overall .t { font-size: 28px; font-weight: 800; }
+  .overall .s { color: var(--muted); margin-top: 4px; }
+  .overall.ok { border-color: var(--green); } .overall.warn { border-color: var(--gold); } .overall.error { border-color: var(--red); }
+  .check { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 14px; background: var(--card);
+           border: 1px solid var(--line); margin-bottom: 10px; }
+  .check .dot { width: 18px; height: 18px; border-radius: 50%; flex: none; background: var(--grey); }
+  .check.ok .dot { background: var(--green); } .check.warn .dot { background: var(--gold); } .check.error .dot { background: var(--red); }
+  .check .tt { font-weight: 700; font-size: 20px; } .check .tx { color: var(--muted); margin-top: 2px; }
+  .check .grow { flex: 1; min-width: 0; }
+  button, .btn { font: inherit; font-size: 18px; font-weight: 700; padding: 14px 22px; border-radius: 14px; border: 1px solid var(--line);
+                 background: var(--card-head); color: var(--text); cursor: pointer; min-height: 56px; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  button.on { background: var(--text); color: var(--bg); }
+  .panel { background: var(--card); border: 2px solid var(--accent); border-radius: var(--radius); padding: 18px 20px; margin: -4px 0 14px; }
+  .panel h3 { margin: 0 0 12px; font-size: 22px; }
+  .panel .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+  .list button { display: flex; width: 100%; justify-content: space-between; text-align: left; margin-bottom: 8px; }
+  .muted { color: var(--muted); } .small { font-size: 15px; }
+  input, select { font: inherit; font-size: 20px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line);
+                  background: var(--bg); color: var(--text); min-height: 56px; }
+  input:focus, select:focus { outline: 3px solid var(--accent); }
+  .msg { padding: 12px 16px; border-radius: 12px; margin: 10px 0; }
+  .msg.ok { background: #12301d; border: 1px solid var(--green); } .msg.err { background: #3a1414; border: 1px solid var(--red); }
+  .startbar { position: fixed; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, var(--bg) 70%, transparent);
+              padding: 18px 24px 22px; display: flex; gap: 16px; align-items: center; justify-content: center; z-index: 5; }
+  .startbar .start { font-size: 30px; padding: 18px 70px; min-height: 76px; border-radius: 18px; }
+  .startbar .hint { color: var(--muted); max-width: 420px; }
+  /* lave skærme (fx Pi'ens officielle 7" touchskærm, 800×480): kompakt, så alle punkter kan ses */
+  @media (max-height: 620px) {
+    body { font-size: 16px; }
+    header.top { padding: 6px 16px; } header.top .logo { font-size: 20px; } header.top .logo img { height: 28px; }
+    header.top .clock { font-size: 18px; }
+    main { padding: 8px 14px 84px; }
+    .overall { padding: 8px 14px; gap: 12px; margin-bottom: 8px; } .overall .ico { font-size: 28px; } .overall .t { font-size: 19px; }
+    .overall .s { display: none; }
+    .check { padding: 6px 12px; margin-bottom: 6px; gap: 12px; } .check .tt { font-size: 16px; } .check .tx { font-size: 14px; }
+    .check button { min-height: 44px; padding: 8px 16px; font-size: 16px; }
+    .startbar { padding: 8px 14px 10px; } .startbar .start { font-size: 22px; padding: 10px 56px; min-height: 56px; }
+    #osk button { min-width: 52px; min-height: 48px; font-size: 19px; } #osk .r { margin: 4px 0; gap: 4px; }
+    #osk button.space { min-width: 260px; }
+  }
+  /* skærmtastatur til WiFi-koden (Pi'ens touchskærm har intet tastatur) */
+  #osk { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #0b120e; border-top: 2px solid var(--accent);
+         padding: 10px 8px 14px; }
+  #osk .r { display: flex; justify-content: center; gap: 6px; margin: 6px 0; }
+  #osk button { min-width: 60px; min-height: 60px; padding: 0 10px; font-size: 22px; font-weight: 600; }
+  #osk button.w { min-width: 110px; } #osk button.space { min-width: 380px; }
+  #osk .show { text-align: center; font-size: 22px; margin-bottom: 6px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 class="logo" id="logo">RaceTimer</h1>
+  <div class="spacer"></div>
+  <div class="muted small" id="ver"></div>
+  <div class="clock num" id="clock"></div>
+</header>
+<main>
+  <div class="overall" id="overall"><div class="ico">⏳</div><div><div class="t">Tjekker udstyret …</div></div></div>
+  <div class="check warn" id="firstCode" hidden><i class="dot"></i><div class="grow"><div class="tt">Første login i admin</div>
+    <div class="tx">Brugernavn <b>admin</b> · kode <b class="num" id="fcCode" style="font-size:1.3em;color:var(--text)"></b> – skift den i opsætningsguiden</div></div></div>
+  <div id="checks"></div>
+  <p class="muted small" id="adminHint"></p>
+</main>
+<div class="startbar">
+  <div class="hint small" id="startHint"></div>
+  <button class="primary start" id="start">START</button>
+</div>
+<div id="osk" hidden></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+let state = null, open = null, busy = false;
+
+async function api(path, opts = {}) {
+  const o = {method: opts.method || (opts.body ? "POST" : "GET"), headers: {}};
+  if (opts.body !== undefined) { o.body = JSON.stringify(opts.body); o.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, o);
+  const d = r.headers.get("content-type")?.includes("json") ? await r.json() : null;
+  if (!r.ok) throw new Error(d?.detail || r.statusText);
+  return d;
+}
+
+const ICON = {ok: "✅", warn: "⚠️", error: "⛔"};
+let adminScan;
+async function refresh(force) {
+  try { state = await api("/api/klar"); } catch (e) { $("overall").innerHTML = `<div class="ico">⛔</div><div><div class="t">RaceTimer svarer ikke</div><div class="s">${esc(e.message)}</div></div>`; return; }
+  // admin-armbåndet scannet igen → tilbage til resultatskærmen (som START)
+  if (adminScan !== undefined && state.admin_scan && state.admin_scan !== adminScan) { $("start").click(); return; }
+  adminScan = state.admin_scan ?? null;
+  const b = state.brand;
+  $("logo").innerHTML = b?.logo ? `<img src="${b.logo}" alt="${esc(b.name)}">` : esc(b?.name || "RaceTimer");
+  $("ver").textContent = `RaceTimer ${state.version}`;
+  const o = state.overall;
+  $("overall").className = "overall " + o;
+  $("overall").innerHTML = `<div class="ico">${ICON[o]}</div><div><div class="t">${o === "ok" ? "Klar til løb" : o === "warn" ? "Klar – men tjek de gule punkter" : "Ret de røde punkter før løbet"}</div>
+    <div class="s">Tryk på et punkt for at rette det. Tryk START, når du er klar.</div></div>`;
+  $("startHint").textContent = o === "error" ? "Du kan godt starte, men der er fejl, der påvirker tidtagningen." : "";
+  $("firstCode").hidden = !state.first_code;
+  if (state.first_code) $("fcCode").textContent = state.first_code;
+  const h = state.host;
+  $("adminHint").textContent = h?.ip ? `Resten af opsætningen: åbn http://${h.ip}:8000/admin på en mobil eller computer.` : "";
+  if (busy || (open && !force)) return;  // rør ikke et åbent panel, mens det bruges
+  $("checks").innerHTML = state.checks.map(c => `
+    <div class="check ${c.state}" data-id="${c.id}">
+      <i class="dot"></i><div class="grow"><div class="tt">${esc(c.title)}</div><div class="tx">${esc(c.text)}</div></div>
+      ${c.fix ? `<button data-fix="${c.fix}">${open === c.fix ? "Luk" : c.state === "ok" || c.state === "info" ? "Skift" : "Ret"}</button>` : ""}
+    </div>${c.fix && open === c.fix ? `<div class="panel" id="panel"></div>` : ""}`).join("");
+  $("checks").querySelectorAll("[data-fix]").forEach(btn => btn.onclick = () => { busy = false; oskClose(); open = open === btn.dataset.fix ? null : btn.dataset.fix; refresh(true).then(fillPanel); });
+}
+
+// ---------------------------------------------------------------- paneler
+async function fillPanel() {
+  const p = $("panel");
+  if (!p) return;
+  const fill = {wifi: wifiPanel, readers: readersPanel, modules: modulesPanel, race: racePanel, sync: syncPanel}[open];
+  if (fill) await fill(p);
+  // vis punktet og panellet over START-knappen
+  p.previousElementSibling?.scrollIntoView({block: "start", behavior: "smooth"});
+}
+const say = (p, ok, text) => { const m = p.querySelector(".msgs"); if (m) m.innerHTML = `<div class="msg ${ok ? "ok" : "err"}">${esc(text)}</div>`; };
+
+async function wifiPanel(p) {
+  p.innerHTML = `<h3>WiFi</h3><p class="muted">Søger efter netværk …</p>`;
+  let w;
+  try { w = await api("/api/wifi"); } catch (e) { p.innerHTML = `<h3>WiFi</h3><div class="msg err">${esc(e.message)}</div>`; return; }
+  const saved = new Set(w.saved.map(n => n.ssid));
+  p.innerHTML = `<h3>WiFi${w.current ? ` – forbundet til ${esc(w.current.ssid)}` : ""}</h3>
+    <div class="list">${w.visible.slice(0, 8).map(v => `<button data-ssid="${esc(v.ssid)}" data-sec="${esc(v.security)}">
+      <span>${esc(v.ssid)}${saved.has(v.ssid) ? ' <span class="muted small">· gemt</span>' : ""}</span>
+      <span class="muted">${v.security && v.security !== "--" ? "🔒 " : ""}${v.signal} %</span></button>`).join("") || `<p class="muted">Ingen netværk fundet.</p>`}</div>
+    <div id="wifiForm"></div><div class="msgs"></div>`;
+  p.querySelectorAll("[data-ssid]").forEach(b => b.onclick = () => wifiForm(p, w, b.dataset.ssid, b.dataset.sec && b.dataset.sec !== "--", saved.has(b.dataset.ssid)));
+}
+function wifiForm(p, w, ssid, secured, known) {
+  busy = true;
+  p.querySelector("#wifiForm").innerHTML = `<div class="row"><b>${esc(ssid)}</b></div>
+    ${secured ? `<div class="row"><input id="wifiPw" type="password" placeholder="${known ? "Gemt – skriv kun, hvis koden er ny" : "Kode til netværket"}" autocomplete="off" style="flex:1" data-osk>
+      <button id="wifiShow">Vis</button></div>` : ""}
+    <div class="row"><button class="primary" id="wifiGo">Forbind</button><button id="wifiCancel">Annullér</button></div>`;
+  const pw = $("wifiPw");
+  if (pw) { pw.focus(); oskFor(pw); $("wifiShow").onclick = () => { pw.type = pw.type === "password" ? "text" : "password"; }; }
+  $("wifiCancel").onclick = () => { busy = false; oskClose(); wifiPanel(p); };
+  $("wifiGo").onclick = async () => {
+    const code = pw ? pw.value : "";
+    if (secured && !code && !known) return say(p, false, "Skriv koden til netværket");
+    oskClose();
+    say(p, true, `Forbinder til ${ssid} …`);
+    // netværket lægges øverst (forbindes først); de andre gemte bevares med deres koder
+    const others = w.saved.filter(n => n.ssid !== ssid).map(n => ({ssid: n.ssid, security: n.security, hidden: n.hidden, identity: n.identity, password: null}));
+    const me = {ssid, security: secured ? "psk" : "open", password: secured ? (code || null) : ""};
+    try {
+      await api("/api/wifi", {method: "PUT", body: {networks: [me, ...others].slice(0, 5)}});
+      await api("/api/wifi/connect/1", {body: {}});
+      say(p, true, `Forbundet til ${ssid}`);
+    } catch (e) { say(p, false, e.message); }
+    busy = false;
+  };
+}
+
+let scanTimer = null;
+async function readersPanel(p) {
+  let d;
+  try { d = await api("/api/readers"); } catch (e) { p.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  const opt = sel => `<option value="">– ingen –</option>` + d.devices.map(x => `<option value="${esc(x.path)}" ${x.path === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("");
+  p.innerHTML = `<h3>RFID-læsere</h3>
+    <div class="row"><label style="min-width:110px">Læser 1</label><select id="rd1" style="flex:1">${opt(d.config.primary)}</select></div>
+    <div class="row"><label style="min-width:110px">Læser 2</label><select id="rd2" style="flex:1">${opt(d.config.backup)}</select></div>
+    <div class="row"><button class="primary" id="rdSave">Gem</button><button id="rdTest">Test: hold et armbånd mod læseren</button></div>
+    <div id="rdLive" class="muted"></div><div class="msgs"></div>`;
+  $("rdSave").onclick = async () => {
+    try { await api("/api/readers", {method: "PUT", body: {primary: $("rd1").value, backup: $("rd2").value}}); open = null; refresh(true); }
+    catch (e) { say(p, false, e.message); }
+  };
+  $("rdTest").onclick = async () => {
+    await api("/api/devtest/start", {body: {}});
+    $("rdLive").textContent = "Venter på armbånd … (scanninger her tæller ikke i noget løb)";
+    clearInterval(scanTimer);
+    scanTimer = setInterval(async () => {
+      if (!$("rdLive")) return clearInterval(scanTimer);
+      const t = await api("/api/devtest");
+      const last = t.reads[t.reads.length - 1];
+      if (last) $("rdLive").innerHTML = `<div class="msg ok">✓ ${last.reader === "primary" ? "Læser 1" : last.reader === "backup" ? "Læser 2" : esc(last.reader)} læste armbånd ${esc(last.chip)}</div>`;
+      if (!t.active) clearInterval(scanTimer);
+    }, 700);
+  };
+}
+
+async function modulesPanel(p) {
+  let d;
+  try { d = await api("/api/modules"); } catch (e) { p.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  const add = d.detected.filter(x => !x.added);
+  p.innerHTML = `<h3>Moduler</h3>
+    ${d.modules.map(m => `<div class="row"><span style="flex:1">${esc(d.kinds[m.kind]?.icon || "🔌")} ${esc(m.name || m.kind)} <span class="muted small">· ${esc(m.status.text)}</span></span>
+      <button data-test="${esc(m.id)}">Test</button></div>`).join("") || `<p class="muted">Ingen moduler.</p>`}
+    ${add.map(x => `<div class="row"><span style="flex:1">${esc(x.icon)} ${esc(x.name)} <span class="muted small">· fundet</span></span>
+      <button data-add="${esc(x.kind)}" data-dev="${esc(x.device)}" data-name="${esc(x.name)}">Tilføj</button></div>`).join("")}
+    <div class="msgs"></div>`;
+  p.querySelectorAll("[data-test]").forEach(b => b.onclick = async () => {
+    try { say(p, true, (await api(`/api/modules/${b.dataset.test}/test`, {body: {}})).text); } catch (e) { say(p, false, e.message); }
+  });
+  p.querySelectorAll("[data-add]").forEach(b => b.onclick = async () => {
+    try { await api("/api/modules", {body: {kind: b.dataset.add, device: b.dataset.dev, name: b.dataset.name}}); modulesPanel(p); }
+    catch (e) { say(p, false, e.message); }
+  });
+}
+
+async function syncPanel(p) {
+  let ds;
+  try { ds = await api("/api/klar/sync"); } catch (e) { p.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  const kl = ts => ts ? new Date(ts * 1000).toLocaleTimeString("da-DK", {hour: "2-digit", minute: "2-digit"}) : "";
+  p.innerHTML = `<h3>Hjemmeside</h3>
+    ${ds.map(d => `<div class="row"><span style="flex:1"><b>${esc(d.name)}</b>
+        <span class="muted small">· ${!d.enabled ? "slået fra" : d.last_error ? "fejl" : d.last_ok ? "sendt kl. " + kl(d.last_ok) : "ikke sendt endnu"}</span>
+        ${d.last_error ? `<br><span class="small" style="color:var(--red)">${esc(d.last_error)}</span>` : ""}</span>
+        ${d.enabled ? `<button data-send="${esc(d.id)}">Send nu</button>` : ""}</div>`).join("") || `<p class="muted">Ingen hjemmeside sat op.</p>`}
+    <div class="msgs"></div>`;
+  p.querySelectorAll("[data-send]").forEach(b => b.onclick = async () => {
+    b.disabled = true; b.textContent = "Sender …";
+    try { const r = await api(`/api/destinations/${b.dataset.send}/send`, {body: {}}); say(p, true, r.final ? "Endelige resultater sendt" : "Sendt"); }
+    catch (e) { say(p, false, "Kunne ikke sende: " + e.message); }
+    setTimeout(() => syncPanel(p), 1500);
+  });
+}
+
+async function racePanel(p) {
+  let rs;
+  try { rs = (await api("/api/races")).filter(r => !r.archived_at); } catch (e) { p.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  const st = {planned: "planlagt", running: "kører", finished: "afsluttet"};
+  p.innerHTML = `<h3>Løb på skærmen</h3><div class="list">
+    ${rs.slice(0, 8).map(r => `<button data-rid="${r.id}" class="${r.is_active ? "on" : ""}"><span>${esc(r.name)}</span><span class="muted small">${st[r.status] || ""} · ${r.n} delt.</span></button>`).join("")}
+    <button data-rid="" class="${rs.some(r => r.is_active) ? "" : "on"}"><span>Intet løb – vis splash</span><span></span></button></div><div class="msgs"></div>`;
+  p.querySelectorAll("[data-rid]").forEach(b => b.onclick = async () => {
+    try {
+      await api(b.dataset.rid ? `/api/races/${b.dataset.rid}/activate` : "/api/races/deactivate", {body: {}});
+      open = null; refresh(true);
+    } catch (e) { say(p, false, e.message); }
+  });
+}
+
+// ---------------------------------------------------------------- skærmtastatur
+const ROWS = [["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"], ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "å"],
+              ["a", "s", "d", "f", "g", "h", "j", "k", "l", "æ", "ø"], ["⇧", "z", "x", "c", "v", "b", "n", "m", "⌫"]];
+const SYMS = [["!", "@", "#", "$", "%", "&", "*", "(", ")", "="], ["-", "_", "+", ".", ",", ":", ";", "?", "/", "\\", "'"],
+              ['"', "<", ">", "[", "]", "{", "}", "|", "~", "^", "€"], ["⇧", "`", "§", "½", "¤", "£", "´", "¨", "⌫"]];
+let oskInput = null, shift = false, syms = false;
+function oskFor(input) {
+  oskInput = input; renderOsk(); $("osk").hidden = false;
+  document.body.style.paddingBottom = $("osk").offsetHeight + "px";  // feltet må ikke gemme sig bag tastaturet
+  input.scrollIntoView({block: "center"});
+}
+function oskClose() { $("osk").hidden = true; oskInput = null; document.body.style.paddingBottom = ""; }
+function renderOsk() {
+  const rows = syms ? SYMS : ROWS;
+  $("osk").innerHTML = rows.map(r => `<div class="r">${r.map(k => `<button type="button" data-k="${esc(k)}" class="${k === "⇧" || k === "⌫" ? "w" : ""}${k === "⇧" && shift ? " on" : ""}">${esc(shift && k.length === 1 ? k.toUpperCase() : k)}</button>`).join("")}</div>`).join("") +
+    `<div class="r"><button type="button" class="w" data-k="sym">${syms ? "abc" : "?123"}</button><button type="button" class="space" data-k=" ">mellemrum</button><button type="button" class="w" data-k="ok">Færdig</button></div>`;
+  $("osk").querySelectorAll("[data-k]").forEach(b => b.onpointerdown = e => {
+    e.preventDefault();  // behold fokus i feltet
+    const k = b.dataset.k, i = oskInput;
+    if (!i) return;
+    if (k === "⇧") { shift = !shift; return renderOsk(); }
+    if (k === "sym") { syms = !syms; return renderOsk(); }
+    if (k === "ok") return oskClose();
+    if (k === "⌫") i.value = i.value.slice(0, -1);
+    else { i.value += shift ? k.toUpperCase() : k; if (shift) { shift = false; renderOsk(); } }
+    i.dispatchEvent(new Event("input"));
+  });
+}
+
+// ---------------------------------------------------------------- START
+$("start").onclick = () => { clearInterval(scanTimer); location.href = "/?kiosk=1"; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") oskClose(); });
+setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString("da-DK"); }, 500);
+refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>
