@@ -1,0 +1,7 @@
+[Unit]
+Description=RaceTimer statuslampe: rødt blink ×5, når RaceTimer ikke kan starte
+# Startes af OnFailure= i racetimer.service; stoppes af sig selv, når RaceTimer starter igen
+Conflicts=racetimer.service
+
+[Service]
+ExecStart=/usr/local/sbin/racetimer-led fail

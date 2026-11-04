@@ -24,6 +24,16 @@ install -d -o racetimer-svc -g racetimer-svc /var/lib/racetimer
 chmod +x /opt/racetimer/deploy/*.sh
 systemctl enable racetimer
 
+# Statuslampe (Luxafor): hvid ved opstart, lilla ved nedlukning, rødt blink hvis RaceTimer ikke kan starte
+install -m 755 -o root -g root /opt/racetimer/deploy/racetimer-led /usr/local/sbin/racetimer-led
+install -m 644 /opt/racetimer/deploy/60-racetimer-luxafor.rules /etc/udev/rules.d/60-racetimer-luxafor.rules
+install -m 644 /opt/racetimer/deploy/racetimer-led.service /etc/systemd/system/racetimer-led.service
+install -m 644 /opt/racetimer/deploy/racetimer-led-fail.service /etc/systemd/system/racetimer-led-fail.service
+install -D -m 755 /opt/racetimer/deploy/racetimer-led-shutdown /usr/lib/systemd/system-shutdown/racetimer-led
+install -d /etc/systemd/system/racetimer.service.d
+printf "[Unit]\nOnFailure=racetimer-led-fail.service\n" > /etc/systemd/system/racetimer.service.d/led.conf
+systemctl enable racetimer-led
+
 # WiFi-hjælper til admin-fanen WiFi (op til 5 netværk)
 install -m 755 -o root -g root /opt/racetimer/deploy/racetimer-wifi /usr/local/sbin/racetimer-wifi
 

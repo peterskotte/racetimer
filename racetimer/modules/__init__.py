@@ -3,15 +3,18 @@
 Opsætningen gemmes i databasen (setting "modules") som en liste:
     {"id", "kind", "device", "name", "enabled", "reader", ...modulets egne felter}
 Enheder findes automatisk; et modul, hvis enhed ikke er sat i, venter bare (status "Ikke tilsluttet").
+Modultyper med auto_add (statuslampen) tilføjes selv første gang, enheden ses – fjernes de i admin,
+kommer de ikke igen (setting "modules_seen").
 """
 import secrets
 import threading
 import time
 
 from .. import db
+from .luxafor import Luxafor
 from .speaker import Speaker
 
-KINDS = {k.kind: k for k in (Speaker,)}
+KINDS = {k.kind: k for k in (Speaker, Luxafor)}
 
 
 class ModuleManager(threading.Thread):
@@ -72,6 +75,11 @@ class ModuleManager(threading.Thread):
 
     def sync(self):
         """Start/stop moduler efter opsætningen, og opdatér hvilke enheder der er sat i."""
+        if self._sync():
+            self._sync()
+
+    def _sync(self):
+        """Returnerer True, hvis nye enheder blev tilføjet automatisk (så skal der synkroniseres igen)."""
         with self._lock:
             cfgs = {c["id"]: c for c in self.configs()}
             for mid in list(self.running):
@@ -88,6 +96,20 @@ class ModuleManager(threading.Thread):
             for m in self.running.values():
                 devs = {d["device"] for d in self.detected.get(m.kind, [])}
                 m.present = m.cfg["device"] == "default" or m.cfg["device"] in devs
+            seen = db.setting("modules_seen", []) or []
+            new = [(k, d) for k, cls in KINDS.items() if getattr(cls, "auto_add", False)
+                   for d in self.detected.get(k, []) if f"{k}:{d['device']}" not in seen]
+            if not new:
+                return False
+            cfgs = self.configs()
+            for k, d in new:
+                seen.append(f"{k}:{d['device']}")
+                if not any(c["kind"] == k and c["device"] == d["device"] for c in cfgs):
+                    cfg = {"id": secrets.token_hex(4), "kind": k, "device": d["device"], "name": KINDS[k].label, "enabled": True}
+                    cfgs.append({**cfg, **{f["key"]: f.get("default") for f in KINDS[k].fields}})
+            db.set_setting("modules_seen", seen)
+            db.set_setting("modules", cfgs)
+            return True
 
     def run(self):
         while True:

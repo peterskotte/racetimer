@@ -156,6 +156,7 @@ Den slås til og fra under *⚙ Opsætning → Udseende*.
 | Modul | Hardware | Hvad det gør |
 |---|---|---|
 | **Højttaler** | En almindelig USB-højttaler (eller Pi'ens egen lydudgang) | Forskellige lyde for talt, afvist, ukendt armbånd, chip tildelt, nedtælling 3-2-1 og start. Lydstyrke og lyd pr. hændelse kan vælges, og den kan knyttes til læser 1, læser 2 eller begge. |
+| **Statuslampe** | Luxafor Flag (USB) | Viser Pi'ens tilstand fra den tændes, til den er klar: hvid = starter, blå = RaceTimer starter/søger net, grøn = klar, gule og røde blinkkoder ved problemer. Forsiden blinker også ved scanninger. Tilføjes af sig selv. Se [docs/statuslampe.md](docs/statuslampe.md). |
 
 **Udstyrstest** (*⚙ Opsætning → Udstyrstest*) går alt tilsluttet udstyr igennem trin for trin, fx før et løb:
 1. *Hold et armbånd mod Læser 1*, derefter *Læser 2*. Bliver armbåndet læst af den forkerte læser, advarer testen om, at USB-stikkene måske er byttet om.
@@ -164,7 +165,7 @@ Den slås til og fra under *⚙ Opsætning → Udseende*.
 
 Scanninger under testen tæller ikke i noget løb. Resultatet gemmes og vises næste gang (*Seneste test: … ✅ alt virkede*).
 
-LED-ring, signallampe og display via Raspberry Pi Pico er planlagt. Se [docs/moduler-udkast.md](docs/moduler-udkast.md).
+LED-ring og display via Raspberry Pi Pico er planlagt. Se [docs/moduler-udkast.md](docs/moduler-udkast.md).
 
 ## Driftssikkerhed
 
@@ -309,7 +310,8 @@ racetimer/
   sync.py      Sender resultater til webservere (interval, manuelt, ved afslutning)
   outcome.py   Vurdering af hver læsning: talt / ignoreret (og hvorfor) / ukendt
   events.py    Hændelser til moduler og skærmens scan-besked
-  modules/     Eksterne enheder (USB-højttaler …)
+  modules/     Eksterne enheder (USB-højttaler, statuslampe …)
+  health.py    Pi'ens samlede tilstand til statuslampen
 web/           Browser-udgaven: engine.js (motoren i JavaScript), lite.js (RD-app); byg med tools/build-web.sh
   db.py        SQLite-skema, brugere (PBKDF2), sessioner
   static/      display.html (resultatskærm), admin.html, style.css

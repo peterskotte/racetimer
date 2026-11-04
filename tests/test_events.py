@@ -13,6 +13,12 @@ with open(os.environ["RACETIMER_FAKE_ASOUND"], "w") as f:
             "                      vc4-hdmi-0\n"
             " 2 [Speak410       ]: USB-Audio - Jabra SPEAK 410 USB\n"
             "                      Jabra SPEAK 410 USB at usb-xhci-hcd.1-1, full speed\n")
+os.environ["RACETIMER_LUXAFOR_LOG"] = os.path.join(TMP, "lampe.log")
+os.environ["RACETIMER_FAKE_HIDRAW"] = os.path.join(TMP, "hidraw")
+for n, hid in (("hidraw0", "0003:0000FFFF:00000035"), ("hidraw1", "0003:000004D8:0000F372")):  # RFID-læser + lampe
+    os.makedirs(os.path.join(TMP, "hidraw", n, "device"))
+    with open(os.path.join(TMP, "hidraw", n, "device", "uevent"), "w") as f:
+        f.write(f"DRIVER=hid-generic\nHID_ID={hid}\nHID_NAME=Test {n}\nHID_PHYS=usb-xhci-hcd.1-{n[-1]}/input0\nHID_UNIQ=\n")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from racetimer import app, db, engine, modules, outcome  # noqa: E402
 from racetimer.modules import speaker  # noqa: E402
@@ -414,6 +420,78 @@ def test_signup_modes_fields_and_link():
     # ældre indstillinger uden "mode": en åben tilmelding var en formular
     assert signup.settings({"signup": json.dumps({"open": True, "birth_year": "off"})})["mode"] == "form"
     assert signup.settings({"signup": json.dumps({"open": True, "birth_year": "off"})})["fields"]["birth_year"] == "off"
+
+
+def test_status_lamp_patterns_and_health():
+    from racetimer import health
+    from racetimer.modules import luxafor as lx
+    # blinkkode ×3: tre blink à 0,3 s, så pause – cyklus 3*0,6+1,2 = 3 s
+    look = ("code", lx.RED, 3)
+    on = [round(t, 2) for t in [i / 20 for i in range(60)] if lx.frame(look, t) == lx.RED]
+    assert on[0] == 0 and 0.3 not in on and 0.6 in on and 1.2 in on and 1.5 not in on and max(on) < 1.5
+    assert lx.frame(look, 3.0) == lx.RED  # forfra
+    assert lx.frame(("blink", lx.BLUE, 1), 0.2) == lx.BLUE and lx.frame(("blink", lx.BLUE, 1), 0.7) == lx.OFF
+    assert max(lx.frame(("pulse", lx.BLUE, 2), 1)) > 200 > max(lx.frame(("pulse", lx.BLUE, 2), 0))
+    assert lx.describe(("code", lx.YELLOW, 2)) == "gul ×2"
+    # tilstand: læser mangler > intet net > ur
+    state = {"readers": [{"path": "/dev/x", "connected": True}], "ip": "192.168.1.5", "synced": True}
+    health.configure(lambda: state["readers"], lambda: {"ip": state["ip"]}, lambda: {"synced": state["synced"]})
+    real = health.STARTED
+    health.STARTED = 0
+    try:
+        assert health.current()["state"] == "ready"
+        state["synced"] = False
+        assert health.current()["code"] == 3
+        state["ip"] = None
+        health._uptime, up = (lambda: 30), health._uptime
+        assert health.current()["state"] == "searching"
+        health._uptime = lambda: 600
+        assert health.current() == {"state": "warn", "code": 2, "text": "Intet netværk"}  # uret skyldes nettet
+        health._uptime = up
+        state["readers"][0]["connected"] = False
+        assert health.current()["state"] == "error" and health.current()["code"] == 1
+        state["readers"] = [{"path": None, "connected": False}]  # ingen læser valgt = manuel tidtagning, ingen fejl
+        assert health.current()["code"] == 2
+    finally:
+        health.STARTED = real
+
+
+def test_status_lamp_module():
+    import time
+    from racetimer import health
+    from racetimer.modules import luxafor as lx
+    found = lx.Luxafor.detect()
+    assert [d["device"] for d in found] == ["luxafor"] and found[0]["path"].endswith("/hidraw1")  # ikke RFID-læseren
+    db.set_setting("modules", [])
+    db.set_setting("modules_seen", [])
+    mgr = modules.ModuleManager()
+    mgr.sync()
+    cfgs = [c for c in mgr.configs() if c["kind"] == "luxafor"]
+    assert len(cfgs) == 1 and cfgs[0]["enabled"] and cfgs[0]["scans"] == "front"  # tilføjet af sig selv
+    mgr.remove(cfgs[0]["id"])
+    mgr.sync()
+    assert not any(c["kind"] == "luxafor" for c in mgr.configs())  # fjernet i admin → kommer ikke igen
+    log = os.environ["RACETIMER_LUXAFOR_LOG"]
+    open(log, "w").close()
+    health.configure(lambda: [], lambda: {"ip": "10.0.0.2"}, lambda: {"synced": True})
+    real = health.STARTED
+    health.STARTED = 0
+    cfg = mgr.add("luxafor", "luxafor")
+    m = mgr.running[cfg["id"]]
+    try:
+        time.sleep(0.3)
+        assert "luxafor\tff\t0,178,0" in open(log).read()  # klar: grøn på begge sider, 70 % lysstyrke
+        assert m.handle({"type": "read.unknown", "reader": "primary"}) == "Rødt blink (ukendt armbånd)"
+        time.sleep(0.15)
+        lines = open(log).read().split("\n")
+        assert "luxafor\t41\t178,0,0" in lines and not any(x.startswith("luxafor\t42") for x in lines[-3:])  # kun forsiden blinker
+        assert m.handle({"type": "race.countdown", "min": 0}) and not m.handle({"type": "race.started"})
+        mgr.update(cfg["id"], {"scans": "off"})
+        assert not m.handle({"type": "read.counted"})
+        assert "bagside: grøn" in m.status()["text"]
+    finally:
+        health.STARTED = real
+        mgr.remove(cfg["id"])
 
 if __name__ == "__main__":
     for name, fn in list(globals().items()):

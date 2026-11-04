@@ -37,6 +37,16 @@ rm -rf "$APP/signing" "$APP/dist" /var/lib/racetimer-update/backup/*/signing /va
 command -v aplay >/dev/null || apt-get install -y -qq alsa-utils >/dev/null 2>&1 \
   || echo "  (kunne ikke installere alsa-utils til højttaler-modulet – kræver internet)"
 
+# Moduler: statuslampe (Luxafor) – adgang via udev, lys ved opstart/nedlukning og når RaceTimer ikke kan starte
+install -m 755 -o root -g root "$APP/deploy/racetimer-led" /usr/local/sbin/racetimer-led
+install -m 644 "$APP/deploy/60-racetimer-luxafor.rules" /etc/udev/rules.d/60-racetimer-luxafor.rules
+install -m 644 "$APP/deploy/racetimer-led.service" /etc/systemd/system/racetimer-led.service
+install -m 644 "$APP/deploy/racetimer-led-fail.service" /etc/systemd/system/racetimer-led-fail.service
+install -D -m 755 "$APP/deploy/racetimer-led-shutdown" /usr/lib/systemd/system-shutdown/racetimer-led
+[ "$SVC_USER" = root ] || usermod -aG input "$SVC_USER" 2>/dev/null || true
+udevadm control --reload 2>/dev/null && udevadm trigger --subsystem-match=hidraw 2>/dev/null || true
+systemctl enable racetimer-led.service >/dev/null 2>&1 || true
+
 # Valgfrie programmer til fjernadgang – installeres slået fra (kræver internet)
 if ! command -v cloudflared >/dev/null 2>&1; then
   ARCH=$(dpkg --print-architecture)
@@ -70,5 +80,6 @@ fi
 chown -R "$SVC_USER": /var/lib/racetimer
 mkdir -p /etc/systemd/system/racetimer.service.d
 printf "[Service]\nEnvironment=RACETIMER_DATA=/var/lib/racetimer\n" > /etc/systemd/system/racetimer.service.d/data.conf
+printf "[Unit]\nOnFailure=racetimer-led-fail.service\n" > /etc/systemd/system/racetimer.service.d/led.conf
 systemctl daemon-reload
 echo "  installationstrin færdige"

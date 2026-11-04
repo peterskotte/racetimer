@@ -28,4 +28,4 @@ jobs:
       - name: Scripts
         run: |
           for f in deploy/*.sh tools/*.sh image/build.sh; do sh -n "$f"; done
-          for f in deploy/racetimer-wifi deploy/racetimer-remote deploy/racetimer-update deploy/racetimer-system; do python -m py_compile "$f"; done
+          for f in deploy/racetimer-wifi deploy/racetimer-remote deploy/racetimer-update deploy/racetimer-system deploy/racetimer-led; do python -m py_compile "$f"; done

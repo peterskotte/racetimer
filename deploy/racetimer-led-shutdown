@@ -1,0 +1,4 @@
+#!/bin/sh
+# systemd-shutdown kører dette helt til sidst, når alt er lukket: sluk statuslampen = strømmen kan fjernes.
+# Ved genstart ($1 = reboot) lyser den hvidt igen, så snart Pi'en starter.
+/usr/local/sbin/racetimer-led off

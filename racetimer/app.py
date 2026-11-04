@@ -22,7 +22,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Up
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import branding, db, engine, events, modules, outcome, readers, signup, sync, updater
+from . import branding, db, engine, events, health, modules, outcome, readers, signup, sync, updater
 
 HERE = os.path.dirname(__file__)
 STATIC = os.path.join(HERE, "static")
@@ -177,6 +177,7 @@ def _startup():
     if MIRROR:
         return
     sync_mgr.start()
+    health.configure(reader_mgr.status, host_info, clock_info)  # til statuslampen
     module_mgr.start()
     threading.Thread(target=sync_bootcode, daemon=True).start()
     events.Ticker(bus, standings, reader_mgr.status).start()

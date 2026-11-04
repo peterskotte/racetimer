@@ -1,0 +1,77 @@
+#!/usr/bin/python3 -I
+"""RaceTimer statuslampe uden for RaceTimer selv – opstart, nedlukning og "kunne ikke starte".
+
+Installeres som /usr/local/sbin/racetimer-led (ejet af root) og kaldes kun af systemd:
+
+  racetimer-led boot   → hvid: Pi'en er tændt og starter (racetimer-led.service, tidligt i opstarten)
+  racetimer-led stop   → lilla: Pi'en lukker ned (samme service, når den stoppes)
+  racetimer-led off    → slukket: nu kan strømmen fjernes (systemd-shutdown, helt til sidst)
+  racetimer-led fail   → rødt blink ×5, indtil RaceTimer starter igen (racetimer-led-fail.service)
+
+Når RaceTimer kører, styrer den selv lampen (racetimer/modules/luxafor.py). Kun standardbiblioteket –
+skal også virke, når RaceTimers venv eller kode er i stykker.
+"""
+import os
+import sys
+import time
+
+VID, PID = "000004D8", "0000F372"
+ALL = 0xFF
+COLORS = {"boot": (180, 180, 180), "stop": (120, 0, 200), "off": (0, 0, 0)}
+
+
+def lamps():
+    root = "/sys/class/hidraw"
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        try:
+            with open(os.path.join(root, n, "device", "uevent")) as f:
+                if f"HID_ID=0003:{VID}:{PID}" in f.read().upper():
+                    out.append(f"/dev/{n}")
+        except OSError:
+            pass
+    return out
+
+
+def send(paths, rgb):
+    for p in paths:
+        try:
+            fd = os.open(p, os.O_WRONLY)
+            try:
+                os.write(fd, bytes([0x00, 0x01, ALL, *rgb, 0, 0, 0]))
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "boot":
+        for _ in range(30):  # USB-enheder kan være et par sekunder om at dukke op
+            if lamps():
+                break
+            time.sleep(0.5)
+        send(lamps(), COLORS["boot"])
+    elif cmd in ("stop", "off"):
+        send(lamps(), COLORS[cmd])
+    elif cmd == "fail":  # kode 5 – samme rytme som i RaceTimer: 5 blink à 0,3 s, så 1,5 s pause
+        while True:
+            paths = lamps()
+            for _ in range(5):
+                send(paths, (255, 0, 0))
+                time.sleep(0.3)
+                send(paths, (0, 0, 0))
+                time.sleep(0.3)
+            time.sleep(1.2)
+    else:
+        print("Brug: racetimer-led boot | stop | off | fail", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

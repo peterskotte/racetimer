@@ -21,6 +21,18 @@ sed -e "s#__USER__#$USER_NAME#g" -e "s#__DIR__#$DIR#g" "$DIR/deploy/racetimer.se
 sudo systemctl daemon-reload
 sudo systemctl enable --now racetimer
 
+# Statuslampe (Luxafor): hvid ved opstart, lilla ved nedlukning, rødt blink hvis RaceTimer ikke kan starte
+sudo install -m 755 -o root -g root "$DIR/deploy/racetimer-led" /usr/local/sbin/racetimer-led
+sudo install -m 644 "$DIR/deploy/60-racetimer-luxafor.rules" /etc/udev/rules.d/60-racetimer-luxafor.rules
+sudo install -m 644 "$DIR/deploy/racetimer-led.service" /etc/systemd/system/racetimer-led.service
+sudo install -m 644 "$DIR/deploy/racetimer-led-fail.service" /etc/systemd/system/racetimer-led-fail.service
+sudo install -D -m 755 "$DIR/deploy/racetimer-led-shutdown" /usr/lib/systemd/system-shutdown/racetimer-led
+sudo mkdir -p /etc/systemd/system/racetimer.service.d
+printf "[Unit]\nOnFailure=racetimer-led-fail.service\n" | sudo tee /etc/systemd/system/racetimer.service.d/led.conf >/dev/null
+sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=hidraw
+sudo systemctl daemon-reload
+sudo systemctl enable racetimer-led.service
+
 # WiFi-hjælper til admin-fanen WiFi (op til 5 netværk)
 sudo install -m 755 -o root -g root "$DIR/deploy/racetimer-wifi" /usr/local/sbin/racetimer-wifi
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=RaceTimer statuslampe: hvid ved opstart, lilla ved nedlukning
+# Tidligt i opstarten – før netværk og RaceTimer – så lampen viser, at Pi'en lever
+DefaultDependencies=no
+After=systemd-udevd.service local-fs.target
+Before=racetimer.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/racetimer-led boot
+# Stoppes efter RaceTimer ved nedlukning; racetimer-led off (systemd-shutdown) slukker til sidst
+ExecStop=/usr/local/sbin/racetimer-led stop
+TimeoutStartSec=20
+
+[Install]
+WantedBy=sysinit.target

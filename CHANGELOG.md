@@ -8,6 +8,7 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 - **Splash fylder hele browservinduet** på hjemmesiden (`index.php` og FTP-siden), også på mobil. Listen over tidligere resultater ligger nedenunder.
 
 **Nyt**
+- **Statuslampe (Luxafor Flag):** sæt lampen i USB, så viser den Pi'ens tilstand – også uden skærm og net. Hvid = Pi'en starter, blå pulserende = RaceTimer starter, blåt blink = søger netværk, grøn = klar. Ved problemer blinker den en kode (N blink og pause): gul ×2 intet netværk, gul ×3 uret er ikke stillet, rød ×1 læser ikke tilsluttet, rød ×4 databasefejl, rød ×5 RaceTimer kunne ikke starte. Lilla ved nedlukning, slukket når strømmen kan fjernes. Forsiden blinker grønt/gult/rødt ved scanninger. Lampen tilføjes af sig selv under *⚙ Opsætning → Moduler*. Se [docs/statuslampe.md](docs/statuslampe.md).
 - **Tilmelding vælges pr. løb:** når et løb oprettes (og senere under *Deltagere*), vælges *Ingen tilmelding*, *Formular på hjemmesiden* eller *Link andetsteds* (fx en Facebook-begivenhed).
   - **Formular:** vælg for køn, fødselsår, klub og e-mail, om feltet skal udfyldes, er valgfrit eller ikke er med. Navn er altid med, og distance, når løbet har flere. Samtykketeksten på siden følger de valgte felter.
   - **Link:** linket (og en valgfri linktekst) vises på hjemmesiden og som knap i teaseren om løbet, indtil løbet starter eller fristen er nået. Resultatskærmen skriver, hvor man tilmelder sig. Går linket til Facebook, vises Facebooks logo, ellers 📝.
