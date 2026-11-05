@@ -445,15 +445,15 @@ def test_status_lamp_patterns_and_health():
         state["ip"] = None
         health._uptime, up = (lambda: 30), health._uptime
         assert health.current()["state"] == "searching"
-        health._uptime = lambda: 600
+        health._uptime = lambda: 600  # ikke maskinens egen oppetid: en ny CI-maskine har kørt under 2 min.
         assert health.current() == {"state": "warn", "code": 2, "text": "Intet netværk"}  # uret skyldes nettet
-        health._uptime = up
         state["readers"][0]["connected"] = False
         assert health.current()["state"] == "error" and health.current()["code"] == 1
         state["readers"] = [{"path": None, "connected": False}]  # ingen læser valgt = manuel tidtagning, ingen fejl
         assert health.current()["code"] == 2
     finally:
         health.STARTED = real
+        health._uptime = up
 
 
 def test_status_lamp_module():
