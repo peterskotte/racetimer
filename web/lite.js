@@ -837,7 +837,15 @@ function bindSettings() {
 document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 $("openScreen").onclick = () => window.open("display.html?local=1&kiosk=1", "racetimer-skaerm", "popup");
 bindSettings();
-showTab(activeRace() ? "race" : "setup");
+// …/tidtagning/#demo (knappen "Prøv et demoløb" på portalen) åbner direkte på demo-kortet
+function openDemo() {
+  showTab("setup");
+  ($("demoForm").previousElementSibling || $("demoForm")).scrollIntoView({block: "start"});  // med overskriften
+  history.replaceState(null, "", location.pathname + location.search);  // en genindlæsning åbner som normalt
+}
+if (location.hash === "#demo") openDemo();
+else showTab(activeRace() ? "race" : "setup");
+window.addEventListener("hashchange", () => { if (location.hash === "#demo") openDemo(); });
 setInterval(() => {
   if (tab === "race" && !document.querySelector("dialog[open]")) renderRace();
   broadcast();
