@@ -36,10 +36,13 @@ SLOTS = [
     ("registered", "Chip tildelt (Deltagere → Scan)", "beep"),
     ("countdown", "Nedtælling 3-2-1 min", "beep"),
     ("go", "Start", "long"),
+    ("callout", "Callout: løberen har scannet", "ok"),
+    ("callout_tick", "Callout: nedtælling 10-5-3-2-1 sek.", "beep"),
+    ("callout_go", "Callout: løberens start", "long"),
     ("reader_lost", "Læser mistet", "low2"),
 ]
 EVENT_SLOT = {"read.counted": "counted", "read.checkin": "checkin", "read.departure": "checkin", "read.started": "checkin",
-              "read.ignored": "ignored", "read.unknown": "unknown", "chip.registered": "registered",
+              "read.callout": "callout", "read.ignored": "ignored", "read.unknown": "unknown", "chip.registered": "registered",
               "race.started": "go", "reader.lost": "reader_lost"}
 
 
@@ -102,6 +105,8 @@ class Speaker(Module):
     def slot_for(self, ev):
         if ev["type"] == "race.countdown":
             return "go" if ev.get("min") == 0 else "countdown"
+        if ev["type"] == "callout.tick":
+            return "callout_go" if ev.get("sec") == 0 else "callout_tick"
         return EVENT_SLOT.get(ev["type"])
 
     def handle(self, ev):

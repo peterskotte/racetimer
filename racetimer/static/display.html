@@ -314,13 +314,14 @@ async function load() {
 
 // ---------------- scan-besked: grøn = talt, gul = læst men tæller ikke, rød = ukendt armbånd
 let scanSeq = null;
-const SCAN_OK = {"read.counted": 1, "read.checkin": 1, "read.departure": 1, "read.started": 1};
+const SCAN_OK = {"read.counted": 1, "read.checkin": 1, "read.departure": 1, "read.started": 1, "read.callout": 1};
 function scanText(e) {
   const who = `${e.bib != null ? `#${e.bib} ` : ""}${esc(e.name || "")}`;
   if (e.type === "read.counted") return [`✓ ${who}`, e.finish ? `I mål${e.time != null ? " · " + hms(e.time) : ""}` : `Omgang ${e.lap}${e.time != null ? " · " + hms(e.time) : ""}`];
   if (e.type === "read.checkin") return [`✓ ${who}`, "Tjekket ind"];
   if (e.type === "read.departure") return [`✓ ${who}`, "Afgang registreret"];
   if (e.type === "read.started") return [`✓ ${who}`, "Startet"];
+  if (e.type === "read.callout") return [`📣 ${who}`, `Callout – start om ${Math.round(e.sec || 15)} sek.`];
   if (e.type === "read.ignored") return [who, esc(e.reason_label)];
   if (e.type === "read.unknown") return ["Ukendt armbånd", "Kontakt en official"];
   if (e.type === "test.screen") return ["🧪 Test af skærm", "Kan du se denne besked, virker resultatskærmen"];
@@ -613,5 +614,6 @@ if (kiosk) {
 
 load(); setInterval(load, 1000); setInterval(tick, 250);
 </script>
+<script src="/static/screen-sleep.js"></script>
 </body>
 </html>

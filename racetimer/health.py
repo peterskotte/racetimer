@@ -6,6 +6,9 @@ Koderne er de samme som lampens blinkkoder (N blink + pause), så de kan slås o
   3 gul  – uret er ikke stillet via internettet
   4 rød  – databasen kan ikke læses
   5 rød  – RaceTimer kunne ikke starte (vises af racetimer-led, ikke herfra)
+
+Offline-tilstand (valgt i klar-tjekket): Pi'en kører bevidst uden net. Er læsere, database og ur
+i orden, er tilstanden "offline" (lampen lyser orange) i stedet for advarslen om intet netværk.
 """
 import time
 
@@ -26,9 +29,9 @@ CODES = {
 _src = {}
 
 
-def configure(readers, host, clock):
-    """readers() → [{"path", "connected"}], host() → {"ip"}, clock() → {"synced"}. Sættes ved opstart."""
-    _src.update(readers=readers, host=host, clock=clock)
+def configure(readers, host, clock, offline=None):
+    """readers() → [{"path", "connected"}], host() → {"ip"}, clock() → {"synced", "manual"}, offline() → bool."""
+    _src.update(readers=readers, host=host, clock=clock, offline=offline or (lambda: False))
 
 
 def _uptime():
@@ -57,10 +60,14 @@ def current():
             return _code(1)
     except Exception:  # noqa: BLE001
         pass
+    clock = _src["clock"]() or {}
+    clock_bad = clock.get("synced") is False and not clock.get("manual")
+    if _src["offline"]():
+        return _code(3) if clock_bad else {"state": "offline", "code": None, "text": "Offline-tilstand – klar uden netværk"}
     if not (_src["host"]() or {}).get("ip"):
         if _uptime() < SEARCH_SEC:
             return {"state": "searching", "code": None, "text": "Søger netværk"}
         return _code(2)
-    if (_src["clock"]() or {}).get("synced") is False:
+    if clock_bad:
         return _code(3)
     return {"state": "ready", "code": None, "text": "Klar"}

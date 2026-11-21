@@ -18,7 +18,7 @@
     --panel: #f1f0ea;
     --brand: #e5682a;
     /* lampens egne farver */
-    --l-white: #ffffff; --l-blue: #2f7df6; --l-green: #23b14d; --l-yellow: #f4c20d; --l-red: #e53935; --l-purple: #9b4dca; --l-off: #2b2f2c;
+    --l-white: #ffffff; --l-blue: #2f7df6; --l-green: #23b14d; --l-yellow: #f4c20d; --l-red: #e53935; --l-purple: #9b4dca; --l-orange: #ff6a1a; --l-off: #2b2f2c;
     --display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
     --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
     color-scheme: light;
@@ -51,7 +51,7 @@
   .led.dim { opacity: .35; }
   .pause { width: 18px; height: 3px; border-radius: 2px; background: var(--rule); margin-left: 2px; }
   .w { background: var(--l-white); } .b { background: var(--l-blue); } .g { background: var(--l-green); } .y { background: var(--l-yellow); }
-  .r { background: var(--l-red); } .p { background: var(--l-purple); } .o { background: var(--l-off); }
+  .r { background: var(--l-red); } .p { background: var(--l-purple); } .or { background: var(--l-orange); } .o { background: var(--l-off); }
   .codes { width: 100%; border-collapse: collapse; }
   .codes th { text-align: left; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 11px;
               color: var(--soft); padding: 4px 8px 4px 0; }
@@ -103,6 +103,7 @@
       <div class="row"><div class="lamp"><i class="led big b ring"></i></div><div class="what">Blå, pulserende<small>RaceTimer starter</small></div></div>
       <div class="row"><div class="lamp"><i class="led b"></i><i class="led b dim"></i><i class="led b"></i><i class="led b dim"></i></div><div class="what">Blå, blinker roligt<small>Søger netværk (op til 2 min. efter opstart)</small></div></div>
       <div class="row"><div class="lamp"><i class="led big g"></i></div><div class="what">Grøn<small><b>Klar.</b> Læsere, netværk og ur er i orden</small></div></div>
+      <div class="row"><div class="lamp"><i class="led big or"></i></div><div class="what">Orange, fast lys<small><b>Klar uden net.</b> Offline-tilstand er slået til</small></div></div>
     </section>
 
     <section>
@@ -140,7 +141,7 @@
         </table>
       </div>
       <p class="note">Gule koder vises kun på bagsiden – forsiden er stadig grøn, så løberne ikke forvirres. Røde koder blinker på begge sider.
-        Ved flere problemer vises det vigtigste først: rød ×1, rød ×4, gul ×2, gul ×3.</p>
+        Ved flere problemer vises det vigtigste først: rød ×1, rød ×4, gul ×2, gul ×3. Orange lyser altid fast, gul blinker altid.</p>
     </section>
   </div>
 

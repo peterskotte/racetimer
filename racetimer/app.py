@@ -22,7 +22,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Up
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import branding, db, engine, events, health, modules, outcome, readers, signup, sync, updater
+from . import branding, db, engine, events, health, modules, outcome, portal, readers, screen, signup, sync, updater
 
 HERE = os.path.dirname(__file__)
 STATIC = os.path.join(HERE, "static")
@@ -93,6 +93,9 @@ def wifi_ssid():
 _clock_cache = {"t": 0, "v": None}
 
 
+STARTED_AT = time.time()
+
+
 def clock_info():
     """Er Pi'ens ur stillet via internettet (NTP) siden opstart? None = kan ikke afgøres (fx på en Mac).
 
@@ -114,8 +117,24 @@ def clock_info():
             synced = {"yes": True, "no": False}.get(out)
         except (OSError, subprocess.SubprocessError):
             pass
-    _clock_cache.update(t=time.time(), v={"synced": synced})
+    m = db.setting("clock_manual") or {}
+    # manuel tid gælder kun i offline-tilstand og kun til næste genstart – med net stilles uret automatisk
+    manual = m.get("at") if m.get("boot") == boot_id() and offline_mode() and not synced else None
+    _clock_cache.update(t=time.time(), v={"synced": synced, "manual": bool(manual), "manual_at": manual})
     return _clock_cache["v"]
+
+
+def boot_id():
+    """Skifter ved hver opstart af Pi'en (et manuelt stillet ur gælder kun til næste genstart)."""
+    try:
+        with open("/proc/sys/kernel/random/boot_id") as f:
+            return f.read().strip()
+    except OSError:
+        return f"proc-{int(STARTED_AT)}"
+
+
+def offline_mode():
+    return bool(db.setting("offline_mode", False))
 
 app = FastAPI(title="RaceTimer")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -142,6 +161,14 @@ def admin_chips():
     return db.setting("admin_chips", []) or []
 
 
+def _race_running():
+    r = db.active_race()
+    return bool(r and r["status"] == "running")
+
+
+screen_power = screen.ScreenPower(_race_running)  # Pi'ens skærm slukker efter et stykke tid uden aktivitet
+
+
 # ------------------------------------------------------------------ chip-læsninger
 
 def handle_read(chip, reader, ts=None):
@@ -164,9 +191,12 @@ def handle_read(chip, reader, ts=None):
             fresh = ts - _admin_scan["last"] > ADMIN_CHIP_GAP
             _admin_scan["last"] = ts
             if fresh:
-                _admin_scan["at"] = ts
+                if not screen_power.activity():  # sov skærmen, vækkes den bare – den skifter ikke side
+                    _admin_scan["at"] = ts
                 bus.publish({"type": "admin.chip", "reader": reader})
             return {"admin": True}  # tæller aldrig i løbet
+
+    screen_power.activity()  # en scanning (fx indtjekning) vækker skærmen
 
     race = db.active_race()
     race_id = race["id"] if race else None
@@ -192,10 +222,12 @@ def _startup():
     if MIRROR:
         return
     sync_mgr.start()
-    health.configure(reader_mgr.status, host_info, clock_info)  # til statuslampen
+    screen_power.start()
+    health.configure(reader_mgr.status, host_info, clock_info, offline_mode)  # til statuslampen
     module_mgr.start()
     threading.Thread(target=sync_bootcode, daemon=True).start()
     events.Ticker(bus, standings, reader_mgr.status).start()
+    events.CalloutClock(bus)  # callout: lyd og lys de sidste sekunder før løberens start
     paths = db.setting("readers", {}) or {}
     for role in readers.ROLES:  # miljøvariabler kan overstyre, fx i systemd-filen
         env = os.environ.get(f"RACETIMER_{role.upper()}")
@@ -614,6 +646,22 @@ def _templates():
     return db.setting("templates", []) or []
 
 
+def _all_templates():
+    return _templates() + engine.EXAMPLE_TEMPLATES
+
+
+def _push_templates_bg():
+    """Skabelonerne er ændret → send dem til løbsportalerne i baggrunden (uden net: næste gang)."""
+    def run():
+        for d in portal.portals():
+            try:
+                portal.push_templates(d, _all_templates())
+            except RuntimeError:
+                pass
+    if portal.portals():
+        threading.Thread(target=run, daemon=True).start()
+
+
 @app.get("/api/templates")
 def templates(u=Depends(admin)):
     return {"examples": engine.EXAMPLE_TEMPLATES, "own": _templates()}
@@ -635,6 +683,7 @@ async def save_template(request: Request, u=Depends(admin)):
         t.update(id=secrets.token_hex(4), created_at=time.time())
         own.append(t)
     db.set_setting("templates", own)
+    _push_templates_bg()
     return old or t
 
 
@@ -644,6 +693,7 @@ def delete_template(tid: str, u=Depends(admin)):
     if not any(x["id"] == tid for x in own):
         _404()
     db.set_setting("templates", [x for x in own if x["id"] != tid])
+    _push_templates_bg()
     return {"ok": True}
 
 
@@ -898,8 +948,11 @@ async def test_mail(request: Request, u=Depends(admin)):
 
 # ------------------------------------------------------------------ tilmelding på hjemmesiden
 
-def _signup_dests():
-    return [d for d in sync.destinations() if d.get("type") == "webhook" and d.get("enabled") and d.get("url")]
+def _signup_dests(portals=False):
+    """Egne hjemmesider med modtag.php. En løbsportal er også en webhook, men får aldrig mailopsætningen
+    og har ingen tilmeld.php – den tages kun med, når der hentes tilmeldinger (portals=True)."""
+    return [d for d in sync.destinations() if d.get("type") == "webhook" and d.get("enabled") and d.get("url")
+            and (portals or not portal.is_portal(d))]
 
 
 @app.get("/api/races/{rid}/signup")
@@ -908,9 +961,16 @@ def get_signup(rid: int, u=Depends(admin)):
     s = signup.settings(race)
     dests = _signup_dests()
     online = db.q1("SELECT COUNT(*) n FROM participants WHERE race_id=? AND signup_id IS NOT NULL", (rid,))["n"]
+    if s["mode"] == "portal":
+        pd = portal.find((s.get("portal") or {}).get("dest"))
+        st = sync_mgr.status.get(pd["id"], {}) if pd else {}
+        dests = [pd] if pd else []
     return {**s, "is_open": signup.is_open(race, s), "online": online, "test": bool(race.get("test")),
+            "portals": [{"id": d["id"], "name": d["name"], "host": d["portal"].get("host"), "organizer": d["portal"].get("organizer")}
+                        for d in portal.portals()],
             "purge_at": signup.purge_at(race, s),
-            "forms": [re.sub(r"modtag\.php(\?.*)?$", "tilmeld.php", d["url"]) + f"?lob={rid}" for d in dests],
+            "forms": [] if s["mode"] == "portal" else
+                     [re.sub(r"modtag\.php(\?.*)?$", "tilmeld.php", d["url"]) + f"?lob={rid}" for d in dests],
             "errors": [sync_mgr.status.get(d["id"], {}).get("signup_error") for d in dests if
                        sync_mgr.status.get(d["id"], {}).get("signup_error")]}
 
@@ -924,6 +984,12 @@ async def put_signup(rid: int, request: Request, u=Depends(admin)):
         raise HTTPException(400, str(e)) from None
     if s["open"] and s["mode"] == "form" and race.get("test"):
         raise HTTPException(400, "Testløb kan ikke åbnes for tilmelding")
+    if s["mode"] == "portal" and not s.get("portal"):
+        raise HTTPException(400, "Vælg løbet på portalen og tryk “Kobl”")
+    old = signup.settings(race)
+    if old["mode"] == "portal" and s["mode"] != "portal" and old.get("portal"):
+        _portal_unlink(race, old["portal"])  # løbet bruger ikke længere portalen
+        s.pop("portal", None)
     signup.save(rid, s)
     sync_mgr.poke_state()  # hjemmesiden får besked med det samme
     return get_signup(rid, u)
@@ -931,8 +997,8 @@ async def put_signup(rid: int, request: Request, u=Depends(admin)):
 
 @app.post("/api/races/{rid}/signup/fetch")
 def fetch_signup(rid: int, u=Depends(admin)):
-    db.race(rid) or _404()
-    dests = _signup_dests()
+    race = db.race(rid) or _404()
+    dests = _signup_dests(portals=signup.settings(race)["mode"] == "portal")
     if not dests:
         raise HTTPException(400, "Opret først en destination af typen “Egen hjemmeside (JSON)” under ⚙ Opsætning → Synkronisering")
     added = 0
@@ -942,6 +1008,189 @@ def fetch_signup(rid: int, u=Depends(admin)):
         except RuntimeError as e:
             raise HTTPException(502, f"Kunne ikke hente fra {d.get('name') or d['url']}: {e}") from None
     return {"added": added}
+
+
+# ------------------------------------------------------------------ løbsportal (fx rebildtrail.dk – se portal.py)
+
+def _portal_public(d):
+    st = sync_mgr.status.get(d["id"], {})
+    return {"id": d["id"], "name": d["name"], "host": d["portal"].get("host"), "base": d["portal"].get("base"),
+            "organizer": d["portal"].get("organizer"), "events_url": d["portal"].get("events_url"), "enabled": d.get("enabled"),
+            "last_ok": st.get("last_ok"), "last_error": st.get("last_error"), "signup_error": st.get("signup_error")}
+
+
+def _portal_or_404(did):
+    return portal.find(did) or _404()
+
+
+def _portal_unlink(race, info):
+    d = portal.find((info or {}).get("dest"))
+    if d:
+        try:
+            portal.link(d, race, 0, {})
+        except RuntimeError:
+            pass  # uden net: portalen beholder koblingen, men får ikke flere data for løbet
+
+
+@app.get("/api/portal")
+def portal_list(u=Depends(admin)):
+    return {"portals": [_portal_public(d) for d in portal.portals()], "default_url": portal.DEFAULT_URL}
+
+
+@app.post("/api/portal/pair")
+async def portal_pair(request: Request, u=Depends(admin)):
+    b = await request.json()
+    try:
+        d = await asyncio.to_thread(portal.pair, b.get("url"), b.get("code"), APP_VERSION)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from None
+    sync_mgr.poke_state()
+    _push_templates_bg()
+    return _portal_public(d)
+
+
+@app.post("/api/portal/{did}/templates")
+async def portal_templates(did: str, u=Depends(admin)):
+    """Send skabelonerne til portalen nu."""
+    d = _portal_or_404(did)
+    try:
+        r = await asyncio.to_thread(portal.push_templates, d, _all_templates())
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from None
+    return {"ok": True, "count": r.get("count", 0), "url": r.get("url")}
+
+
+@app.get("/api/portal/{did}/events")
+async def portal_events(did: str, u=Depends(admin)):
+    d = _portal_or_404(did)
+    try:
+        r = await asyncio.to_thread(portal.events, d)
+    except RuntimeError as e:
+        raise HTTPException(502, f"Kunne ikke hente løbene fra {d['name']}: {e}") from None
+    return {"events": r.get("events") or [], "links": r.get("links") or {}, "organizer": r.get("organizer")}
+
+
+@app.post("/api/portal/{did}/unpair")
+async def portal_unpair(did: str, u=Depends(admin)):
+    d = _portal_or_404(did)
+    err = await asyncio.to_thread(portal.unpair, d)
+    for race in db.q("SELECT * FROM races WHERE signup IS NOT NULL"):
+        s = signup.settings(race)
+        if s["mode"] == "portal" and (s.get("portal") or {}).get("dest") == did:
+            s["mode"] = "none"
+            s.pop("portal", None)
+            signup.save(race["id"], s)
+    sync_mgr.reset(did)
+    return {"ok": True, "warning": f"Portalen kunne ikke nås ({err}). Fjern RaceTimeren på portalen under “Mine RaceTimere”." if err else None}
+
+
+@app.get("/api/portal/{did}/transferable")
+def portal_transferable(did: str, u=Depends(admin)):
+    """Løbene på Pi'en, der kan overføres til portalen (ikke testløb)."""
+    _portal_or_404(did)
+    out = []
+    for r in db.q("SELECT id, name, status, scheduled_start, started_at, created_at, archived_at, signup FROM races "
+                  "WHERE test IS NULL ORDER BY COALESCE(scheduled_start, started_at, created_at) DESC"):
+        s = signup.settings(r)
+        on = (s.get("portal") if s["mode"] == "portal" else None) or s.get("portal_results")
+        out.append({"id": r["id"], "name": r["name"], "status": r["status"], "archived": bool(r["archived_at"]),
+                    "date": r["scheduled_start"] or r["started_at"] or r["created_at"],
+                    "portal": {"title": on.get("title"), "url": on.get("url")} if on and on.get("dest") == did else None})
+    return {"races": out}
+
+
+def _transfer_one(d, race):
+    """Opret ét løb på portalen og kobl det. Afholdte løb får de endelige resultater med det samme."""
+    r = portal.create(d, race)
+    ev = r.get("event") or {}
+    info = {"dest": d["id"], "event_id": ev.get("id"), "title": ev.get("title"), "url": ev.get("url"),
+            "distances": {k: v for k, v in (r.get("distances") or {}).items()}}
+    s = signup.settings(race)
+    if race["status"] == "finished":
+        s["portal_results"] = info
+        signup.save(race["id"], s)
+        sync._post(d["url"], sync_mgr._results_payload(race, True, images=False), d.get("key"), gz=False)
+        return {"id": race["id"], "ok": True, "message": (r.get("besked") or "Oprettet") + " · resultaterne er sendt", "url": ev.get("url")}
+    was = s["mode"]
+    if s.get("portal", {}).get("event_id") != ev.get("id"):
+        s["portal_fetched"] = 0
+    s.update(mode="portal", portal=info)
+    signup.save(race["id"], s)
+    try:
+        sync_mgr.fetch_signups(d, force=True)
+    except RuntimeError:
+        pass
+    note = " · tilmeldingen på din egen hjemmeside er slået fra for løbet" if was == "form" else ""
+    return {"id": race["id"], "ok": True, "message": (r.get("besked") or "Oprettet") + note, "url": ev.get("url"), "edit_url": ev.get("edit_url")}
+
+
+@app.post("/api/portal/{did}/transfer")
+async def portal_transfer(did: str, request: Request, u=Depends(admin)):
+    d = _portal_or_404(did)
+    ids = [int(x) for x in (await request.json()).get("race_ids") or [] if str(x).isdigit()]
+    if not ids:
+        raise HTTPException(400, "Vælg mindst ét løb")
+
+    def run():
+        out = []
+        for rid in ids:
+            race = db.race(rid)
+            if not race or race.get("test"):
+                out.append({"id": rid, "ok": False, "message": "Testløb kan ikke overføres"})
+                continue
+            try:
+                out.append(_transfer_one(d, race))
+            except RuntimeError as e:
+                out.append({"id": rid, "ok": False, "message": str(e)})
+        return out
+    results = await asyncio.to_thread(run)
+    sync_mgr.poke_state()
+    return {"results": results}
+
+
+@app.post("/api/races/{rid}/portal")
+async def link_portal(rid: int, request: Request, u=Depends(admin)):
+    race = db.race(rid) or _404()
+    if race.get("test"):
+        raise HTTPException(400, "Testløb kan ikke kobles til en løbsportal")
+    b = await request.json()
+    d = _portal_or_404(str(b.get("dest") or ""))
+    ds = {x["id"] for x in engine.distances(race["type"], engine.merged_config(race["type"], json.loads(race["config"]) if isinstance(race["config"], str) else race["config"]))}
+    dist = {str(k): int(v) for k, v in (b.get("distances") or {}).items() if str(k) in ds and str(v).isdigit()}
+    try:
+        r = await asyncio.to_thread(portal.link, d, race, int(b.get("event_id") or 0), dist)
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from None
+    ev = r.get("event") or {}
+    s = signup.settings(race)
+    old = s.get("portal") or {}
+    if old.get("dest") and old.get("dest") != d["id"]:
+        _portal_unlink(race, old)
+    if old.get("dest") != d["id"] or old.get("event_id") != ev.get("id"):
+        s["portal_fetched"] = 0  # andet løb på portalen → hent alle tilmeldte
+    s.update(mode="portal", portal={"dest": d["id"], "event_id": ev.get("id"), "title": ev.get("title"), "url": ev.get("url"), "distances": dist})
+    signup.save(rid, s)
+    sync_mgr.poke_state()
+    added = 0
+    try:
+        added = await asyncio.to_thread(sync_mgr.fetch_signups, d, True) or 0
+    except RuntimeError:
+        pass  # vises i tilmeldingsboksen, og der prøves igen hvert minut
+    return {"ok": True, "added": added, "event": ev}
+
+
+@app.delete("/api/races/{rid}/portal")
+async def unlink_portal(rid: int, u=Depends(admin)):
+    race = db.race(rid) or _404()
+    s = signup.settings(race)
+    if s.get("portal"):
+        await asyncio.to_thread(_portal_unlink, race, s["portal"])
+    s["mode"] = "none"
+    s.pop("portal", None)
+    signup.save(rid, s)
+    return {"ok": True}
 
 
 @app.post("/api/races/{rid}/archive")
@@ -1282,14 +1531,30 @@ def ready_checks():
     out = []
     add = lambda k, title, state, text, fix=None: out.append({"id": k, "title": title, "state": state, "text": text, "fix": fix})  # noqa: E731
     h = host_info()
+    off = offline_mode()
     if h.get("ip"):
         add("net", "Netværk", "ok", f"{'WiFi ' + h['wifi'] if h.get('wifi') else 'Forbundet'} · {h['ip']}", "wifi")
+    elif off:
+        add("net", "Netværk", "info", "Intet netværk – det er i orden i offline-tilstand", "wifi")
     else:
-        add("net", "Netværk", "warn", "Intet netværk. Tidtagningen virker uden, men hjemmeside, ur og fjernadgang kræver net.", "wifi")
-    c = clock_info().get("synced")
-    add("clock", "Ur", "ok" if c else "warn" if c is False else "info",
-        "Stillet via internettet" if c else "Ikke stillet via internettet – giv Pi'en net et par minutter før start"
-        if c is False else "Kan ikke afgøres her")
+        add("net", "Netværk", "warn", "Intet netværk. Tidtagningen virker uden, men hjemmeside, ur og fjernadgang kræver net. "
+            "Skal I køre uden net, så slå offline-tilstand til og stil uret herunder.", "wifi")
+    if off:
+        add("offline", "Offline-tilstand", "ok", "Slået til – Pi'en kører uden netværk, og statuslampen lyser orange"
+            + (". Der er netværk nu, så du kan slå den fra" if h.get("ip") else ""), "offline")
+    else:
+        add("offline", "Offline-tilstand", "info", "Slået fra – slå til, hvis løbet køres uden netværk", "offline")
+    ci = clock_info()
+    c = ci.get("synced")
+    if c:
+        add("clock", "Ur", "ok", "Stillet via internettet", "clock")
+    elif ci.get("manual"):
+        add("clock", "Ur", "ok", f"Stillet manuelt kl. {time.strftime('%H.%M', time.localtime(ci['manual_at']))} – tjek, at klokken passer", "clock")
+    elif c is False:
+        add("clock", "Ur", "warn", "Ikke stillet – giv Pi'en net et par minutter" + (", eller stil uret her" if off else
+            ". Køres løbet uden net, så slå offline-tilstand til og stil uret her"), "clock")
+    else:
+        add("clock", "Ur", "info", "Kan ikke afgøres her", "clock")
     race = db.active_race()
     manual = bool(race and race.get("timing") == "manual")
     st = {r["role"]: r for r in reader_mgr.status()}
@@ -1319,7 +1584,9 @@ def ready_checks():
     else:
         add("modules", "Moduler", "info", "Ingen højttaler eller statuslampe (valgfrit)", "modules")
     dests = [d for d in sync.destinations() if d.get("enabled") and d.get("url")]
-    if dests:
+    if dests and off and not h.get("ip"):
+        add("sync", "Hjemmeside", "info", "Offline-tilstand – resultaterne sendes, når der er net igen", "sync")
+    elif dests:
         errs = [d.get("name") or d["url"] for d in dests if sync_mgr.status.get(d["id"], {}).get("last_error")]
         last = max((sync_mgr.status.get(d["id"], {}).get("last_ok") or 0 for d in dests), default=0)
         add("sync", "Hjemmeside", "warn" if errs else "ok",
@@ -1332,6 +1599,80 @@ def ready_checks():
     else:
         add("race", "Løb på skærmen", "info", "Intet aktivt løb – START viser splash", "race")
     return out
+
+
+# ------------------------------------------------------------------ Pi'ens skærm: sluk efter et stykke tid (screen.py)
+
+def _kiosk_only(request):
+    if not kiosk_screen(request):
+        raise HTTPException(403, "Kun Pi'ens egen skærm")
+
+
+@app.get("/api/screen")
+def screen_state(request: Request):
+    _kiosk_only(request)
+    return {"asleep": screen_power.asleep}
+
+
+@app.post("/api/screen/activity")
+def screen_activity(request: Request):
+    """Kiosk-siden melder tryk og taster (højst hvert 20. sek.) og vækker skærmen med første tryk."""
+    _kiosk_only(request)
+    return {"woke": screen_power.activity()}
+
+
+@app.get("/api/screen/settings")
+def screen_settings(u=Depends(admin)):
+    return screen_power.status()
+
+
+@app.put("/api/screen/settings")
+async def screen_settings_put(request: Request, u=Depends(admin)):
+    try:
+        screen.save_settings(await request.json())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    screen_power.activity()  # tæl forfra fra nu
+    return screen_power.status()
+
+
+@app.post("/api/screen/sleep")
+def screen_sleep_now(u=Depends(admin)):
+    """Test: sluk skærmen nu. Et tryk på skærmen eller admin-armbåndet tænder den igen."""
+    screen_power.sleep_now()
+    return screen_power.status()
+
+
+@app.post("/api/klar/clock")
+async def ready_set_clock(request: Request, u=Depends(admin_or_screen)):
+    """Stil Pi'ens ur manuelt (uden net). Ikke mens et løb kører – så ville tiderne springe."""
+    b = await request.json()
+    try:
+        epoch = float(b.get("epoch"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Ugyldigt tidspunkt")
+    race = db.active_race()
+    if race and race["status"] == "running":
+        raise HTTPException(400, "Uret kan ikke stilles, mens et løb kører – tiderne ville springe")
+    if not offline_mode():
+        raise HTTPException(400, "Uret kan kun stilles manuelt i offline-tilstand – med net stilles det automatisk")
+    if clock_info().get("synced"):
+        raise HTTPException(400, "Uret er allerede stillet via internettet")
+    if host_info().get("ip"):
+        raise HTTPException(400, "Pi'en har netværk, så uret stilles automatisk – vent et par minutter")
+    if _system("settime", stdin=json.dumps({"epoch": int(epoch)})) is None:
+        raise HTTPException(400, "Uret kan kun stilles på Pi'en")
+    db.set_setting("clock_manual", {"boot": boot_id(), "at": time.time()})
+    _clock_cache["t"] = 0
+    return clock_info()
+
+
+@app.post("/api/klar/offline")
+async def ready_offline(request: Request, u=Depends(admin_or_screen)):
+    on = bool((await request.json()).get("on"))
+    db.set_setting("offline_mode", on)
+    _clock_cache["t"] = 0  # et manuelt ur gælder kun i offline-tilstand
+    return {"offline": on}
 
 
 @app.get("/api/klar/sync")
@@ -1350,7 +1691,8 @@ def ready_sync(u=Depends(admin_or_screen)):
 def ready_status(request: Request, u=Depends(admin_or_screen)):
     checks = ready_checks()
     worst = "error" if any(c["state"] == "error" for c in checks) else "warn" if any(c["state"] == "warn" for c in checks) else "ok"
-    return {"checks": checks, "overall": worst, "host": host_info(), "version": APP_VERSION, "now": time.time(),
+    return {"checks": checks, "overall": worst, "offline": offline_mode(), "clock": clock_info(),
+            "race_running": bool((db.active_race() or {}).get("status") == "running"), "host": host_info(), "version": APP_VERSION, "now": time.time(),
             "brand": branding.public(),
             # ny installation: førstegangskoden står kun på Pi'ens egen skærm (aldrig til en browser andetsteds)
             "first_code": db.first_code() if kiosk_screen(request) else None,

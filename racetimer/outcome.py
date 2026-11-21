@@ -62,6 +62,9 @@ def evaluate(read_id):
         return _ignored("not_started", **who)
     if race.get("finished_at") and rd["ts"] > race["finished_at"]:
         return _ignored("after_finish", **who)
+    if info.get("callout_sec") and after.get("start_ts") and not before.get("start_ts"):
+        # callout: løbslederen tæller ned, og løberens tid starter ved 0 (events.CalloutClock giver lyd og lys)
+        return {"type": "read.callout", "start_at": after["start_ts"], "sec": info["callout_sec"], **who}
     if after.get("start_ts") and not before.get("start_ts") and race["type"] == "timetrial":
         return {"type": "read.started", **who}
     if (after.get("laps") or 0) > (before.get("laps") or 0) or (after.get("finish_ts") and not before.get("finish_ts")):

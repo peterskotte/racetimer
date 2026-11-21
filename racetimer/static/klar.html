@@ -60,6 +60,15 @@
     #osk button.space { min-width: 260px; }
   }
   /* skærmtastatur til WiFi-koden (Pi'ens touchskærm har intet tastatur) */
+  /* manuelt ur */
+  .clockset { display: grid; grid-template-columns: repeat(3, auto); gap: 10px 14px; justify-content: start; align-items: center; margin: 10px 0; }
+  .clockset .lbl { color: var(--muted); }
+  .clockset .val { font-size: 30px; font-weight: 800; min-width: 150px; text-align: center; }
+  .clockset button { min-width: 64px; font-size: 26px; padding: 6px 14px; }
+  .bigtime { font-size: 40px; font-weight: 800; margin: 4px 0; }
+  .check.ok.offline .dot, .overall.offline { border-color: #ff7a1a; }
+  .check.offline .dot { background: #ff7a1a; }
+  @media (max-height: 620px) { .bigtime { font-size: 28px; } .clockset .val { font-size: 22px; } .clockset button { min-height: 44px; } }
   #osk { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #0b120e; border-top: 2px solid var(--accent);
          padding: 10px 8px 14px; }
   #osk .r { display: flex; justify-content: center; gap: 6px; margin: 6px 0; }
@@ -113,8 +122,8 @@ async function refresh(force) {
   $("logo").innerHTML = b?.logo ? `<img src="${b.logo}" alt="${esc(b.name)}">` : esc(b?.name || "RaceTimer");
   $("ver").textContent = `RaceTimer ${state.version}`;
   const o = state.overall;
-  $("overall").className = "overall " + o;
-  $("overall").innerHTML = `<div class="ico">${ICON[o]}</div><div><div class="t">${o === "ok" ? "Klar til løb" : o === "warn" ? "Klar – men tjek de gule punkter" : "Ret de røde punkter før løbet"}</div>
+  $("overall").className = "overall " + o + (state.offline && o === "ok" ? " offline" : "");
+  $("overall").innerHTML = `<div class="ico">${state.offline && o === "ok" ? "🟠" : ICON[o]}</div><div><div class="t">${o === "ok" ? (state.offline ? "Klar til løb – uden netværk" : "Klar til løb") : o === "warn" ? "Klar – men tjek de gule punkter" : "Ret de røde punkter før løbet"}</div>
     <div class="s">Tryk på et punkt for at rette det. Tryk START, når du er klar.</div></div>`;
   $("startHint").textContent = o === "error" ? "Du kan godt starte, men der er fejl, der påvirker tidtagningen." : "";
   $("firstCode").hidden = !state.first_code;
@@ -123,7 +132,7 @@ async function refresh(force) {
   $("adminHint").textContent = h?.ip ? `Resten af opsætningen: åbn http://${h.ip}:8000/admin på en mobil eller computer.` : "";
   if (busy || (open && !force)) return;  // rør ikke et åbent panel, mens det bruges
   $("checks").innerHTML = state.checks.map(c => `
-    <div class="check ${c.state}" data-id="${c.id}">
+    <div class="check ${c.state}${c.id === "offline" && state.offline ? " offline" : ""}" data-id="${c.id}">
       <i class="dot"></i><div class="grow"><div class="tt">${esc(c.title)}</div><div class="tx">${esc(c.text)}</div></div>
       ${c.fix ? `<button data-fix="${c.fix}">${open === c.fix ? "Luk" : c.state === "ok" || c.state === "info" ? "Skift" : "Ret"}</button>` : ""}
     </div>${c.fix && open === c.fix ? `<div class="panel" id="panel"></div>` : ""}`).join("");
@@ -134,7 +143,7 @@ async function refresh(force) {
 async function fillPanel() {
   const p = $("panel");
   if (!p) return;
-  const fill = {wifi: wifiPanel, readers: readersPanel, modules: modulesPanel, race: racePanel, sync: syncPanel}[open];
+  const fill = {wifi: wifiPanel, readers: readersPanel, modules: modulesPanel, race: racePanel, sync: syncPanel, clock: clockPanel, offline: offlinePanel}[open];
   if (fill) await fill(p);
   // vis punktet og panellet over START-knappen
   p.previousElementSibling?.scrollIntoView({block: "start", behavior: "smooth"});
@@ -244,6 +253,77 @@ async function syncPanel(p) {
   });
 }
 
+// Uret stilles ud fra Pi'ens egen tid (denne skærm kører på Pi'en) plus de trin, man trykker
+let clockOffset = 0, clockTimer = null;
+function clockPanel(p) {
+  const ci = state.clock || {};
+  clockOffset = 0;
+  if (ci.synced) {
+    p.innerHTML = `<h3>Ur</h3><p>Uret er stillet via internettet og passer. Det skal ikke stilles manuelt.</p>`;
+    return;
+  }
+  // manuel tid kun i offline-tilstand – med net stilles uret automatisk
+  if (!state.offline || state.host?.ip) {
+    p.innerHTML = `<h3>Ur</h3><p>${state.host?.ip ? "Pi'en har netværk, så uret stilles automatisk om lidt." :
+      "Med netværk stilles uret automatisk. Køres løbet uden net, så slå offline-tilstand til – så kan uret stilles her."}</p>
+      ${state.host?.ip ? "" : `<div class="row"><button class="primary" id="ckOff">Slå offline-tilstand til</button></div>`}<div class="msgs"></div>`;
+    const b = $("ckOff");
+    if (b) b.onclick = async () => {
+      try { await api("/api/klar/offline", {body: {on: true}}); open = "clock"; await refresh(true); fillPanel(); }
+      catch (e) { say(p, false, e.message); }
+    };
+    return;
+  }
+  const running = state.race_running;
+  p.innerHTML = `<h3>Stil uret</h3>
+    <p class="muted small" style="margin:0">Uden net ved Pi'en ikke, hvad klokken er. Sæt den efter din mobil, og tryk <b>Gem</b>.
+      Det manuelle ur gælder, til Pi'en genstarter, får net, eller offline-tilstand slås fra.</p>
+    <div class="bigtime num" id="ckShow"></div>
+    <div class="clockset">
+      <span class="lbl">Dato</span><button data-d="-86400">−</button><button data-d="86400">+</button>
+      <span class="lbl">Time</span><button data-d="-3600">−</button><button data-d="3600">+</button>
+      <span class="lbl">Minut</span><button data-d="-60">−</button><button data-d="60">+</button>
+    </div>
+    <div class="row"><button class="primary" id="ckSave" ${running ? "disabled" : ""}>Gem</button><button id="ckReset">Nulstil</button>
+      <span class="muted small">Sekunderne sættes til 00, når du trykker Gem.</span></div>
+    ${running ? `<div class="msg err">Et løb kører – uret kan ikke stilles nu, for så ville tiderne springe.</div>` : ""}
+    <div class="msgs"></div>`;
+  const show = () => {
+    const el = $("ckShow"); if (!el) return clearInterval(clockTimer);
+    const t = new Date(Date.now() + clockOffset * 1000);
+    el.textContent = t.toLocaleDateString("da-DK", {weekday: "short", day: "numeric", month: "short", year: "numeric"}) + "  " +
+      t.toLocaleTimeString("da-DK", {hour: "2-digit", minute: "2-digit"});
+  };
+  clearInterval(clockTimer); clockTimer = setInterval(show, 500); show();
+  p.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { busy = true; clockOffset += +b.dataset.d; show(); });
+  $("ckReset").onclick = () => { clockOffset = 0; show(); };
+  $("ckSave").onclick = async () => {
+    const t = new Date(Date.now() + clockOffset * 1000); t.setSeconds(0, 0);
+    try {
+      await api("/api/klar/clock", {body: {epoch: t.getTime() / 1000}});
+      busy = false; open = null; clockOffset = 0; refresh(true);
+    } catch (e) { say(p, false, e.message); }
+  };
+}
+
+function offlinePanel(p) {
+  const on = state.offline, clockOk = state.clock?.synced || state.clock?.manual;
+  p.innerHTML = `<h3>Offline-tilstand</h3>
+    <p class="muted small" style="margin:0">Til løb uden WiFi. Læserne, tidtagningen og skærmen virker som normalt. Resultaterne sendes til hjemmesiden, når Pi'en får net igen.
+      Statuslampen lyser <b style="color:#ff7a1a">orange</b>, så man kan se, at alt virker uden net. Den blinker stadig rødt, hvis en læser mangler, og gult ×3, hvis uret ikke er stillet.</p>
+    ${!on && !clockOk ? `<p class="small">Uret er ikke stillet. Når offline-tilstand er slået til, kan du stille det under punktet <b>Ur</b>.</p>` : ""}
+    <div class="row"><button class="primary" id="offGo">${on ? "Slå offline-tilstand fra" : "Slå offline-tilstand til"}</button></div><div class="msgs"></div>`;
+  $("offGo").onclick = async () => {
+    try {
+      await api("/api/klar/offline", {body: {on: !on}});
+      await refresh(true);
+      // slået til uden stillet ur → åbn uret med det samme
+      open = !on && !(state.clock?.synced || state.clock?.manual) ? "clock" : null;
+      await refresh(true); if (open) fillPanel();
+    } catch (e) { say(p, false, e.message); }
+  };
+}
+
 async function racePanel(p) {
   let rs;
   try { rs = (await api("/api/races")).filter(r => !r.archived_at); } catch (e) { p.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
@@ -294,5 +374,6 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") oskClose(); 
 setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString("da-DK"); }, 500);
 refresh(); setInterval(refresh, 3000);
 </script>
+<script src="/static/screen-sleep.js"></script>
 </body>
 </html>

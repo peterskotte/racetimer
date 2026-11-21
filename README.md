@@ -6,13 +6,13 @@ Pi'en er både server, viser resultatskærmen og har en kodebeskyttet admin-side
 ![Resultatskærmen under et tidsløb](docs/img/resultatskaerm-nedtaeller.webp)
 
 - **Resultatskærm** (dark mode): `http://<pi>:8000/` – virker på Pi-skærmen, en TV-skærm og på mobilen.
-- **Klar-tjek** på Pi'ens egen skærm ved opstart (`/klar`): netværk, ur, læsere, moduler og løb med grøn/gul/rød – ret dem med touch eller tastatur (skærmtastatur til WiFi-koden), og tryk **START** for resultatskærmen. Kun fra Pi'en selv; ellers kræves login.
+- **Klar-tjek** på Pi'ens egen skærm ved opstart (`/klar`): netværk, ur, læsere, moduler og løb med grøn/gul/rød – ret dem med touch eller tastatur (skærmtastatur til WiFi-koden), og tryk **START** for resultatskærmen. Offline-tilstand og manuelt ur til løb uden WiFi, og et admin-armbånd skifter skærmen frem og tilbage. Kun fra Pi'en selv; ellers kræves login.
   `?kiosk=1` får lange lister til at rulle automatisk.
 - **Admin**: `http://<pi>:8000/admin`. Første login er `admin` og en tilfældig **førstegangskode**, der står på Pi'ens skærm (og i `racetimer-kode.txt` på SD-kortet).
 
 **Ingen Raspberry Pi?** Til små løb med op til 12 deltagere kan race director tage tid manuelt i browseren. Se [docs/browser.md](docs/browser.md).
 
-**Ny klub? Start med [Kom i gang-vejledningen](docs/vejledning.md)**: indkøb, SD-kort, opsætning, første løb og fejlfinding.
+**Ny klub? Start med [Kom i gang-vejledningen](docs/vejledning.md)**: indkøb, SD-kort, opsætning, første løb og fejlfinding. Den findes også som HTML og PDF til klubbens webhotel i `webhotel/racetimer/vejledning/` (byg den igen med `python3 tools/build-guide.py`).
 
 ## Løbstyper
 
@@ -157,7 +157,7 @@ Den slås til og fra under *⚙ Opsætning → Udseende*.
 | Modul | Hardware | Hvad det gør |
 |---|---|---|
 | **Højttaler** | En almindelig USB-højttaler (eller Pi'ens egen lydudgang) | Forskellige lyde for talt, afvist, ukendt armbånd, chip tildelt, nedtælling 3-2-1 og start. Lydstyrke og lyd pr. hændelse kan vælges, og den kan knyttes til læser 1, læser 2 eller begge. |
-| **Statuslampe** | Luxafor Flag (USB) | Viser Pi'ens tilstand fra den tændes, til den er klar: hvid = starter, blå = RaceTimer starter/søger net, grøn = klar, gule og røde blinkkoder ved problemer. Forsiden blinker også ved scanninger. Tilføjes af sig selv. Se [docs/statuslampe.md](docs/statuslampe.md). |
+| **Statuslampe** | Luxafor Flag (USB) | Viser Pi'ens tilstand fra den tændes, til den er klar: hvid = starter, blå = RaceTimer starter/søger net, grøn = klar, orange = klar uden netværk (offline-tilstand), gule og røde blinkkoder ved problemer. Forsiden blinker også ved scanninger. Tilføjes af sig selv. Se [docs/statuslampe.md](docs/statuslampe.md). |
 
 **Udstyrstest** (*⚙ Opsætning → Udstyrstest*) går alt tilsluttet udstyr igennem trin for trin, fx før et løb:
 1. *Hold et armbånd mod Læser 1*, derefter *Læser 2*. Bliver armbåndet læst af den forkerte læser, advarer testen om, at USB-stikkene måske er byttet om.

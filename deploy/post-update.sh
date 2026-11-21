@@ -37,6 +37,10 @@ rm -rf "$APP/signing" "$APP/dist" /var/lib/racetimer-update/backup/*/signing /va
 command -v aplay >/dev/null || apt-get install -y -qq alsa-utils >/dev/null 2>&1 \
   || echo "  (kunne ikke installere alsa-utils til højttaler-modulet – kræver internet)"
 
+# Pi'ens skærm slukker efter et stykke tid uden aktivitet (screen.py) – wlopm slukker skærmen på Wayland (labwc)
+command -v wlopm >/dev/null || apt-get install -y -qq wlopm >/dev/null 2>&1 \
+  || echo "  (kunne ikke installere wlopm – skærmen bliver kun sort, når den sover)"
+
 # Moduler: statuslampe (Luxafor) – adgang via udev, lys ved opstart/nedlukning og når RaceTimer ikke kan starte
 install -m 755 -o root -g root "$APP/deploy/racetimer-led" /usr/local/sbin/racetimer-led
 install -m 644 "$APP/deploy/60-racetimer-luxafor.rules" /etc/udev/rules.d/60-racetimer-luxafor.rules

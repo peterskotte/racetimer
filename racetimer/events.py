@@ -119,3 +119,26 @@ class Ticker(threading.Thread):
                 if self._readers.get(role) is not None and self._readers[role] != ok:
                     self.bus.publish({"type": "reader.connected" if ok else "reader.lost", "reader": role})
         self._readers = now
+
+
+class CalloutClock:
+    """Callout: når en løber har scannet, udgives "callout.tick" ved 10, 5, 3, 2 og 1 sek. før løberens start og ved 0.
+    Egne timere pr. løber, så nedtællingen er præcis på sekundet – også når flere løbere scanner lige efter hinanden."""
+    MARKS = (10, 5, 3, 2, 1, 0)
+
+    def __init__(self, bus):
+        self.bus = bus
+        bus.subscribe(self.on_event)
+
+    def on_event(self, ev):
+        if ev.get("type") != "read.callout" or not ev.get("start_at"):
+            return
+        who = {k: ev.get(k) for k in ("bib", "name", "reader")}
+        for sec in self.MARKS:
+            delay = ev["start_at"] - sec - time.time()
+            if delay < -0.5 or sec > (ev.get("sec") or 15):
+                continue
+            t = threading.Timer(max(0.0, delay), self.bus.publish, args=({"type": "callout.tick", "sec": sec, "start_at": ev["start_at"], **who},))
+            t.daemon = True
+            t.start()
+

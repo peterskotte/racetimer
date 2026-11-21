@@ -14,6 +14,7 @@ Lampen har 3 LED'er på **forsiden** og 3 på **bagsiden**:
 | 🔵 Blå, pulserende | RaceTimer starter |
 | 🔵 Blå, blinker roligt | Søger netværk (op til 2 minutter efter opstart) |
 | 🟢 Grøn | **Klar.** Læsere, netværk og ur er i orden |
+| 🟠 Orange (fast lys) | **Klar uden netværk.** Offline-tilstand er slået til i klar-tjekket, og læsere, database og ur er i orden |
 
 ## Blinkkoder
 
@@ -29,7 +30,9 @@ Lampen blinker et antal gange, holder en pause og gentager. Tæl blinkene.
 
 Ved gule koder er forsiden stadig grøn. Tidtagningen virker, kun bagsiden advarer. Ved røde koder blinker begge sider.
 
-Er der flere problemer på én gang, vises det vigtigste: rød ×1 → rød ×4 → gul ×2 → gul ×3. Uden net kan uret ikke stilles, så gul ×2 dækker også over gul ×3.
+Er der flere problemer på én gang, vises det vigtigste: rød ×1 → rød ×4 → gul ×2 → gul ×3. Uden net kan uret ikke stilles, så gul ×2 dækker også over gul ×3. I offline-tilstand vises gul ×3 dog, indtil uret er stillet manuelt i klar-tjekket, og røde koder vises som altid.
+
+Orange er altid fast lys, gul blinker altid. Det er sådan, man kender dem fra hinanden.
 
 ## Scanninger (forsiden)
 
@@ -39,6 +42,7 @@ Er der flere problemer på én gang, vises det vigtigste: rød ×1 → rød ×4 
 | 🟡 Gult blink | Læst, men tæller ikke (fx for tidligt eller allerede registreret) |
 | 🔴 Rødt blink | Ukendt armbånd, kontakt en official |
 | 🔵 Blåt blink | Chip tildelt under *Deltagere → Scan*, eller admin-armbånd scannet |
+| 🔵 Blåt blink, så hvide blink, så grønt | Callout: løberen har scannet. Hvide blink ved 10, 5, 3, 2 og 1 sekund og grønt, når løberens tid starter |
 | ⚪ Hvide blink ×3, ×2, ×1 | Nedtælling 3-2-1 minutter |
 | 🟢 Grønt lys i 3 sek. | Start |
 

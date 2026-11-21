@@ -350,6 +350,44 @@ def test_cutoff_p2p_and_distance_override():
     assert rows[0]["status"] == "dnf" and rows[0]["laps"] == 1  # 2. passage efter 70 min tæller ikke
 
 
+def test_callout_p2p_own_start_15_sec_after_scan():
+    race = {"type": "p2p", "config": {"callout": True, "min_time_min": 1, "checkin_min": 30}, "started_at": S}
+    reads = [{"participant_id": 1, "ts": S + 100}, {"participant_id": 1, "ts": S + 1300},
+             {"participant_id": 2, "ts": S + 200}]
+    rows, info = engine.compute(race, [P(1), P(2), P(3)], reads, S + 205)
+    b = by(rows)
+    assert info["callout_sec"] == 15 and "checkin" not in info  # ingen indtjekning ved callout
+    assert b["L1"]["status"] == "finished" and b["L1"]["start_ts"] == S + 115 and b["L1"]["total_time"] == 1185
+    assert b["L2"]["status"] == "waiting" and b["L2"]["start_ts"] == S + 215  # nedtælling i gang
+    assert b["L3"]["status_label"] == "Venter på callout" and b["L3"]["start_ts"] is None
+    assert info["callouts"] == [{"id": 2, "bib": 2, "name": "L2", "start_ts": S + 215}]
+    rows, info = engine.compute(race, [P(1), P(2), P(3)], reads, S + 216)
+    assert by(rows)["L2"]["status"] == "active" and info["callouts"] == []
+
+
+def test_callout_timed_each_runner_runs_the_duration_from_own_start():
+    race = {"type": "timed", "config": {"callout": True, "callout_sec": 10, "duration_h": 1, "min_lap_min": 1, "loop_km": 1}, "started_at": S}
+    reads = [{"participant_id": 1, "ts": S + 0}, {"participant_id": 1, "ts": S + 600}, {"participant_id": 1, "ts": S + 3615},
+             {"participant_id": 2, "ts": S + 1800}, {"participant_id": 2, "ts": S + 3000}, {"participant_id": 2, "ts": S + 5300}]
+    rows, info = engine.compute(race, [P(1), P(2)], reads[:-1], S + 4000)  # den sidste læsning er ikke sket endnu
+    b = by(rows)
+    assert b["L1"]["status"] == "finished" and b["L1"]["laps"] == 1  # 3615 er efter løberens time (10 + 3600)
+    assert b["L2"]["status"] == "active" and b["L2"]["laps"] == 1 and b["L2"]["start_ts"] == S + 1810
+    assert info["phase"] == "running" and info["end_at"] == S + 1810 + 3600
+    rows, info = engine.compute(race, [P(1), P(2)], reads, S + 5500)
+    assert by(rows)["L2"]["laps"] == 2 and info["phase"] == "ended"
+
+
+def test_callout_not_for_backyard_and_timetrial_overrides_start_mode():
+    rows, info = engine.compute({"type": "backyard_custom", "config": {"callout": True}, "started_at": S}, [P(1)], [], S + 10)
+    assert "callout_sec" not in info
+    race = {"type": "timetrial", "config": {"callout": True, "start_mode": "interval", "min_time_min": 0}, "started_at": S}
+    rows, info = engine.compute(race, [P(1), P(2, start_offset=60)], [{"participant_id": 1, "ts": S + 30},
+                                                                      {"participant_id": 1, "ts": S + 400}], S + 500)
+    b = by(rows)
+    assert info["start_mode"] == "callout" and b["L1"]["total_time"] == 355 and b["L2"]["start_ts"] == S + 60
+
+
 def test_example_templates_are_valid():
     for t in engine.EXAMPLE_TEMPLATES:
         cfg = engine.clean_distances(t["type"], engine.merged_config(t["type"], t["config"]))

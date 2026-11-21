@@ -11,8 +11,9 @@ import time
 
 from . import db, engine
 
-# Tilmelding pr. løb: "none" (ingen), "form" (formular på hjemmesiden) eller "link" (fx en Facebook-begivenhed)
-MODES = ("none", "form", "link")
+# Tilmelding pr. løb: "none" (ingen), "form" (formular på hjemmesiden), "link" (fx en Facebook-begivenhed)
+# eller "portal" (løbet er koblet til et løb på en løbsportal, fx rebildtrail.dk – se portal.py)
+MODES = ("none", "form", "link", "portal")
 # Felter i formularen ud over navnet: "required" (skal udfyldes), "optional" (valgfrit) eller "off" (ikke med)
 FIELDS = ("sex", "birth_year", "club", "email")
 FIELD_STATES = ("required", "optional", "off")
@@ -95,6 +96,8 @@ def purge_at(race, s):
 def is_open(race, s, now=None):
     """Kan man tilmelde sig nu? Formular: når den er åbnet. Link: så længe der er et link."""
     now = now or time.time()
+    if s["mode"] == "portal":  # portalen styrer selv, hvornår tilmeldingen er åben
+        return bool(s.get("portal")) and race["status"] != "finished"
     on = bool(s["open"]) if s["mode"] == "form" else bool(s.get("link_url")) if s["mode"] == "link" else False
     return on and race["status"] != "finished" and not (s.get("deadline") and now > s["deadline"])
 
@@ -113,6 +116,8 @@ def public_list(now=None):
     for r in _signup_races():
         s = settings(r)
         pa = purge_at(r, s)
+        if s["mode"] == "portal":  # tilmeldingen ligger på portalen, ikke på hjemmesiden
+            continue
         if s["mode"] == "link":  # tilmelding andetsteds: hjemmesiden viser bare linket, så længe det er relevant
             if is_open(r, s, now):
                 out.append({"id": r["id"], "name": r["name"], "date": race_date(r), "mode": "link", "open": True,
@@ -137,13 +142,19 @@ def public_list(now=None):
     return out
 
 
-def _wanted(now=None):
-    """Løb, hvor der kan ligge nye tilmeldinger på hjemmesiden → {race_id: sidste hentede id}."""
+def _wanted(now=None, dest=None):
+    """Løb, hvor der kan ligge nye tilmeldinger på hjemmesiden → {race_id: sidste hentede id}.
+    For en løbsportal: de løb, der er koblet til netop den portal."""
     now = now or time.time()
+    portal = bool(dest and dest.get("portal"))
     out = {}
     for r in _signup_races():
         s = settings(r)
-        if s["mode"] == "form" and (s["open"] or (s.get("deadline") and now < s["deadline"] + 86400)):
+        if portal:
+            if s["mode"] == "portal" and (s.get("portal") or {}).get("dest") == dest["id"] and \
+                    (r["status"] != "finished" or now < (r.get("finished_at") or now) + 86400):
+                out[str(r["id"])] = s.get("portal_fetched", 0)
+        elif s["mode"] == "form" and (s["open"] or (s.get("deadline") and now < s["deadline"] + 86400)):
             out[str(r["id"])] = s.get("fetched", 0)
     return out
 
@@ -151,7 +162,7 @@ def _wanted(now=None):
 def fetch(dest, post, now=None):
     """Hent nye tilmeldinger fra én hjemmeside og opret dem som deltagere. Returnerer antal nye."""
     now = now or time.time()
-    want = _wanted(now)
+    want = _wanted(now, dest)
     if not want:
         return 0
     resp = post(dest["url"], {"event": "hent_tilmeldinger", "loeb": want, "sent_at": now}, dest.get("key"), gz=False)
@@ -160,19 +171,21 @@ def fetch(dest, post, now=None):
         race = db.race(int(rid))
         if not race or not isinstance(entries, list):
             continue
-        added += import_entries(race, entries, now)
+        added += import_entries(race, entries, now, portal=bool(dest.get("portal")))
     return added
 
 
-def import_entries(race, entries, now=None):
-    """Tilmeldinger fra hjemmesiden → deltagere (dubletter springes over via tilmeldingens id)."""
+def import_entries(race, entries, now=None, portal=False):
+    """Tilmeldinger fra hjemmesiden → deltagere (dubletter springes over via tilmeldingens id).
+    Tilmeldinger fra en løbsportal gemmes med negativt id, så de aldrig blandes med hjemmesidens."""
     from .app import norm_sex
     s = settings(race)
     ds = {d["id"] for d in engine.distances(race["type"], engine.merged_config(race["type"], race["config"]))}
-    added, last = 0, s.get("fetched", 0)
+    key = "portal_fetched" if portal else "fetched"
+    added, last = 0, s.get(key, 0)
     for e in sorted(entries, key=lambda e: int(e.get("id") or 0)):
-        eid = int(e.get("id") or 0)
-        last = max(last, eid)
+        last = max(last, int(e.get("id") or 0))
+        eid = -int(e.get("id") or 0) if portal else int(e.get("id") or 0)
         name = str(e.get("name") or "").strip()[:100]
         if not name or db.q1("SELECT 1 FROM participants WHERE race_id=? AND signup_id=?", (race["id"], eid)):
             continue
@@ -193,7 +206,7 @@ def import_entries(race, entries, now=None):
                int(by) if str(by or "").isdigit() else None, str(e.get("email") or "").strip()[:200] or None,
                e.get("distance") if e.get("distance") in ds else None, eid))
         added += 1
-    s.update(fetched=last, fetched_at=now or time.time(), error=None)
+    s.update({key: last, "fetched_at": now or time.time(), "error": None})
     save(race["id"], s)
     return added
 

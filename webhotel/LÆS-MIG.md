@@ -10,6 +10,7 @@ Mappen `racetimer/` her lægges op på webhotellet. Den indeholder to filer:
 | `mailer.php` | Sender bekræftelsen på tilmelding – via klubbens mailkonto (SMTP), hvis den er sat op i RaceTimer |
 | `logo.png` *(valgfri)* | Reserve-logo. Normalt sender Pi'en selv logoet fra **Admin → ⚙ Opsætning → Udseende** |
 | `admin/index.php` | Gør, at `…/racetimer/admin` viderestiller til Pi'ens admin via fjernadgang (se nedenfor) |
+| `vejledning/` *(valgfri)* | Kom i gang-vejledningen med screenshots: `index.html` (læses i browseren, også på mobil), `vejledning.pdf` (til print) og det printbare farvekodeark til statuslampen. Upload hele mappen, så ligger den på `…/racetimer/vejledning/` |
 
 Det kræver kun et almindeligt webhotel med PHP 7.4 eller nyere. Der skal ikke bruges en database.
 
@@ -48,6 +49,16 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 > **Browser-udgaven** af RaceTimer (uden Pi) sender til den samme `modtag.php`. Det kræver den nyeste version, som tillader afsendelse fra en browser.
 
 > Har du en ældre version af `modtag.php` og `index.php` på webhotellet, så upload de nye. Ellers vises arkiverede løb stadig, og splash mangler. Husk at sætte din nøgle i den nye `modtag.php`.
+
+## Vejledningen på hjemmesiden
+
+Mappen `vejledning/` er en færdig udgave af [docs/vejledning.md](../docs/vejledning.md) med alle billeder lagt ind i filen, så den kan ligge på webhotellet uden noget andet. Upload mappen som den er. Den bruger ikke PHP og kan også åbnes direkte fra computeren.
+
+Er vejledningen ændret, så byg den igen på Mac'en (PDF'en laves med Google Chrome):
+
+```bash
+python3 tools/build-guide.py
+```
 
 ## Tilmelding på hjemmesiden
 

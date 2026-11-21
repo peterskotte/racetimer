@@ -30,9 +30,10 @@ Denne vejledning er til klubber og arrangører, der vil bruge RaceTimer til egne
 | **Skærm** *(valgfri)* | Alm. skærm eller TV med HDMI | **Ikke nødvendig for at tage tid.** Resultater og admin kan ses på mobil, tablet eller bærbar (se [Uden skærm](#uden-skærm)). Pi 4/5 har micro-HDMI, så I skal bruge et kabel eller en adapter. |
 | **RFID-læser** | 1 eller 2 USB-læsere, 13,56 MHz, "keyboard emulation" | Driverfri, billig og den mest udbredte type. Med 2 af samme model har I en backup. |
 | **Armbånd/chips** | MIFARE Classic 1K eller NTAG213 | Køb et par ekstra til glemte og defekte chips. |
-| **Ur (kun Pi 5)** | Officielt RTC-batteri | Holder uret, når Pi'en er slukket og uden internet. Pi 3/4 har ikke batteristik. De stiller selv uret, så snart de har internet, så giv dem net et par minutter, inden løbet startes (mobil-hotspot er nok). |
+| **Ur (kun Pi 5)** | Officielt RTC-batteri | Holder uret, når Pi'en er slukket og uden internet. Pi 3/4 har ikke batteristik. De stiller selv uret, så snart de har internet, så giv dem net et par minutter, inden løbet startes (mobil-hotspot er nok). Er der slet ikke net, stilles uret i klar-tjekket (se afsnit 7). |
 | Til ude i skoven | Powerbank med pass-through eller UPS | Uden skærm rækker en almindelig powerbank længe. Med skærm skal den også have strøm. |
 | *Valgfrit:* højttaler | En USB-højttaler ved læseren | Lyd, når der scannes, så løberen kan høre, om omgangen talte. Se afsnit 7. |
+| *Valgfrit:* statuslampe | Luxafor Flag (USB) – brug et micro-USB **datakabel**, ikke kun et ladekabel | Viser med farver, om Pi'en er klar, også uden skærm. Se [statuslampe.md](statuslampe.md) og det printbare [farvekodeark](statuslampe-farvekoder.pdf). |
 
 > **Tip:** Køb læseren før armbåndene, og test med de armbånd, der fulgte med. Læseren skal kunne læse jeres chip-type.
 
@@ -156,6 +157,10 @@ Reglerne for hver type og backyards tidsvinduer står i [README](../README.md#l�
 
 **Indtjekning:** Ved fælles start skal hver løber scanne sin chip inden for 30 minutter før start. Ellers tæller løberens læsninger ikke. Glemmer en løber det, kan en official trykke **✓ Tjek ind** i admin. Vinduet kan ændres pr. løb, og 0 slår det fra.
 
+**Sådan scannes chippen:** Øverst i indstillingerne for hvert løb står, hvornår løberne skal scanne, fx ingen scanning ved start, ved hver omgang eller kun i mål. Teksten følger løbstypen og indstillingerne og ændrer sig med det samme, når I fx slår indtjekning eller callout til.
+
+**📣 Callout** (A til B, intervalstart, tidsløb og rekordløb): hver løber starter for sig. Tryk **▶ Start nu**, når startområdet åbner. Derefter scanner løberen sin chip ved start, og løbslederen tæller ned fra 15 sekunder (kan ændres under *Callout: nedtælling*). Ved 0 starter løberens tid. Nedtællingen vises stort under **Aktivt løb**, højttaleren bipper ved 10, 5, 3, 2 og 1 sekund og giver en lang tone ved start, og statuslampen blinker hvidt og lyser grønt ved start. Startscanningen er hverken en omgang eller et mål, og der er ingen særskilt indtjekning. Ved tidsløb løber hver løber varigheden fra sin egen start. Løbere, der ikke har scannet endnu, står som *Venter på callout*. Callout kan ikke bruges i backyard, fordi alle starter samtidig.
+
 ## 6. Deltagere og chips
 
 **Excel-import (hurtigst ved mange deltagere)**
@@ -183,16 +188,33 @@ Tryk **📡 Scan** ud for en deltager, og hold armbåndet mod en læser. Så er 
 ## 7. På løbsdagen
 
 **Klar-tjek på Pi'ens skærm:** Har Pi'en en skærm, starter den på et **klar-tjek** i stedet for resultatskærmen. Her står netværk, ur, RFID-læsere, moduler (højttaler, statuslampe), hjemmeside og løbet på skærmen med grøn, gul eller rød. Tryk på et punkt for at rette det direkte på touchskærmen eller med et tastatur:
+
+<img src="img/klar-tjek.webp" alt="Klar-tjek på Pi'ens skærm" width="520">
+
 - **Netværk:** vælg et WiFi og skriv koden på skærmtastaturet.
+- **Offline-tilstand:** slå den til, når løbet køres uden WiFi. Så er "intet netværk" ikke en advarsel, og statuslampen lyser **orange**, når læsere, database og ur er i orden. Resultaterne sendes til hjemmesiden, når Pi'en får net igen. Slå den fra igen efter løbet.
+- **Ur:** med net stilles uret automatisk. Uden net ved Pi'en ikke, hvad klokken er, så i **offline-tilstand** kan du stille den efter din mobil med − og + og trykke *Gem*. Det kan ikke gøres, mens et løb kører, og det manuelle ur gælder, til Pi'en genstarter, får net, eller offline-tilstand slås fra.
 - **RFID-læsere:** vælg læser 1 og 2, og hold et armbånd mod læseren for at se, at den læser (det tæller ikke i noget løb).
 - **Moduler:** tilføj en fundet højttaler eller statuslampe, og tryk *Test*.
 - **Hjemmeside:** se hvornår der sidst blev sendt, eller hvilken fejl der kom, og tryk *Send nu*.
 - **Løb på skærmen:** vælg løbet, eller *Intet løb* for splash.
 
-Tryk **START**, når alt er klar. Så skifter skærmen til splash eller det aktive løb. Det lille ⚙ nederst i hjørnet af resultatskærmen fører tilbage til klar-tjekket. Med et **admin-armbånd** behøver I ikke røre skærmen: scan det ved læseren, så skifter skærmen til klar-tjekket, og scan det igen for at komme tilbage. Armbåndet sættes op i admin under *Opsætning → Brugere → Admin-armbånd* (tryk *Scan armbånd* og hold det mod læseren). Det tæller aldrig i et løb, kan ikke tildeles en løber og giver ikke adgang til admin-siden. På en ny Pi står førstegangskoden øverst i klar-tjekket. Klar-tjekket kan kun bruges på Pi'ens egen skærm – fra andre enheder kræver det login i admin.
+**Løb uden WiFi:** slå *Offline-tilstand* til, og stil uret under *Ur*. Så står der *Klar til løb – uden netværk*, og statuslampen lyser fast orange.
+
+<p><img src="img/klar-ur.webp" alt="Stil uret i offline-tilstand" width="400"> <img src="img/klar-offline.webp" alt="Klar til løb uden netværk" width="400"></p>
+
+Tryk **START**, når alt er klar. Så skifter skærmen til splash eller det aktive løb. Det lille ⚙ nederst i hjørnet af resultatskærmen fører tilbage til klar-tjekket.
+
+**Admin-armbånd:** så behøver I ikke røre skærmen. Scan armbåndet ved læseren, så skifter skærmen til klar-tjekket, og scan det igen for at komme tilbage. Armbåndet sættes op i admin under *Opsætning → Brugere → Admin-armbånd* (tryk *Scan armbånd* og hold det mod læseren). Statuslampen blinker blåt, når det læses. Det tæller aldrig i et løb, kan ikke tildeles en løber og giver ikke adgang til admin-siden.
+
+<img src="img/admin-armbaand.webp" alt="Admin-armbånd i admin" width="320">
+
+**Skærmen slukker af sig selv** efter 5 minutter uden aktivitet, men aldrig mens et løb kører. Tryk på skærmen, scan et armbånd eller scan admin-armbåndet, så tænder den igen. Det første tryk vækker kun skærmen og trykker ikke på noget, og admin-armbåndet skifter først side, når skærmen er vågen. Tiden ændres eller slås fra under *Opsætning → Udseende → Pi'ens skærm*. Brug *Sluk nu (test)* for at prøve det. Har I slået *Screen Blanking* til i Raspberry Pi'ens egne indstillinger, så slå det fra, så det ikke blander sig.
+
+På en ny Pi står førstegangskoden øverst i klar-tjekket. Klar-tjekket kan kun bruges på Pi'ens egen skærm – fra andre enheder kræver det login i admin.
 
 **Før start**
-- [ ] Tænd Pi'en i god tid. Under **Aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes.
+- [ ] Tænd Pi'en i god tid. Under **Aktivt løb** står det, om uret er i orden (🕐 ✓). Står der en advarsel, så giv Pi'en internet et par minutter, inden løbet startes – eller slå offline-tilstand til og stil uret i klar-tjekket.
 - [ ] Kør **⚙ Opsætning → Udstyrstest**. Den beder dig holde et armbånd mod læser 1 og læser 2, og den tester højttalere og resultatskærm. Scanninger under testen tæller ikke. Læserne vælges under **⚙ Opsætning → RFID-læsere**.
 - [ ] Placér læserne ved målet, ca. 30 cm fra hinanden, og mærk dem "1" og "2". Har I to ens læsere, kendes de på USB-porten. Sættes de i andre porte (fx en USB-hub), finder RaceTimer dem selv og skriver det i klar-tjekket – men mærk gerne portene, så I ved, hvilken der er læser 1.
 - [ ] Bed løberne scanne for at tjekke ind. Skærmen viser, hvor mange der er tjekket ind, fx 18/20.
@@ -204,7 +226,7 @@ Tryk **START**, når alt er klar. Så skifter skærmen til splash eller det akti
 - Udgår en løber, trykker I **RTC** (udgået) ud for løberen. **DNS** er for en løber, der ikke startede, og **DSQ** for diskvalifikation.
 - En forkert læsning kan ignoreres og gendannes igen i loggen. Intet slettes.
 - I backyard viser **⚑ Til vurdering** læsninger i flagzonen, som en official skal godkende eller afvise.
-- **Løberen kan se, om scanningen talte.** En stor bjælke på skærmen er grøn, når den talte, gul, når den ikke talte (med årsagen), og rød ved et ukendt armbånd. Med en **USB-højttaler** ved læseren kan det også høres: sæt den i, og tilføj den under **⚙ Opsætning → Moduler**. Tryk **▶ Test** for at høre den.
+- **Løberen kan se, om scanningen talte.** En stor bjælke på skærmen er grøn, når den talte, gul, når den ikke talte (med årsagen), og rød ved et ukendt armbånd. Med en **USB-højttaler** ved læseren kan det også høres: sæt den i, og tilføj den under **⚙ Opsætning → Moduler**. Tryk **▶ Test** for at høre den. En **statuslampe** (Luxafor Flag) blinker grønt, gult eller rødt ved hver scanning på forsiden. Bagsiden viser altid Pi'ens tilstand: grøn = klar, orange = klar uden netværk, gule og røde blinkkoder ved problemer. Hæng [farvekodearket](statuslampe-farvekoder.pdf) op ved målet.
 
 ![Stilling i admin](img/admin-stilling.webp)
 *Stillingen i admin, delt op pr. distance. Knapperne ud for løberen: passage nu, indtast tid, RTC/DNS/DSQ og fortryd.*

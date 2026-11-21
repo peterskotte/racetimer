@@ -103,6 +103,61 @@ def test_system_helper():
         f.write("ikke en kode; rm -rf /\n")  # kun koder i det rigtige format skrives
     assert not _helper(["bootcode"], **env)["written"]
     assert not _helper(["noget-andet"], **env)["ok"]
+    # manuelt ur: kun et rimeligt tidspunkt, og kun som tal (ingen tekst til date-kommandoen)
+    fake_date = os.path.join(d, "date")
+    with open(fake_date, "w") as f:
+        f.write(f"#!/bin/sh\necho \"$@\" > {d}/date.in\n")
+    os.chmod(fake_date, 0o755)
+    env["RACETIMER_SYS_DATE"] = fake_date
+    assert _helper(["settime"], json.dumps({"epoch": 1793800000.7}), **env) == {"ok": True, "epoch": 1793800000}
+    assert open(f"{d}/date.in").read().strip() == "-s @1793800000"
+    for bad in (0, 4102444800, "1793800000; rm -rf /", True, None):
+        assert not _helper(["settime"], json.dumps({"epoch": bad}), **env)["ok"]
+
+
+def test_manual_clock_and_offline_mode():
+    def req(body):
+        async def j():
+            return body
+        return N(client=N(host="127.0.0.1"), headers={"host": "localhost:8000"}, cookies={}, json=j)
+    calls = []
+    real_sys, real_clock, real_host = app._system, app.clock_info, app.host_info
+    app._system = lambda *a, stdin=None: calls.append((a, stdin)) or {"ok": True}
+    net = {"ip": "192.168.1.5"}
+    app.host_info = lambda: dict(net)
+    app._clock_cache["t"] = 0
+    os.environ["RACETIMER_CLOCK_SYNCED"] = "0"
+
+    def refused(word):
+        try:
+            asyncio.run(app.ready_set_clock(req({"epoch": 1793800000}), u={}))
+            raise AssertionError("skulle afvises")
+        except HTTPException as e:
+            assert word in e.detail, e.detail
+    try:
+        refused("offline-tilstand")  # kun i offline-tilstand
+        asyncio.run(app.ready_offline(req({"on": True}), u={}))
+        refused("netværk")  # med net stilles uret automatisk
+        net["ip"] = None
+        assert asyncio.run(app.ready_set_clock(req({"epoch": 1793800000}), u={}))["manual"]
+        assert calls == [(("settime",), json.dumps({"epoch": 1793800000}))]
+        r = app.ready_status(req({}), u={})
+        clock = next(c for c in r["checks"] if c["id"] == "clock")
+        assert clock["state"] == "ok" and "manuelt" in clock["text"]
+        # ikke mens et løb kører – så ville tiderne springe
+        db.ex("UPDATE races SET is_active=0")
+        rid = db.ex("INSERT INTO races(name, type, config, status, is_active, created_at) VALUES ('Kører', 'timed', '{}', 'running', 1, 0)")
+        refused("kører")
+        db.ex("UPDATE races SET status='finished', is_active=0 WHERE id=?", (rid,))
+        r = app.ready_status(req({}), u={})
+        assert r["offline"] and next(c for c in r["checks"] if c["id"] == "offline")["state"] == "ok"
+        # offline-tilstand fra → det manuelle ur gælder ikke længere
+        assert asyncio.run(app.ready_offline(req({"on": False}), u={})) == {"offline": False}
+        assert not app.clock_info()["manual"]
+    finally:
+        app._system, app.clock_info, app.host_info = real_sys, real_clock, real_host
+        os.environ.pop("RACETIMER_CLOCK_SYNCED")
+        app._clock_cache["t"] = 0
 
 
 

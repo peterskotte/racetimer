@@ -4,6 +4,7 @@
   racetimer-system status     → JSON: Pi-brugerens navn, og om den stadig har standardkoden
   racetimer-system passwd     → skift Pi-brugerens kode (JSON {"password": ...} på stdin)
   racetimer-system bootcode   → læg RaceTimers førstegangskode på SD-kortet – eller fjern den igen
+  racetimer-system settime    → stil uret manuelt, når Pi'en er uden net (JSON {"epoch": sekunder} på stdin)
 
 Sikkerhed:
 * passwd virker KUN, mens Pi'en stadig har standardkoden fra imaget (markøren DEFAULT_MARK).
@@ -110,6 +111,20 @@ def bootcode():
         out(boot=boot, written=False)
 
 
+def settime():
+    """Stil systemuret. Kun et rimeligt tidspunkt (2024–2099) – ellers kan løbstider og certifikater gå i stykker."""
+    b = json.loads(sys.stdin.read() or "{}")
+    epoch = b.get("epoch")
+    if not isinstance(epoch, (int, float)) or isinstance(epoch, bool) or not (1704067200 <= epoch < 4102444800):
+        raise RuntimeError("Ugyldigt tidspunkt")
+    r = subprocess.run([os.environ.get("RACETIMER_SYS_DATE", "date"), "-s", f"@{int(epoch)}"], capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError("Kunne ikke stille uret: " + (r.stderr or r.stdout).strip()[:200])
+    if not os.environ.get("RACETIMER_SYS_DATE") and shutil.which("hwclock"):  # Pi 5: også det indbyggede RTC-ur
+        subprocess.run(["hwclock", "-w"], capture_output=True)
+    out(epoch=int(epoch))
+
+
 def main():
     a = sys.argv[1:]
     try:
@@ -119,8 +134,10 @@ def main():
             passwd()
         elif a == ["bootcode"]:
             bootcode()
+        elif a == ["settime"]:
+            settime()
         else:
-            raise RuntimeError("Brug: racetimer-system status | passwd | bootcode")
+            raise RuntimeError("Brug: racetimer-system status | passwd | bootcode | settime")
     except Exception as e:  # noqa: BLE001
         print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
         sys.exit(1)

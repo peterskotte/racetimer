@@ -6,7 +6,7 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)"
 USER_NAME="$(id -un)"
 
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-evdev python3-serial chromium-browser curl alsa-utils
+sudo apt-get install -y python3-venv python3-evdev python3-serial chromium-browser curl alsa-utils wlopm
 
 # venv med adgang til apt-pakkerne (evdev/pyserial)
 python3 -m venv --system-site-packages "$DIR/.venv"

@@ -298,14 +298,14 @@ function renderRace() {
   $("tiles").innerHTML = parts.length ? parts.map(p => {
     const r = byId.get(p.id) || {status: "waiting", status_label: "Venter", laps: 0};
     const lr = lastRead(p.id), flash = lastTap && lastTap.pid === p.id && Date.now() - lastTap.at < 2500 ? lastTap.ev : null;
-    const flashCls = flash ? (["read.counted", "read.checkin", "read.started", "read.departure"].includes(flash.type) ? "ok" : "warn") : "";
+    const flashCls = flash ? (["read.counted", "read.checkin", "read.started", "read.departure", "read.callout"].includes(flash.type) ? "ok" : "warn") : "";
     const main = tt ? (r.total_time != null ? hms(r.total_time) : r.elapsed != null ? hms(r.elapsed) : "–") : `${r.laps} <small>omg.</small>`;
     return `<div class="tile st-${r.status} ${OUT.includes(r.status) ? "out" : ""} ${flashCls}" data-pid="${p.id}">
       <button class="tap" data-pid="${p.id}" aria-label="Registrér passage for ${esc(p.name)}">
         <span class="tbib">${p.bib ?? ""}</span><span class="tname">${esc(p.name)}</span>
         <span class="tmain num">${main}</span>
         <span class="tsub"><i class="dot"></i>${esc(r.status_label)}${r.place ? ` · nr. ${r.place}` : ""}${lr ? ` · sidst ${hms(t - lr)} siden` : ""}</span>
-        ${flash ? `<span class="tflash">${esc(flash.type === "read.counted" ? (flash.finish ? "✓ I mål" : `✓ Omgang ${flash.lap}`) : flash.type === "read.checkin" ? "✓ Tjekket ind" : flash.type === "read.departure" ? "✓ Afgang" : flash.type === "read.started" ? "✓ Startet" : flash.reason_label || "")}</span>` : ""}
+        ${flash ? `<span class="tflash">${esc(flash.type === "read.counted" ? (flash.finish ? "✓ I mål" : `✓ Omgang ${flash.lap}`) : flash.type === "read.checkin" ? "✓ Tjekket ind" : flash.type === "read.departure" ? "✓ Afgang" : flash.type === "read.started" ? "✓ Startet" : flash.type === "read.callout" ? "📣 Callout" : flash.reason_label || "")}</span>` : ""}
       </button>
       <button class="tmenu" data-menu="${p.id}" aria-label="Flere valg for ${esc(p.name)}">⋯</button>
     </div>`;

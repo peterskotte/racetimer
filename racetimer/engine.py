@@ -21,20 +21,23 @@ RACE_TYPES = {
     },
     "p2p": {
         "label": "Alm. tidtagning (A til B)",
-        "config": {"checkin_min": 30, "distance_km": 10.0, "min_time_min": 5, "cutoff_min": 0, "canicross": False},
+        "config": {"checkin_min": 30, "distance_km": 10.0, "min_time_min": 5, "cutoff_min": 0, "canicross": False,
+                   "callout": False, "callout_sec": 15},
     },
     "record": {
         "label": "Rekordløb (Årets rekord)",
-        "config": {"checkin_min": 30, "loop_km": 1.0, "min_lap_min": 2, "record_km": 0, "record_label": "Årets rekord", "canicross": False},
+        "config": {"checkin_min": 30, "loop_km": 1.0, "min_lap_min": 2, "record_km": 0, "record_label": "Årets rekord", "canicross": False,
+                   "callout": False, "callout_sec": 15},
     },
     "timed": {
         "label": "Tidsbaseret (6/12/24/48 t)",
-        "config": {"checkin_min": 30, "duration_h": 24, "loop_km": 1.0, "min_lap_min": 2, "canicross": False},
+        "config": {"checkin_min": 30, "duration_h": 24, "loop_km": 1.0, "min_lap_min": 2, "canicross": False,
+                   "callout": False, "callout_sec": 15},
     },
     "timetrial": {
         "label": "Intervalstart / enkeltstart",
         "config": {"checkin_min": 30, "distance_km": 10.0, "start_mode": "interval", "interval_sec": 30, "min_time_min": 5,
-                   "cutoff_min": 0, "canicross": False,
+                   "cutoff_min": 0, "canicross": False, "callout": False, "callout_sec": 15,
                    "waves": [{"name": "Bølge 1", "from_bib": 1, "to_bib": 20, "offset_sec": 0},
                              {"name": "Bølge 2", "from_bib": 21, "to_bib": 40, "offset_sec": 120}]},
     },
@@ -413,28 +416,49 @@ def _count_laps(tss, start, end, minlap, approved=()):
     return laps
 
 
-def _lap_rows(parts, reads, start, end, minlap, loop, done):
+def _lap_rows(parts, reads, start, end, minlap, loop, done, starts=None, dur=None, now=None):
+    """Omgange fra fælles start – eller fra hver løbers egen start (callout: starts = {pid: start}, dur = egen varighed)."""
     by, ok = _reads_by_pid(reads), _approved_by_pid(reads)
     rows = []
     for p in parts:
-        laps = _count_laps(by.get(p["id"], []), start, end, minlap, ok.get(p["id"], ()))
-        splits = [b - a for a, b in zip([start] + laps, laps)]
         m = _manual(p)
-        st = m if m else ("finished" if done else "active")
+        ps, pend, pdone = start, end, done
+        if starts is not None:
+            ps = starts.get(p["id"])
+            if ps is None:  # har ikke scannet til callout endnu
+                rows.append(_row(p, status=m or "waiting", start_ts=None, last_ts=None))
+                continue
+            pend = min(x for x in (ps + dur if dur else None, end) if x) if (dur or end) else None
+            pdone = done or bool(dur and now >= ps + dur)
+        laps = _count_laps(by.get(p["id"], []), ps, pend, minlap, ok.get(p["id"], ()))
+        splits = [b - a for a, b in zip([ps] + laps, laps)]
+        st = m if m else ("finished" if pdone else "waiting" if starts is not None and now < ps else "active")
+        extra = {"start_ts": ps} if starts is not None else {}
         rows.append(_row(p, status=st, laps=len(laps), distance_km=round(len(laps) * loop, 3),
-                         total_time=(laps[-1] - start) if laps else None, last_lap=splits[-1] if splits else None,
-                         best_lap=min(splits) if splits else None, last_ts=laps[-1] if laps else None))
+                         total_time=(laps[-1] - ps) if laps else None, last_lap=splits[-1] if splits else None,
+                         best_lap=min(splits) if splits else None, last_ts=laps[-1] if laps else None, **extra))
     bad = ("dsq", "dns")
     return _place(rows, lambda r: (r["status"] in bad, -r["laps"], r["last_ts"] or 9e18))
 
 
-def compute_timed(race, cfg, parts, reads, now):
+def compute_timed(race, cfg, parts, reads, now, starts=None):
     start = race.get("started_at")
     dur = cfg["duration_h"] * 3600
     info = {"duration_sec": dur, "loop_km": cfg["loop_km"]}
     if not start:
         info.update(phase="before", next_start=race.get("scheduled_start"))
         return [_row(p) for p in parts], info
+    if starts is not None:  # callout: hver løber har sin egen start og løber varigheden fra den
+        stop = race.get("finished_at")
+        rows = _lap_rows(parts, reads, start, stop, cfg.get("min_lap_min", 0) * 60, cfg["loop_km"], bool(stop), starts, dur, now)
+        racing = [p for p in parts if _manual(p) not in ("dns", "dsq", "rtc")]
+        end = max((starts[p["id"]] + dur for p in racing if p["id"] in starts), default=None)
+        all_out = bool(racing) and all(p["id"] in starts for p in racing)
+        done = bool(stop) or bool(all_out and end and now >= end)
+        info.update(phase="ended" if done else "running", end_at=end if all_out else None,
+                    remaining=max(0, end - now) if all_out and end else None,
+                    total_km=round(fsum(r["distance_km"] for r in rows), 2))
+        return rows, info
     end = start + dur
     done = now >= end or bool(race.get("finished_at"))
     rows = _lap_rows(parts, reads, start, end, cfg.get("min_lap_min", 0) * 60, cfg["loop_km"], done)
@@ -443,7 +467,7 @@ def compute_timed(race, cfg, parts, reads, now):
     return rows, info
 
 
-def compute_record(race, cfg, parts, reads, now):
+def compute_record(race, cfg, parts, reads, now, starts=None):
     start = race.get("started_at")
     info = {"loop_km": cfg["loop_km"], "record_km": cfg.get("record_km") or 0,
             "record_label": cfg.get("record_label") or "Årets rekord"}
@@ -451,7 +475,8 @@ def compute_record(race, cfg, parts, reads, now):
         info.update(phase="before", next_start=race.get("scheduled_start"), total_km=0)
         return [_row(p) for p in parts], info
     done = bool(race.get("finished_at"))
-    rows = _lap_rows(parts, reads, start, race.get("finished_at"), cfg.get("min_lap_min", 0) * 60, cfg["loop_km"], done)
+    rows = _lap_rows(parts, reads, start, race.get("finished_at"), cfg.get("min_lap_min", 0) * 60, cfg["loop_km"], done,
+                     starts, None, now)
     total = round(fsum(r["distance_km"] for r in rows), 2)
     info.update(phase="ended" if done else "running", total_km=total,
                 total_laps=sum(r["laps"] for r in rows), new_record=bool(info["record_km"]) and total > info["record_km"])
@@ -522,13 +547,15 @@ def _finish_rows(parts, reads, starts, minimum, now, legs=None, cutoff=0):
                                    r["start_ts"] or 9e18, r["bib"] or 0))
 
 
-def compute_p2p(race, cfg, parts, reads, now):
+def compute_p2p(race, cfg, parts, reads, now, starts=None):
     start = race.get("started_at")
     info = {"distance_km": cfg["distance_km"]}
     if not start:
         info.update(phase="before", next_start=race.get("scheduled_start"))
         return [_row(p) for p in parts], info
-    rows = _finish_rows(parts, reads, {p["id"]: start for p in parts}, cfg.get("min_time_min", 0) * 60, now, cfg.get("legs"),
+    if starts is None:
+        starts = {p["id"]: start for p in parts}
+    rows = _finish_rows(parts, reads, starts, cfg.get("min_time_min", 0) * 60, now, cfg.get("legs"),
                         (cfg.get("cutoff_min") or 0) * 60)
     info.update(phase="ended" if race.get("finished_at") else "running", elapsed=now - start,
                 finished=sum(1 for r in rows if r["status"] == "finished"))
@@ -564,14 +591,18 @@ def timetrial_starts(race, cfg, parts, reads):
     return starts
 
 
-def compute_timetrial(race, cfg, parts, reads, now):
+def compute_timetrial(race, cfg, parts, reads, now, starts=None):
     start = race.get("started_at")
     info = {"distance_km": cfg["distance_km"], "start_mode": cfg.get("start_mode", "interval")}
     if not start:
         info.update(phase="before", next_start=race.get("scheduled_start"))
         return [_row(p) for p in parts], info
-    starts = timetrial_starts(race, cfg, parts, reads)
     minimum = cfg.get("min_time_min", 0) * 60
+    if starts is not None:  # callout: hver løber starter efter sin scanning (manuel starttid vinder stadig)
+        info["start_mode"] = "callout"
+        starts = {**starts, **{p["id"]: start + p["start_offset"] for p in parts if p.get("start_offset") is not None}}
+    else:
+        starts = timetrial_starts(race, cfg, parts, reads)
     if info["start_mode"] == "chip":
         # første læsning er start – mållæsning skal derfor ligge efter minimumstiden
         reads = [r for r in reads if r["ts"] != starts.get(r.get("participant_id"))]
@@ -589,10 +620,38 @@ COMPUTE = {
 }
 
 
+# Callout: løberen scanner sin chip, løbslederen tæller ned (fx 15 sek.), og løberens tid starter ved 0.
+# Virker i løbstyper, hvor hver løber kan have sin egen start. I backyard starter alle samtidig.
+CALLOUT_TYPES = ("p2p", "timetrial", "timed", "record")
+
+
+def callout_sec(race_type, cfg):
+    """Sekunder fra callout-scanningen til løberens start. 0 = callout er slået fra."""
+    if race_type not in CALLOUT_TYPES or not cfg.get("callout"):
+        return 0
+    return max(1.0, float(cfg.get("callout_sec") or 15))
+
+
+def callout_starts(race, parts, reads, sec):
+    """Hver løbers start = første scanning efter løbets start + sec. Scanningen er ikke en omgang eller et mål,
+    så den fjernes fra læsningerne. Løbere uden scanning er ikke med i starts."""
+    start = race["started_at"]
+    by = _reads_by_pid(reads)
+    starts, used = {}, set()
+    for p in parts:
+        first = next((ts for ts in by.get(p["id"], []) if ts >= start), None)
+        if first is not None:
+            starts[p["id"]] = first + sec
+            used.add((p["id"], first))
+    return starts, [r for r in reads if (r.get("participant_id"), r["ts"]) not in used]
+
+
 def checkin_window(race, cfg):
     """Indtjekning: sek. før start, hvor løberen skal scanne chippen (0 = slået fra).
-    Ved chipstart er startscanningen selve starten, så der er ingen særskilt indtjekning."""
+    Ved chipstart og callout er startscanningen selve starten, så der er ingen særskilt indtjekning."""
     if race["type"] == "timetrial" and cfg.get("start_mode") == "chip":
+        return 0
+    if callout_sec(race["type"], cfg):
         return 0
     return float(cfg.get("checkin_min") or 0) * 60
 
@@ -663,6 +722,9 @@ def compute(race, parts, reads, now):
     if ci:
         info["checkin"] = {"min": ci[0]["min"], "count": sum(c["count"] for c in ci), "total": sum(c["total"] for c in ci)}
     info["finished"] = sum(1 for r in all_rows if r["status"] == "finished")
+    if any("callout_sec" in i for i in dinfo):
+        info["callout_sec"] = next(i["callout_sec"] for i in dinfo if "callout_sec" in i)
+        info["callouts"] = sorted((c for i in dinfo for c in i.get("callouts", [])), key=lambda c: c["start_ts"])
     if race.get("test"):
         info["test"] = race["test"]
     return all_rows, info
@@ -679,7 +741,19 @@ def _compute_one(race, cfg, parts, reads, now):
         reads = [r for r in reads if r.get("participant_id") not in hold]
     keep_all = race["type"] == "timetrial"  # intervalstart: startrækkefølgen må ikke rykke sig
     cparts = parts if keep_all else [p for p in parts if p["id"] not in hold]
-    rows, info = COMPUTE[race["type"]](race, cfg, cparts, reads, now)
+    co = callout_sec(race["type"], cfg)
+    if co and started:
+        starts, reads = callout_starts(race, cparts, reads, co)
+        rows, info = COMPUTE[race["type"]](race, cfg, cparts, reads, now, starts=starts)
+        for r in rows:
+            if r["status"] == "waiting" and r.get("start_ts") is None:
+                r["status_label"] = "Venter på callout"
+        info.update(callout_sec=co, callouts=sorted(
+            ({"id": r["id"], "bib": r["bib"], "name": r["name"], "start_ts": r["start_ts"]}
+             for r in rows if r.get("start_ts") and r["start_ts"] > now and r["status"] == "waiting"),
+            key=lambda c: c["start_ts"]))
+    else:
+        rows, info = COMPUTE[race["type"]](race, cfg, cparts, reads, now)
     if hold:
         held = [r for r in rows if r["id"] in hold] + [_row(p) for p in parts if p["id"] in hold and not keep_all]
         for r in held:

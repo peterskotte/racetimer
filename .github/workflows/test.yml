@@ -21,6 +21,10 @@ jobs:
         run: python tests/test_readers.py
       - name: Sikkerhed (førstegangskode, koder, system-hjælper)
         run: python tests/test_security.py
+      - name: Løbsportal (parring, kobling, tilmeldinger)
+        run: python tests/test_portal.py
+      - name: Pi'ens skærm slukker og vækkes
+        run: python tests/test_screen.py
       - name: Løbsmotoren regner ens i Python og JavaScript (browser-udgaven)
         run: python tests/engine_parity.py
       - name: Appen kan starte

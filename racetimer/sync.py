@@ -71,6 +71,15 @@ def public_race():
     return None if race and race.get("test") else race
 
 
+
+def _public_info(info):
+    """Løbsinfo til hjemmesider og portaler: uden callout-listen (navne på løbere, der er ved at starte).
+    Den bruges kun i admin, og en portal kunne ellers vise navnet på en løber, der vil være anonym."""
+    out = {k: v for k, v in info.items() if k != "callouts"}
+    if isinstance(out.get("distances"), list):
+        out["distances"] = [{k: v for k, v in d.items() if k != "callouts"} for d in out["distances"]]
+    return out
+
 class SyncManager(threading.Thread):
     def __init__(self, standings):
         super().__init__(daemon=True, name="sync")
@@ -185,7 +194,9 @@ class SyncManager(threading.Thread):
             brand_ok = True
             try:
                 if d["type"] == "webhook":
-                    resp = _post(d["url"], self._results_payload(race, final, images=new_brand), d.get("key"), gz=False)
+                    # en løbsportal bruger ikke klubbens logo og splash – spar billederne
+                    resp = _post(d["url"], self._results_payload(race, final, images=new_brand and not d.get("portal")),
+                                 d.get("key"), gz=False)
                     if isinstance(resp, dict) and "brand_v" in resp and resp["brand_v"] != brand_v:
                         brand_ok = False  # hjemmesiden mangler billederne – send dem igen
                         if not new_brand:
@@ -222,13 +233,17 @@ class SyncManager(threading.Thread):
                    "archived": [r["id"] for r in db.q("SELECT id FROM races WHERE archived_at IS NOT NULL")]}
         if race:
             rows, info = self.standings(race)
+            # tilmeldinger fra en løbsportal: portalen skal kunne genkende sine løbere (fx dem, der vil være anonyme)
+            portal_ids = {p["id"]: -p["signup_id"] for p in db.q(
+                "SELECT id, signup_id FROM participants WHERE race_id=? AND signup_id < 0", (race["id"],))}
             payload.update(
                 race={k: race[k] for k in ("id", "name", "type", "status", "scheduled_start", "started_at",
                                            "finished_at")},
-                info=info,
+                info=_public_info(info),
                 results=[{k: r.get(k) for k in ("place", "bib", "name", "sex", "club", "status", "status_label",
                                                  "laps", "distance_km", "total_time", "last_lap", "best_lap", "dogs",
                                                  "distance", "distance_name", "class")}
+                         | ({"portal_signup": portal_ids[r["id"]]} if r.get("id") in portal_ids else {})
                          for r in rows if not info.get("teaser")])  # teaser: ingen deltagerliste endnu
         return payload
 

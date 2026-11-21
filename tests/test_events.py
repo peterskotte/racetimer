@@ -82,6 +82,29 @@ def test_p2p_finish():
     assert kind(scan("CHIP1", 1300)) == "ignored:already_finished"
 
 
+def test_callout_event_and_countdown():
+    from racetimer import events
+    rid = race("p2p", {"callout": True, "callout_sec": 15, "min_time_min": 1})
+    db.ex("UPDATE races SET status='running', started_at=? WHERE id=?", (S, rid))
+    ev = scan("CHIP1", 30)
+    assert kind(ev) == "read.callout" and ev["start_at"] == S + 45 and ev["sec"] == 15 and ev["bib"] == 1
+    assert kind(scan("CHIP1", 32)) == "ignored:duplicate"  # armbåndet holdes stadig mod læseren
+    assert kind(scan("CHIP1", 600)) == "read.counted"
+    # nedtællingen: lyd/lys ved 10, 5, 3, 2, 1 og 0 sek. før løberens start
+    got = []
+    bus = events.EventBus()
+    bus.subscribe(lambda e: got.append(e) if e["type"] == "callout.tick" else None)
+    events.CalloutClock(bus)
+    import time as _t
+    bus.publish({"type": "read.callout", "start_at": _t.time() + 1.2, "sec": 15, "bib": 2, "name": "Løber 2"})
+    _t.sleep(1.6)
+    assert [e["sec"] for e in got] == [1, 0] and got[0]["name"] == "Løber 2"
+    spk = speaker.Speaker({"id": "s", "device": "default", "enabled": True})
+    assert spk.slot_for({"type": "callout.tick", "sec": 3}) == "callout_tick" and spk.slot_for({"type": "callout.tick", "sec": 0}) == "callout_go"
+    assert spk.slot_for({"type": "read.callout"}) == "callout"
+    spk.stop()
+
+
 def test_speaker_module():
     found = speaker.Speaker.detect()
     assert found[0]["device"] == "Speak410" and found[0]["usb"] and found[-1]["device"] == "default"
@@ -451,6 +474,18 @@ def test_status_lamp_patterns_and_health():
         assert health.current()["state"] == "error" and health.current()["code"] == 1
         state["readers"] = [{"path": None, "connected": False}]  # ingen læser valgt = manuel tidtagning, ingen fejl
         assert health.current()["code"] == 2
+        # offline-tilstand: intet net er i orden (orange), men uret skal være stillet – via net eller manuelt
+        state["offline"] = True
+        health.configure(lambda: state["readers"], lambda: {"ip": state["ip"]},
+                         lambda: {"synced": state["synced"], "manual": state.get("manual")}, lambda: state["offline"])
+        assert health.current()["code"] == 3
+        state["manual"] = True
+        assert health.current()["state"] == "offline"
+        assert lx.STATUS_LOOK["offline"][1] == ("solid", lx.ORANGE, 0) and lx.describe(lx.STATUS_LOOK["offline"][1]) == "orange"
+        state["readers"] = [{"path": "/dev/x", "connected": False}]
+        assert health.current()["code"] == 1  # en manglende læser er stadig rød
+        state["readers"], state["offline"] = [{"path": None, "connected": False}], False
+        assert health.current()["code"] == 2  # manuelt ur, men offline-tilstand fra: intet net er en advarsel
     finally:
         health.STARTED = real
         health._uptime = up

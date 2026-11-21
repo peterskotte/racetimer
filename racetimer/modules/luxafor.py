@@ -21,17 +21,19 @@ FRONT, BACK, ALL = 0x41, 0x42, 0xFF
 
 GREEN, YELLOW, RED = (0, 255, 0), (255, 150, 0), (255, 0, 0)
 BLUE, WHITE, OFF = (0, 70, 255), (255, 255, 255), (0, 0, 0)
+ORANGE = (255, 45, 0)  # offline-tilstand: fast lys (gul bruges kun som blinkkode)
 
 # Pi'ens tilstand → (forside, bagside). Et mønster er (art, farve, parameter).
 STATUS_LOOK = {
     "starting": (("pulse", BLUE, 2.5), ("pulse", BLUE, 2.5)),
     "searching": (("blink", BLUE, 1), ("blink", BLUE, 1)),
     "ready": (("solid", GREEN, 0), ("solid", GREEN, 0)),
+    "offline": (("solid", ORANGE, 0), ("solid", ORANGE, 0)),  # bevidst uden net – alt andet virker
     "warn": (("solid", GREEN, 0), ("code", YELLOW, None)),   # tidtagningen virker – kun bagsiden advarer
     "error": (("code", RED, None), ("code", RED, None)),
 }
 LOOK_TEXT = {"solid": "", "pulse": " pulserende", "blink": " blink", "code": " ×{n}"}
-COLOR_NAME = {GREEN: "grøn", YELLOW: "gul", RED: "rød", BLUE: "blå", WHITE: "hvid", OFF: "slukket"}
+COLOR_NAME = {GREEN: "grøn", YELLOW: "gul", RED: "rød", BLUE: "blå", WHITE: "hvid", ORANGE: "orange", OFF: "slukket"}
 
 # hændelse → (mønster, sekunder, tekst)
 FLASH = {
@@ -43,6 +45,7 @@ FLASH = {
     "read.unknown": (("blink", RED, 5), 2.0, "Rødt blink (ukendt armbånd)"),
     "chip.registered": (("blink", BLUE, 5), 1.2, "Blåt blink (chip tildelt)"),
     "admin.chip": (("blink", BLUE, 5), 1.2, "Blåt blink (admin-armbånd)"),
+    "read.callout": (("blink", BLUE, 5), 1.2, "Blåt blink (callout)"),
     "race.started": (("solid", GREEN, 0), 3.0, "Grønt lys (start)"),
 }
 SCAN_SIDES = [("front", "Forsiden"), ("both", "Begge sider"), ("off", "Ingen (kun status)")]
@@ -126,6 +129,10 @@ class Luxafor(Module):
             n = ev.get("min") or 0
             look, secs, text = (("solid", GREEN, 0), 3.0, "Grønt lys (start)") if n == 0 else \
                 (("code", WHITE, n), n * 0.6, f"Hvide blink ×{n} (nedtælling)")
+        elif ev["type"] == "callout.tick":  # callout: hvidt blink pr. sekund-mærke, grønt ved løberens start
+            n = ev.get("sec") or 0
+            look, secs, text = (("solid", GREEN, 0), 2.0, "Grønt lys (callout-start)") if n == 0 else \
+                (("solid", WHITE, 0), 0.25, f"Hvidt blink (callout {n} sek.)")
         elif ev["type"] in FLASH:
             look, secs, text = FLASH[ev["type"]]
         if not look or self.cfg.get("scans") == "off":
