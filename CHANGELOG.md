@@ -9,6 +9,10 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 - Hver læser stod to gange i listen over læsere på Pi 5 (samme port har to navne).
 
 **Nyt**
+- **Chipstart i A til B:** hver løbers tid starter ved første scanning efter start og stopper ved næste scanning efter minimumstiden. Virker også med flere distancer og ruter i træk (fx Nytårsløbet), og i browser-udgaven (første tryk).
+- **Browser-udgaven og løbsportalen:** RaceTimer i browseren (iPad, iPhone, Android) kan forbindes til en løbsportal med en kode, koble et løb, hente de tilmeldte og sende live-resultater og endelige resultater. Anonyme løbere forbliver anonyme på portalen.
+- **Omgangstider sendes med:** hjemmesider og løbsportalen får hver løbers omgangstider (og tiden for hver rute ved flere ruter i træk). På løbsportalen kan man folde dem ud ved hver løber, og Excel-filen har en kolonne pr. omgang.
+- **Lampe ved læseren (blink(1) mk3):** en lille USB-lampe ved hver RFID-læser blinker grønt, gult eller rødt, så løberen kan se, om scanningen talte. Med to læsere vælges, hvilken læser hver lampe sidder ved. Lamperne tilføjes af sig selv under Moduler.
 - **📣 Callout:** kan slås til i A til B, intervalstart, tidsløb og rekordløb. Løberen scanner sin chip ved start, løbslederen tæller ned fra 15 sekunder, og løberens tid starter ved 0. Nedtællingen vises stort i admin, højttaleren bipper de sidste sekunder, og statuslampen lyser grønt ved start.
 - **Sådan scannes chippen:** indstillingerne for hvert løb viser, hvornår løberne skal scanne (ved start, ved hver omgang, i mål osv.), ud fra løbstype og indstillinger.
 - **Pi'ens skærm slukker af sig selv:** efter 5 minutter uden aktivitet slukker en tilsluttet skærm helt (også baggrundslyset). Et tryk på skærmen, et armbånd ved læseren eller admin-armbåndet tænder den igen. Det første tryk vækker kun skærmen og trykker ikke på noget. Mens et løb kører, slukker skærmen ikke. Tiden kan ændres eller slås fra under Opsætning → Udseende → Pi'ens skærm.

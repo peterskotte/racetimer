@@ -35,6 +35,8 @@ def scenario(rnd):
         cfg.update(start_mode=rnd.choice(["interval", "waves", "chip"]), interval_sec=rnd.choice([15, 30, 60]),
                    waves=[{"name": "A", "from_bib": 1, "to_bib": 3, "offset_sec": 0},
                           {"name": "B", "from_bib": 4, "to_bib": 9, "offset_sec": rnd.choice([60, 300])}])
+    if typ == "p2p" and rnd.random() < 0.3:  # chipstart: tiden starter ved første scanning efter start
+        cfg.update(chip_start=True)
     if typ in engine.CALLOUT_TYPES and rnd.random() < 0.4:  # callout: egen start 15/30 sek. efter første scanning
         cfg.update(callout=True, callout_sec=rnd.choice([15, 30]))
     race = {"id": 1, "type": typ, "config": cfg, "scheduled_start": S + rnd.choice([-60, 600, 90000]),

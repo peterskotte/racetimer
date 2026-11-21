@@ -22,7 +22,7 @@ RACE_TYPES = {
     "p2p": {
         "label": "Alm. tidtagning (A til B)",
         "config": {"checkin_min": 30, "distance_km": 10.0, "min_time_min": 5, "cutoff_min": 0, "canicross": False,
-                   "callout": False, "callout_sec": 15},
+                   "chip_start": False, "callout": False, "callout_sec": 15},
     },
     "record": {
         "label": "Rekordløb (Årets rekord)",
@@ -256,7 +256,7 @@ def compute_backyard_open(race, cfg, parts, reads, now):
             st = "active"
         rows.append(_row(p, status=st, laps=len(laps), distance_km=round(len(laps) * loop, 3),
                          total_time=(laps[-1] - start) if laps else None, last_lap=splits[-1] if splits else None,
-                         best_lap=min(splits) if splits else None, last_ts=laps[-1] if laps else None))
+                         best_lap=min(splits) if splits else None, last_ts=laps[-1] if laps else None, splits=splits))
     _place(rows, lambda r: (r["status"] in ("dsq", "dns"), -r["laps"], r["last_ts"] or 9e18))
 
     still_running = any(r["status"] == "active" for r in rows)
@@ -369,7 +369,7 @@ def compute_backyard(race, cfg, parts, reads, now):
         times = [pl[b] - (start + b * I) for b in range(n) if b in pl]
         rows.append(_row(p, status=st, laps=n, distance_km=round(n * loop, 3),
                          total_time=fsum(times) if times else None,
-                         last_lap=times[-1] if times else None, best_lap=min(times) if times else None,
+                         last_lap=times[-1] if times else None, best_lap=min(times) if times else None, splits=times,
                          current_lap_done=current.get(pid), started_current=cur in started.get(pid, ()),
                          flags=sum(1 for f in flags if f["participant_id"] == pid)))
 
@@ -436,7 +436,7 @@ def _lap_rows(parts, reads, start, end, minlap, loop, done, starts=None, dur=Non
         extra = {"start_ts": ps} if starts is not None else {}
         rows.append(_row(p, status=st, laps=len(laps), distance_km=round(len(laps) * loop, 3),
                          total_time=(laps[-1] - ps) if laps else None, last_lap=splits[-1] if splits else None,
-                         best_lap=min(splits) if splits else None, last_ts=laps[-1] if laps else None, **extra))
+                         best_lap=min(splits) if splits else None, last_ts=laps[-1] if laps else None, splits=splits, **extra))
     bad = ("dsq", "dns")
     return _place(rows, lambda r: (r["status"] in bad, -r["laps"], r["last_ts"] or 9e18))
 
@@ -538,7 +538,7 @@ def _finish_rows(parts, reads, starts, minimum, now, legs=None, cutoff=0):
         if multi:
             splits = [b - a for a, b in zip([ps] + passed, passed)]
             row.update(laps=len(passed), legs=len(legs), distance_km=round(fsum(lg["km"] for lg in legs[:len(passed)]), 3),
-                       last_lap=splits[-1] if splits else None, best_lap=min(splits) if splits else None)
+                       last_lap=splits[-1] if splits else None, best_lap=min(splits) if splits else None, splits=splits)
             if st == "active" and passed:
                 row["status_label"] = f"{STATUS_LABELS['active']} · {len(passed)}/{len(legs)}"
         rows.append(row)
@@ -632,6 +632,12 @@ def callout_sec(race_type, cfg):
     return max(1.0, float(cfg.get("callout_sec") or 15))
 
 
+def chip_start(race_type, cfg):
+    """A til B med chipstart: løberens tid starter ved første scanning efter løbets (distancens) start, og næste
+    scanning efter minimumstiden er mål. Ingen nedtælling – callout er chipstart med nedtælling og går forud."""
+    return race_type == "p2p" and bool(cfg.get("chip_start")) and not callout_sec(race_type, cfg)
+
+
 def callout_starts(race, parts, reads, sec):
     """Hver løbers start = første scanning efter løbets start + sec. Scanningen er ikke en omgang eller et mål,
     så den fjernes fra læsningerne. Løbere uden scanning er ikke med i starts."""
@@ -651,7 +657,7 @@ def checkin_window(race, cfg):
     Ved chipstart og callout er startscanningen selve starten, så der er ingen særskilt indtjekning."""
     if race["type"] == "timetrial" and cfg.get("start_mode") == "chip":
         return 0
-    if callout_sec(race["type"], cfg):
+    if callout_sec(race["type"], cfg) or chip_start(race["type"], cfg):
         return 0
     return float(cfg.get("checkin_min") or 0) * 60
 
@@ -722,6 +728,8 @@ def compute(race, parts, reads, now):
     if ci:
         info["checkin"] = {"min": ci[0]["min"], "count": sum(c["count"] for c in ci), "total": sum(c["total"] for c in ci)}
     info["finished"] = sum(1 for r in all_rows if r["status"] == "finished")
+    if any(i.get("chip_start") for i in dinfo):
+        info["chip_start"] = True
     if any("callout_sec" in i for i in dinfo):
         info["callout_sec"] = next(i["callout_sec"] for i in dinfo if "callout_sec" in i)
         info["callouts"] = sorted((c for i in dinfo for c in i.get("callouts", [])), key=lambda c: c["start_ts"])
@@ -742,17 +750,21 @@ def _compute_one(race, cfg, parts, reads, now):
     keep_all = race["type"] == "timetrial"  # intervalstart: startrækkefølgen må ikke rykke sig
     cparts = parts if keep_all else [p for p in parts if p["id"] not in hold]
     co = callout_sec(race["type"], cfg)
-    if co and started:
-        starts, reads = callout_starts(race, cparts, reads, co)
+    cs = chip_start(race["type"], cfg)
+    if (co or cs) and started:
+        starts, reads = callout_starts(race, cparts, reads, co)  # chipstart: tiden starter ved scanningen (0 sek.)
         rows, info = COMPUTE[race["type"]](race, cfg, cparts, reads, now, starts=starts)
         for r in rows:
             if r["status"] == "waiting" and r.get("start_ts") is None:
-                r["status_label"] = "Venter på callout"
+                r["status_label"] = "Venter på callout" if co else "Venter på start-scanning"
+        if cs:
+            info["chip_start"] = True
+    if co and started:
         info.update(callout_sec=co, callouts=sorted(
             ({"id": r["id"], "bib": r["bib"], "name": r["name"], "start_ts": r["start_ts"]}
              for r in rows if r.get("start_ts") and r["start_ts"] > now and r["status"] == "waiting"),
             key=lambda c: c["start_ts"]))
-    else:
+    if not ((co or cs) and started):
         rows, info = COMPUTE[race["type"]](race, cfg, cparts, reads, now)
     if hold:
         held = [r for r in rows if r["id"] in hold] + [_row(p) for p in parts if p["id"] in hold and not keep_all]

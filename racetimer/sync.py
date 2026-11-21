@@ -243,6 +243,7 @@ class SyncManager(threading.Thread):
                 results=[{k: r.get(k) for k in ("place", "bib", "name", "sex", "club", "status", "status_label",
                                                  "laps", "distance_km", "total_time", "last_lap", "best_lap", "dogs",
                                                  "distance", "distance_name", "class")}
+                         | ({"splits": [round(x, 1) for x in r["splits"]]} if r.get("splits") else {})  # omgangstider
                          | ({"portal_signup": portal_ids[r["id"]]} if r.get("id") in portal_ids else {})
                          for r in rows if not info.get("teaser")])  # teaser: ingen deltagerliste endnu
         return payload

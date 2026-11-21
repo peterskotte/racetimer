@@ -388,6 +388,25 @@ def test_callout_not_for_backyard_and_timetrial_overrides_start_mode():
     assert info["start_mode"] == "callout" and b["L1"]["total_time"] == 355 and b["L2"]["start_ts"] == S + 60
 
 
+def test_chip_start_p2p_with_distances():
+    """Nytårsløbet med chipstart: hver løbers tid starter ved første scanning efter distancens start."""
+    cfg = {"chip_start": True, "checkin_min": 30, "routes": [{"id": "r1", "name": "Kort", "km": 5, "min_min": 10},
+                                                              {"id": "r2", "name": "Lang", "km": 10, "min_min": 20}],
+           "distances": [{"id": "d1", "name": "15 km", "start_min": 0, "routes": ["r1", "r2"]},
+                         {"id": "d2", "name": "5 km", "start_min": 30, "routes": ["r1"]}]}
+    race = {"type": "p2p", "config": cfg, "started_at": S}
+    parts = [P(1, distance="d1"), P(2, distance="d2"), P(3, distance="d2")]
+    reads = [{"participant_id": 1, "ts": S + 40}, {"participant_id": 1, "ts": S + 40 + 1500}, {"participant_id": 1, "ts": S + 40 + 3700},
+             {"participant_id": 2, "ts": S + 1700}, {"participant_id": 2, "ts": S + 1900},  # før 5 km starter (kl. +30) og for tidligt
+             {"participant_id": 2, "ts": S + 1810 + 1300}]
+    rows, info = engine.compute(race, parts, reads, S + 5000)
+    b = by(rows)
+    assert info["chip_start"] and "checkin" not in info
+    assert b["L1"]["start_ts"] == S + 40 and b["L1"]["status"] == "finished" and b["L1"]["total_time"] == 3700 and b["L1"]["laps"] == 2
+    assert b["L2"]["start_ts"] == S + 1900 and b["L2"]["status"] == "finished" and b["L2"]["total_time"] == 1810 + 1300 - 1900
+    assert b["L3"]["status_label"] == "Venter på start-scanning"
+
+
 def test_example_templates_are_valid():
     for t in engine.EXAMPLE_TEMPLATES:
         cfg = engine.clean_distances(t["type"], engine.merged_config(t["type"], t["config"]))

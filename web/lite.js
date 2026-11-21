@@ -16,13 +16,16 @@ const day = ts => ts ? new Date(ts * 1000).toLocaleDateString("da-DK", {day: "nu
 
 const EMPTY = {v: 1, nextId: 1, races: [], parts: [], reads: [],
   branding: {name: "RaceTimer", logo: null, splash: "builtin:racetiming", splash_upload: null, splash_text: "", scan_banner: true, v: 1},
-  sync: {url: "", key: "", interval_sec: 60, on_finish: true, final_sent: [], brand_v: null, last_ok: null, last_error: null}};
+  sync: {url: "", key: "", interval_sec: 60, on_finish: true, final_sent: [], brand_v: null, last_ok: null, last_error: null},
+  // løbsportal (fx rebildtrail.dk): forbundet med en kode, ét portal-løb pr. løb her (links), tilmeldte hentes herfra
+  portal: {base: "", token: "", sync_url: "", organizer: "", name: "", links: {}, fetched: {}, final_sent: [], last_ok: null, last_error: null}};
 let db = load();
 
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
-    if (d && d.v === 1) return {...structuredClone(EMPTY), ...d, branding: {...EMPTY.branding, ...d.branding}, sync: {...EMPTY.sync, ...d.sync}};
+    if (d && d.v === 1) return {...structuredClone(EMPTY), ...d, branding: {...EMPTY.branding, ...d.branding}, sync: {...EMPTY.sync, ...d.sync},
+                                portal: {...EMPTY.portal, ...d.portal}};
   } catch (_) { /* tom eller ødelagt – start forfra */ }
   return structuredClone(EMPTY);
 }
@@ -224,8 +227,119 @@ async function sendToWebsite(final = false, manual = false) {
   }
 }
 
+// ------------------------------------------------------------------ løbsportal (RaceTimer Portal på WordPress)
+
+const PORTAL_DEFAULT = "https://rebildtrail.dk";
+async function postJSON(url, body, key) {
+  const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", ...(key ? {"X-RaceTimer-Key": key} : {})},
+                                body: JSON.stringify(body)});
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(out.besked || out.message || `HTTP ${res.status}`); e.status = res.status; throw e; }
+  return out;
+}
+const portalCall = payload => postJSON(db.portal.sync_url, payload, db.portal.token);
+const portalLink = race => race && !race.test ? db.portal.links[race.id] || null : null;
+
+async function portalPair(url, code) {
+  let base = (url || "").trim().replace(/\/+$/, "");
+  if (!base) throw new Error("Skriv portalens adresse, fx rebildtrail.dk");
+  if (!/^https?:\/\//.test(base)) base = "https://" + base;
+  code = (code || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (code.length !== 8) throw new Error("Koden har 8 tegn, fx K7QM-4TXD. Du får den på portalen under Mine RaceTimere.");
+  let last = null;
+  // pæne adresser (/wp-json/) virker ikke på alle WordPress-sider – ?rest_route= gør altid
+  for (const u of [`${base}/wp-json/racetimer/v1/pair`, `${base}/?rest_route=/racetimer/v1/pair`]) {
+    try {
+      const r = await postJSON(u, {code, name: "RaceTimer i browseren", version: "browser"});
+      Object.assign(db.portal, {base, token: r.token, sync_url: r.sync_url, organizer: r.organizer || "", name: r.portal || base,
+                                links: {}, fetched: {}, final_sent: [], last_ok: null, last_error: null});
+      save();
+      return r;
+    } catch (e) {
+      last = e;
+      if (e.status === 403 || e.status === 429) throw e;  // portalen svarede – koden er forkert eller brugt
+    }
+  }
+  throw new Error(`Fandt ingen løbsportal på ${base} (${last?.message || "ingen forbindelse"}). Er pluginet RaceTimer Portal aktivt?`);
+}
+
+async function portalUnpair() {
+  try { await portalCall({event: "portal_unpair"}); } catch (_) { /* uden net: fjern den her alligevel */ }
+  db.portal = structuredClone(EMPTY.portal);
+  save();
+}
+
+/** Hent tilmeldte fra portalen. Felter med "Løber N" uden tider udfyldes først; højst 12 deltagere i alt. */
+async function portalFetchSignups(race, manual = false) {
+  const link = portalLink(race);
+  if (!link) return;
+  const since = db.portal.fetched[race.id] || 0;
+  const r = await portalCall({event: "hent_tilmeldinger", loeb: {[race.id]: since}});
+  const entries = (r.tilmeldinger || {})[race.id] || [];
+  let added = 0, full = 0;
+  for (const e of entries) {
+    db.portal.fetched[race.id] = Math.max(db.portal.fetched[race.id] || 0, e.id);
+    if (partsOf(race.id).some(p => p.portal_signup === e.id)) continue;
+    const blank = partsOf(race.id).find(p => /^Løber \d+$/.test(p.name) && !p.portal_signup && !readsOf(race.id).some(x => x.participant_id === p.id));
+    const fields = {name: e.name, sex: e.sex || "", club: e.club || "", portal_signup: e.id};
+    if (blank) { Object.assign(blank, fields); added++; continue; }
+    if (partsOf(race.id).length >= MAX_RUNNERS) { full++; continue; }
+    const bib = Math.max(0, ...partsOf(race.id).map(p => p.bib || 0)) + 1;
+    db.parts.push({id: newId(), race_id: race.id, bib, status: null, status_at: null, dogs: null, dog1: null, dog2: null, start_offset: null, ...fields});
+    added++;
+  }
+  save(); render();
+  if (manual || added || full) toast(`${added} tilmeldte hentet fra portalen` + (full ? ` · ${full} er ikke med – browser-udgaven har plads til ${MAX_RUNNERS}` : ""), Boolean(full));
+}
+
+/** Send stillingen til portalen (samme form som RaceTimer på Pi'en). */
+async function portalSend(race, final = false, manual = false) {
+  if (!portalLink(race)) return false;
+  const [rows, info] = standings(race);
+  const bySignup = new Map(partsOf(race.id).filter(p => p.portal_signup).map(p => [p.id, p.portal_signup]));
+  const payload = {event: final ? "final" : "update", sent_at: nowS(),
+    race: {id: race.id, name: race.name, type: race.type, status: race.status, scheduled_start: race.scheduled_start,
+           started_at: race.started_at, finished_at: race.finished_at},
+    info, results: rows.map(r => ({place: r.place, bib: r.bib, name: r.name, sex: r.sex, club: r.club, status: r.status,
+      status_label: r.status_label, laps: r.laps, distance_km: r.distance_km, total_time: r.total_time, last_lap: r.last_lap,
+      best_lap: r.best_lap, dogs: r.dogs, ...(r.splits?.length ? {splits: r.splits.map(x => Math.round(x * 10) / 10)} : {}),
+      ...(bySignup.has(r.id) ? {portal_signup: bySignup.get(r.id)} : {})}))};
+  try {
+    await portalCall(payload);
+    Object.assign(db.portal, {last_ok: nowS(), last_error: null});
+    save();
+    if (manual) toast(final ? "Endelige resultater sendt til portalen" : "Sendt til portalen");
+    return true;
+  } catch (e) {
+    db.portal.last_error = e.message.includes("Failed to fetch") ? "Ingen forbindelse til portalen" : e.message;
+    save();
+    if (manual) toast(db.portal.last_error, true);
+    return false;
+  }
+}
+
+let nextPortal = 0, nextSignups = 0;
+async function portalTick() {
+  const race = activeRace(), link = portalLink(race);
+  if (!link || !navigator.onLine) return;
+  const fk = race.status === "finished" && race.finished_at ? `${race.id}:${Math.round(race.finished_at)}` : null;
+  if (fk && !db.portal.final_sent.includes(fk)) {
+    if (await portalSend(race, true)) { db.portal.final_sent.push(fk); save(); }
+    return;
+  }
+  if (race.status === "running" && nowS() >= nextPortal) {  // live: hvert 15. sekund
+    nextPortal = nowS() + 15;
+    await portalSend(race);
+  }
+  if (race.status === "planned" && nowS() >= nextSignups) {  // før start: nye tilmeldte hvert minut
+    nextSignups = nowS() + 60;
+    await portalFetchSignups(race).catch(e => { db.portal.last_error = e.message; save(); });
+  }
+}
+
 let nextSync = 0;
 async function syncTick() {
+  await portalTick().catch(() => {});
   const s = db.sync, race = activeRace();
   if (!s.url) return;
   const fk = race?.status === "finished" && race.finished_at ? `${race.id}:${Math.round(race.finished_at)}` : null;
@@ -355,7 +469,8 @@ const FIELD_LABELS = {checkin_min: "Indtjekning: min. før start (0 = fra)", loo
   min_lap_min: "Min. omgangstid (min)", end_mode: "Slutter når", max_yards: "Antal omgange (cutoff)", total_h: "Samlet tid (timer)",
   distance_km: "Distance (km)", min_time_min: "Min. tid (min)", canicross: "Canicross (1–2 hunde)", record_km: "Rekord at slå (km)",
   record_label: "Rekordens navn", duration_h: "Varighed (timer)", start_mode: "Start", interval_sec: "Startinterval (sek)",
-  cutoff_min: "Cutoff: maks. tid (min, 0 = ingen)"};
+  cutoff_min: "Cutoff: maks. tid (min, 0 = ingen)", chip_start: "Chipstart: løberens tid starter ved første tryk efter start",
+  callout: "Callout: første tryk starter en nedtælling til løberens start", callout_sec: "Callout: nedtælling (sek)"};
 const SELECTS = {end_mode: [["last_man", "Sidste mand tilbage"], ["duration", "Samlet tid"], ["yards", "Fast antal omgange"]],
                  start_mode: [["interval", "Enkeltstart med interval"], ["waves", "Bølgestart"], ["chip", "Start ved første tryk"]]};
 
@@ -530,7 +645,77 @@ function renderSettings() {
   f.url.value = s.url; f.key.value = s.key; f.interval.value = String(s.interval_sec); f.on_finish.checked = s.on_finish;
   $("logoPrev").innerHTML = b.logo ? `<img src="${b.logo}" style="height:40px">` : `<span class="muted small">Intet logo – navnet vises som tekst</span>`;
   $("syncStatus").innerHTML = s.last_error ? `<span class="err-text">✗ ${esc(s.last_error)}</span>` : s.last_ok ? `✓ Sendt ${clock(s.last_ok)}` : `<span class="muted">Ikke sendt endnu</span>`;
+  renderPortal();
   $("storageInfo").textContent = `${db.races.length} løb · ${db.parts.length} deltagere · ${db.reads.length} registreringer gemt i denne browser`;
+}
+
+let portalEvents = {at: 0, list: null, error: null};
+function renderPortal() {
+  const P = db.portal, box = $("portalBox"), race = activeRace();
+  if (!box) return;
+  if (!P.token) {
+    box.innerHTML = `<p class="muted small" style="margin-top:0">Hent tilmeldte fra en løbsportal, fx rebildtrail.dk, og vis resultaterne live dér. Lav en forbindelseskode på portalen under <b>For arrangører → Mine RaceTimere</b>.</p>
+      <div class="grid" id="portalPair"><label>Portalens adresse<input name="url" value="${esc(P.base || PORTAL_DEFAULT)}" autocomplete="off"></label>
+        <label>Forbindelseskode<input name="code" maxlength="9" placeholder="K7QM-4TXD" autocomplete="off" style="text-transform:uppercase;letter-spacing:.08em"></label></div>
+      <div class="btns" style="margin-top:10px;align-items:center"><button type="button" class="primary" id="portalPairBtn">Forbind</button><span class="muted small">Koden virker én gang og i 15 minutter.</span></div>`;
+    $("portalPairBtn").onclick = async () => {
+      const f = $("portalPair"), b = $("portalPairBtn");
+      b.disabled = true; b.textContent = "Forbinder …";
+      try { await portalPair(f.querySelector("[name=url]").value, f.querySelector("[name=code]").value); toast(`Forbundet til ${db.portal.name} som ${db.portal.organizer}`); }
+      catch (e) { toast(e.message, true); }
+      portalEvents = {at: 0, list: null, error: null}; render();
+    };
+    return;
+  }
+  const link = portalLink(race);
+  let h = `<div class="btns" style="justify-content:space-between;align-items:center"><span>Forbundet til <b>${esc(P.name)}</b> som <b>${esc(P.organizer)}</b></span><button type="button" class="danger" id="portalUnpair">Afbryd</button></div>`;
+  if (!race) h += `<p class="muted small">Opret et løb under <b>Opsæt løb</b>, så kan det kobles til et løb på portalen.</p>`;
+  else if (race.test) h += `<p class="muted small">“${esc(race.name)}” er et testløb. Testløb sendes aldrig til portalen.</p>`;
+  else if (link) h += `<p>“${esc(race.name)}” er koblet til <a href="${esc(link.url)}" target="_blank" rel="noopener">${esc(link.title)}</a>. Før start hentes nye tilmeldte hvert minut, og under løbet sendes resultaterne hvert 15. sekund.</p>
+      <div class="btns"><button type="button" id="portalFetch">⬇ Hent tilmeldte nu</button><button type="button" id="portalSendNow">Send resultater nu</button><button type="button" id="portalUnlink">Fjern koblingen</button></div>`;
+  else h += `<p>Kobl “${esc(race.name)}” til løbet på portalen. Løbet skal være oprettet på portalen først.</p>
+      <div class="btns" style="align-items:center"><select id="portalEvents" style="min-width:240px"><option value="">Henter løb …</option></select><button type="button" class="primary" id="portalLinkBtn">Kobl</button></div>`;
+  h += `<p class="small" style="margin-bottom:0">${P.last_error ? `<span class="err-text">✗ ${esc(P.last_error)}</span>` : P.last_ok ? `✓ Sendt til portalen ${clock(P.last_ok)}` : ""}</p>`;
+  box.innerHTML = h;
+  $("portalUnpair").onclick = async () => {
+    if (!confirm(`Afbryd forbindelsen til ${P.name}? Der hentes ingen tilmeldte og sendes ingen resultater dertil.`)) return;
+    await portalUnpair(); toast("Forbindelsen er afbrudt"); render();
+  };
+  if (link) {
+    $("portalFetch").onclick = () => portalFetchSignups(race, true).catch(e => toast(e.message, true));
+    $("portalSendNow").onclick = async () => { await portalSend(race, race.status === "finished", true); render(); };
+    $("portalUnlink").onclick = async () => {
+      try { await portalCall({event: "portal_link", race_id: race.id, race_name: race.name, event_id: 0, distances: {}}); } catch (_) { /* fjern her alligevel */ }
+      delete db.portal.links[race.id]; save(); render();
+    };
+  } else if (race && !race.test) {
+    const fill = () => {
+      const sel = $("portalEvents");
+      if (!sel) return;
+      if (portalEvents.error) { sel.innerHTML = `<option value="">${esc(portalEvents.error)}</option>`; return; }
+      const list = portalEvents.list || [];
+      sel.innerHTML = list.length ? list.map(e => `<option value="${e.id}">${esc(e.title)} · ${day(e.starts_at)}${e.status !== "published" ? " · " + esc(e.status_label) : ""}</option>`).join("")
+        : `<option value="">Ingen kommende løb – opret løbet på portalen først</option>`;
+    };
+    if (Date.now() - portalEvents.at > 30000) {
+      portalEvents.at = Date.now();
+      portalCall({event: "portal_events"}).then(r => { portalEvents = {at: Date.now(), list: r.events || [], error: null}; fill(); })
+        .catch(e => { portalEvents = {at: Date.now(), list: null, error: e.message}; fill(); });
+    }
+    fill();
+    $("portalLinkBtn").onclick = async () => {
+      const eid = +$("portalEvents").value;
+      if (!eid) return toast("Vælg løbet på portalen", true);
+      try {
+        const r = await portalCall({event: "portal_link", race_id: race.id, race_name: race.name, event_id: eid, distances: {}});
+        db.portal.links[race.id] = {event_id: eid, title: r.event?.title || "", url: r.event?.url || ""};
+        db.portal.fetched[race.id] = 0; save();
+        toast(`Koblet til ${r.event?.title || "løbet"}`);
+        await portalFetchSignups(race, true);
+      } catch (e) { toast(e.message, true); }
+      render();
+    };
+  }
 }
 
 function bindSettings() {

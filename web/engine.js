@@ -11,7 +11,7 @@ export const RACE_TYPES = {
     config: {checkin_min: 30, loop_km: BACKYARD_KM, interval_min: 60, warnings_min: [3, 2, 1], start_window_min: 3, goal_window_min: 25,
              min_lap_min: 10, end_mode: "last_man", max_yards: 5, total_h: 3}},
   p2p: {label: "Alm. tidtagning (A til B)", config: {checkin_min: 30, distance_km: 10.0, min_time_min: 5, cutoff_min: 0, canicross: false,
-    callout: false, callout_sec: 15}},
+    chip_start: false, callout: false, callout_sec: 15}},
   record: {label: "Rekordløb (Årets rekord)",
     config: {checkin_min: 30, loop_km: 1.0, min_lap_min: 2, record_km: 0, record_label: "Årets rekord", canicross: false,
              callout: false, callout_sec: 15}},
@@ -147,7 +147,7 @@ function computeBackyardOpen(race, cfg, parts, reads, now) {
     const st = m ? m : maxYards && laps.length >= maxYards ? "finished" : timeUp ? (mode === "duration" ? "finished" : "dnf") : "active";
     rows.push(row(p, {status: st, laps: laps.length, distance_km: r3(laps.length * loop),
       total_time: laps.length ? laps[laps.length - 1] - start : null, last_lap: splits.length ? splits[splits.length - 1] : null,
-      best_lap: splits.length ? Math.min(...splits) : null, last_ts: laps.length ? laps[laps.length - 1] : null}));
+      best_lap: splits.length ? Math.min(...splits) : null, last_ts: laps.length ? laps[laps.length - 1] : null, splits}));
   }
   place(rows, r => [["dsq", "dns"].includes(r.status), -r.laps, r.last_ts || 9e18]);
   const stillRunning = rows.some(r => r.status === "active");
@@ -250,7 +250,7 @@ function computeBackyard(race, cfg, parts, reads, now) {
     for (let b = 0; b < n; b++) if (pl.has(b)) times.push(pl.get(b) - (start + b * I));
     rows.push(row(p, {status: st, laps: n, distance_km: r3(n * loop),
       total_time: times.length ? pySum(times) : null,
-      last_lap: times.length ? times[times.length - 1] : null, best_lap: times.length ? Math.min(...times) : null,
+      last_lap: times.length ? times[times.length - 1] : null, best_lap: times.length ? Math.min(...times) : null, splits: times,
       current_lap_done: current.has(pid) ? current.get(pid) : null, started_current: (started.get(pid) || new Set()).has(cur),
       flags: flags.filter(f => f.participant_id === pid).length}));
   }
@@ -315,7 +315,7 @@ function lapRows(parts, reads, start, end, minlap, loop, done, starts = null, du
     const st = m ? m : pdone ? "finished" : starts !== null && now < ps ? "waiting" : "active";
     rows.push(row(p, {status: st, laps: laps.length, distance_km: r3(laps.length * loop),
       total_time: laps.length ? laps[laps.length - 1] - ps : null, last_lap: splits.length ? splits[splits.length - 1] : null,
-      best_lap: splits.length ? Math.min(...splits) : null, last_ts: laps.length ? laps[laps.length - 1] : null,
+      best_lap: splits.length ? Math.min(...splits) : null, last_ts: laps.length ? laps[laps.length - 1] : null, splits,
       ...(starts !== null ? {start_ts: ps} : {})}));
   }
   return place(rows, r => [["dsq", "dns"].includes(r.status), -r.laps, r.last_ts || 9e18]);
@@ -457,6 +457,11 @@ export function calloutSec(type, cfg) {
   return Math.max(1.0, Number(cfg.callout_sec || 15));
 }
 
+// A til B med chipstart: tiden starter ved første scanning efter start, næste scanning efter minimumstiden er mål
+export function chipStart(type, cfg) {
+  return type === "p2p" && Boolean(cfg.chip_start) && !calloutSec(type, cfg);
+}
+
 function calloutStarts(race, parts, reads, sec) {
   // hver løbers start = første scanning efter løbets start + sec; scanningen er hverken omgang eller mål
   const start = race.started_at, by = readsByPid(reads), starts = new Map(), used = new Set();
@@ -469,7 +474,7 @@ function calloutStarts(race, parts, reads, sec) {
 
 export function checkinWindow(race, cfg) {
   if (race.type === "timetrial" && cfg.start_mode === "chip") return 0;
-  if (calloutSec(race.type, cfg)) return 0;
+  if (calloutSec(race.type, cfg) || chipStart(race.type, cfg)) return 0;
   return Number(cfg.checkin_min || 0) * 60;
 }
 
@@ -490,16 +495,20 @@ export function compute(race, parts, reads, now) {
   }
   const keepAll = race.type === "timetrial";  // intervalstart: startrækkefølgen må ikke rykke sig
   const cparts = keepAll ? parts : parts.filter(p => !hold.has(p.id));
-  const co = calloutSec(race.type, cfg);
+  const co = calloutSec(race.type, cfg), cs = chipStart(race.type, cfg);
   let rows, info;
-  if (co && started) {
+  if ((co || cs) && started) {
     const [starts, rest] = calloutStarts(race, cparts, reads, co);
     [rows, info] = COMPUTE[race.type](race, cfg, cparts, rest, now, starts);
-    for (const r of rows) if (r.status === "waiting" && (r.start_ts === null || r.start_ts === undefined)) r.status_label = "Venter på callout";
+    for (const r of rows) if (r.status === "waiting" && (r.start_ts === null || r.start_ts === undefined)) r.status_label = co ? "Venter på callout" : "Venter på start-scanning";
+    if (cs) info.chip_start = true;
+  }
+  if (co && started) {
     info.callout_sec = co;
     info.callouts = rows.filter(r => r.start_ts && r.start_ts > now && r.status === "waiting")
       .map(r => ({id: r.id, bib: r.bib, name: r.name, start_ts: r.start_ts})).sort((a, b) => a.start_ts - b.start_ts);
-  } else [rows, info] = COMPUTE[race.type](race, cfg, cparts, reads, now);
+  }
+  if (!((co || cs) && started)) [rows, info] = COMPUTE[race.type](race, cfg, cparts, reads, now);
   if (hold.size) {
     const held = [...rows.filter(r => hold.has(r.id)), ...(keepAll ? [] : parts.filter(p => hold.has(p.id)).map(p => row(p)))];
     for (const r of held) Object.assign(r, {status: "nocheckin", status_label: STATUS_LABELS.nocheckin, laps: 0, distance_km: 0.0,

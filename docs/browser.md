@@ -39,6 +39,17 @@ Under **⚙ Indstillinger → Hjemmeside** skriver du adressen til `modtag.php` 
 
 FTP og spejlserver kan ikke bruges fra en browser.
 
+## Løbsportal (fx rebildtrail.dk)
+
+Browser-udgaven kan forbindes til en løbsportal med pluginet RaceTimer Portal, ligesom RaceTimer på Pi'en:
+
+1. Opret løbet på portalen, og lav en **forbindelseskode** under *For arrangører → Mine RaceTimere*.
+2. Opret løbet her under **Opsæt løb**. Gå til **⚙ Indstillinger → 🌍 Løbsportal**, skriv portalens adresse og koden, og tryk **Forbind**.
+3. Vælg løbet på portalen, og tryk **Kobl**. De tilmeldte hentes med det samme. Felter med *Løber N* uden tider bliver udfyldt først, og der er plads til 12. Indtil start hentes nye tilmeldte hvert minut, og **⬇ Hent tilmeldte nu** henter med det samme.
+4. Under løbet sendes resultaterne til portalen hvert 15. sekund (med omgangstider), og de endelige resultater, når løbet afsluttes. Uden net prøver den igen, når der er forbindelse.
+
+Løbere, der har valgt at være anonyme på portalen, står med navn her, men som *Anonym løber* på portalen. Testløb sendes aldrig. Portalen skal have version 0.10 eller nyere (den tillader kald fra en browser).
+
 ## Forskelle fra RaceTimer på Pi'en
 
 | | Browser | Raspberry Pi |
@@ -47,6 +58,7 @@ FTP og spejlserver kan ikke bruges fra en browser.
 | Deltagere | Op til 12 | Ubegrænset, med Excel-import |
 | Resultatskærm | Ekstra vindue på samme enhed | Pi'ens skærm og alle enheder på netværket |
 | Data | I browseren på én enhed | På Pi'en, med flere administratorer |
+| Løbsportal | ✓ Tilmeldte (op til 12) og live-resultater | ✓ Tilmeldte, live-resultater, overførsel af løb og skabeloner |
 | Højttaler, LED, læsere, WiFi, fjernadgang, opdateringer | – | ✓ |
 
 ## Læg den på jeres egen hjemmeside

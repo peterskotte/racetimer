@@ -754,13 +754,14 @@ const CFG_LABELS = {
   goal_window_min: "Målvindue åbner (min efter start)", canicross: "🐕 Canicross (løber med 1–2 hunde)", distance_km: "Distance (km)", min_time_min: "Min. løbstid (min)",
   record_km: "Rekord at slå (km)", record_label: "Titel på fælles distance", duration_h: "Varighed (timer)",
   start_mode: "Startform", interval_sec: "Startinterval (sek)", waves: "Startbølger",
+  chip_start: "⏱ Chipstart: tiden starter, når løberen scanner ved start",
   callout: "📣 Callout: løberen scanner ved start, løbslederen tæller ned", callout_sec: "Callout: nedtælling (sek)",
   cutoff_min: "Cutoff: maks. tid (min, 0 = ingen)", end_mode: "Løbet slutter", max_yards: "Cutoff: antal omgange", total_h: "Samlet tid (timer)",
 };
 const HELP = {
   backyard: "Officielle regler: 6,7056 km hver hele time, advarsel 3-2-1 min. Sidste løber skal gennemføre én omgang mere end alle andre. Parametre er låst.",
   backyard_custom: "Som backyard, men alle parametre kan justeres (fx 1 time/5 km, eller 30 min til træning). Vælg om løbet slutter med sidste mand tilbage (fælles start hver interval), efter et fast antal omgange (cutoff) eller efter en samlet tid, fx 3 timer. De to sidste løbes i træk uden fælles starter.",
-  p2p: "Fælles start (start-knap = startskud). Første chip-læsning efter minimumstiden er måltid.",
+  p2p: "Fælles start (start-knap = startskud), eller chipstart, hvor hver løbers tid starter ved scanningen ved start. Første chip-læsning efter minimumstiden er måltid.",
   record: "Hver deltager tæller omgange; alles distance lægges sammen til en fælles total.",
   timed: "Flest omgange inden for tidsgrænsen. Ved lige mange omgange vinder den, der nåede sidste omgang først.",
   timetrial: "Intervalstart (fast interval i startnummer-orden), bølgestart (startnummer-intervaller) eller chipstart (første læsning = start).",
@@ -772,7 +773,7 @@ const CALLOUT_TYPES = ["p2p", "timetrial", "timed", "record"];
 function scanGuide(type, cfg) {
   const n = v => String(Math.round((Number(v) || 0) * 100) / 100).replace(".", ",");
   const co = CALLOUT_TYPES.includes(type) && cfg.callout, cs = n(cfg.callout_sec || 15);
-  const chip = type === "timetrial" && cfg.start_mode === "chip";
+  const chip = (type === "timetrial" && cfg.start_mode === "chip") || (type === "p2p" && cfg.chip_start && !co);
   const L = [];
   if (Number(cfg.checkin_min) > 0 && !co && !chip)
     L.push(`<b>Indtjekning:</b> scan inden for ${n(cfg.checkin_min)} min før start. Uden indtjekning tæller løberens scanninger ikke.`);
@@ -792,7 +793,7 @@ function scanGuide(type, cfg) {
       : `<b>Sidste omgang:</b> scan inden ${n(cfg.total_h)} timer er gået. Omgange derefter tæller ikke.`);
     L.push(`<span class="muted">Callout kan ikke bruges i backyard, fordi alle starter samtidig.</span>`);
   } else if (type === "p2p" || type === "timetrial") {
-    L.push(co ? callout : chip ? `<b>Start:</b> scan ved start. Første scanning efter startknappen er løberens starttid.`
+    L.push(co ? callout : chip ? `<b>Start (chipstart):</b> når løbet${(cfg.distances || []).some(d => Number(d.start_min) > 0) ? " eller distancen" : ""} er startet, scanner løberen ved start. Første scanning er løberens starttid – scanninger før start tæller ikke.`
       : type === "timetrial" ? `<b>Start:</b> ingen scanning. Løberen starter på sin tid (${cfg.start_mode === "waves" ? "bølgestart" : `interval på ${n(cfg.interval_sec)} sek. i startnummer-orden`}).`
       : `<b>Start:</b> ingen scanning. Startknappen er startskuddet for alle.`);
     const multi = (cfg.distances || []).some(d => (d.routes || []).length > 1);

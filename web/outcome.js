@@ -39,7 +39,7 @@ export function evaluate(race, parts, reads, read, duplicate = false) {
   if (race.finished_at && read.ts > race.finished_at) return ignored("after_finish", who);
   // callout: løbslederen tæller ned, og løberens tid starter ved 0
   if (info.callout_sec && after.start_ts && !before.start_ts) return {type: "read.callout", start_at: after.start_ts, sec: info.callout_sec, ...who};
-  if (after.start_ts && !before.start_ts && race.type === "timetrial") return {type: "read.started", ...who};
+  if (after.start_ts && !before.start_ts && (race.type === "timetrial" || info.chip_start)) return {type: "read.started", ...who};
   if ((after.laps || 0) > (before.laps || 0) || (after.finish_ts && !before.finish_ts)) {
     const finish = ["p2p", "timetrial"].includes(race.type) || Boolean(info.continuous && after.status === "finished");
     return {type: "read.counted", lap: after.laps, finish,

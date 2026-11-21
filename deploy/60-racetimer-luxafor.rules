@@ -1,2 +1,4 @@
 # Luxafor Flag (statuslampe): RaceTimers servicebruger er i gruppen input og må styre lampen
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="f372", MODE="0660", GROUP="input"
+# blink(1) mk3 (lampe ved læseren)
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="27b8", ATTRS{idProduct}=="01ed", MODE="0660", GROUP="input"

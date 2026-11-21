@@ -11,10 +11,11 @@ import threading
 import time
 
 from .. import db
+from .blink1 import Blink1
 from .luxafor import Luxafor
 from .speaker import Speaker
 
-KINDS = {k.kind: k for k in (Speaker, Luxafor)}
+KINDS = {k.kind: k for k in (Speaker, Luxafor, Blink1)}
 
 
 class ModuleManager(threading.Thread):

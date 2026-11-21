@@ -65,7 +65,7 @@ def evaluate(read_id):
     if info.get("callout_sec") and after.get("start_ts") and not before.get("start_ts"):
         # callout: løbslederen tæller ned, og løberens tid starter ved 0 (events.CalloutClock giver lyd og lys)
         return {"type": "read.callout", "start_at": after["start_ts"], "sec": info["callout_sec"], **who}
-    if after.get("start_ts") and not before.get("start_ts") and race["type"] == "timetrial":
+    if after.get("start_ts") and not before.get("start_ts") and (race["type"] == "timetrial" or info.get("chip_start")):
         return {"type": "read.started", **who}
     if (after.get("laps") or 0) > (before.get("laps") or 0) or (after.get("finish_ts") and not before.get("finish_ts")):
         finish = (race["type"] in ("p2p", "timetrial") and bool(after.get("finish_ts"))) or \

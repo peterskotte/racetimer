@@ -64,9 +64,21 @@ Lampen tilføjes af sig selv under **⚙ Opsætning → Moduler**, første gang 
 
 Fjerner du lampen i admin, bliver den ikke tilføjet igen. Den kan altid tilføjes fra listen over fundne enheder. Hvide, lilla og røde ×5 lys kommer fra opstarten og nedlukningen af Pi'en og vises altid, når lampen er sat i.
 
+## Lampe ved læseren (blink(1) mk3)
+
+En lille [blink(1) mk3](https://shop.thingm.com/products/blink1mk3) kan sidde ved hver RFID-læser, så løberen kan se, om scanningen talte. Den blinker med de samme farver som forsiden på statuslampen: grønt = talt, gult = læst, men tæller ikke, rødt = ukendt armbånd, blåt = callout eller chip tildelt. Mellem scanningerne lyser den grønt, når Pi'en er klar, og viser de røde koder ved fejl.
+
+Lamperne tilføjes af sig selv under **⚙ Opsætning → Moduler**, når de sættes i. Med to læsere og to lamper skal hver lampe have sin læser:
+- **Sidder ved læser:** *Læser 1 (primær)* eller *Læser 2 (backup)*. Så blinker lampen kun ved sin egen læser. *Begge læsere* passer, når der kun er én lampe.
+- **Lysstyrke:** standard er fuld styrke, fordi lampen er lille.
+- **Mellem scanninger:** grøn, når Pi'en er klar, eller slukket, så den kun lyser ved scanninger. Røde fejlkoder vises altid.
+
+Brug **Test** for at se, hvilken lampe der er hvilken. blink(1) lyser svagere end Luxafor Flag og ses bedst i skygge. Lamperne lyser ikke under opstart og nedlukning af Pi'en, det gør kun Luxafor-lampen.
+
 ## Teknisk
 
 - Lampen er en USB HID-enhed (`04D8:F372`). RaceTimer skriver direkte til `/dev/hidrawN` og har ingen ekstra pakker. Reglen `/etc/udev/rules.d/60-racetimer-luxafor.rules` giver gruppen `input` adgang.
 - `racetimer-led.service` sætter hvid tidligt i opstarten og lilla ved nedlukning. `/usr/lib/systemd/system-shutdown/racetimer-led` slukker lampen helt til sidst.
 - `racetimer-led-fail.service` startes af `OnFailure=` i `racetimer.service` og blinker rødt ×5, indtil RaceTimer starter igen.
 - Alt installeres af opdateringen (`deploy/post-update.sh`).
+- blink(1) styres med HID feature reports (`ioctl HIDIOCSFEATURE`) på `/dev/hidrawN` (`27B8:01ED`). Samme udev-regel giver adgang (`racetimer/modules/blink1.py`).

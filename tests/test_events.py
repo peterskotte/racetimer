@@ -15,7 +15,8 @@ with open(os.environ["RACETIMER_FAKE_ASOUND"], "w") as f:
             "                      Jabra SPEAK 410 USB at usb-xhci-hcd.1-1, full speed\n")
 os.environ["RACETIMER_LUXAFOR_LOG"] = os.path.join(TMP, "lampe.log")
 os.environ["RACETIMER_FAKE_HIDRAW"] = os.path.join(TMP, "hidraw")
-for n, hid in (("hidraw0", "0003:0000FFFF:00000035"), ("hidraw1", "0003:000004D8:0000F372")):  # RFID-læser + lampe
+for n, hid in (("hidraw0", "0003:0000FFFF:00000035"), ("hidraw1", "0003:000004D8:0000F372"),  # RFID-læser + lampe
+               ("hidraw2", "0003:000027B8:000001ED"), ("hidraw3", "0003:000027B8:000001ED")):  # to blink(1) ved læserne
     os.makedirs(os.path.join(TMP, "hidraw", n, "device"))
     with open(os.path.join(TMP, "hidraw", n, "device", "uevent"), "w") as f:
         f.write(f"DRIVER=hid-generic\nHID_ID={hid}\nHID_NAME=Test {n}\nHID_PHYS=usb-xhci-hcd.1-{n[-1]}/input0\nHID_UNIQ=\n")
@@ -103,6 +104,14 @@ def test_callout_event_and_countdown():
     assert spk.slot_for({"type": "callout.tick", "sec": 3}) == "callout_tick" and spk.slot_for({"type": "callout.tick", "sec": 0}) == "callout_go"
     assert spk.slot_for({"type": "read.callout"}) == "callout"
     spk.stop()
+
+
+def test_chip_start_event():
+    rid = race("p2p", {"chip_start": True, "min_time_min": 1})
+    db.ex("UPDATE races SET status='running', started_at=? WHERE id=?", (S, rid))
+    assert kind(scan("CHIP2", 20)) == "read.started"
+    ev = scan("CHIP2", 20 + 600)
+    assert kind(ev) == "read.counted" and ev["finish"] and round(ev["time"]) == 600
 
 
 def test_speaker_module():
@@ -527,6 +536,47 @@ def test_status_lamp_module():
     finally:
         health.STARTED = real
         mgr.remove(cfg["id"])
+
+
+def test_blink1_lamps_at_the_readers():
+    import time
+    from racetimer import health
+    from racetimer.modules import blink1
+    found = blink1.Blink1.detect()
+    assert [d["path"][-7:] for d in found] == ["hidraw2", "hidraw3"] and found[0]["device"] != found[1]["device"]
+    db.set_setting("modules", [])
+    db.set_setting("modules_seen", [])
+    mgr = modules.ModuleManager()
+    mgr.sync()
+    cfgs = [c for c in mgr.configs() if c["kind"] == "blink1"]
+    assert len(cfgs) == 2 and all(c["enabled"] and c["reader"] == "all" and c["idle"] == "status" for c in cfgs)
+    mgr.update(cfgs[0]["id"], {"reader": "primary"})
+    mgr.update(cfgs[1]["id"], {"reader": "backup"})
+    a, b = mgr.running[cfgs[0]["id"]], mgr.running[cfgs[1]["id"]]
+    log = os.environ["RACETIMER_LUXAFOR_LOG"]
+    open(log, "w").close()
+    health.configure(lambda: [], lambda: {"ip": "10.0.0.2"}, lambda: {"synced": True})
+    real, up = health.STARTED, health._uptime
+    health.STARTED = 0
+    health._uptime = lambda: 600  # ikke maskinens egen oppetid
+    try:
+        time.sleep(1.3)  # lampen henter Pi'ens tilstand hvert sekund
+        assert f"{a.cfg['device']}\tblink1\t0,255,0" in open(log).read()  # klar: grøn, fuld styrke
+        a.offer({"type": "read.unknown", "reader": "primary"})
+        b.offer({"type": "read.unknown", "reader": "primary"})  # læser 1 → kun lampen ved læser 1 blinker
+        time.sleep(0.3)
+        text = open(log).read()
+        assert f"{a.cfg['device']}\tblink1\t255,0,0" in text and f"{b.cfg['device']}\tblink1\t255,0,0" not in text
+        assert a.last_action[1] == "Rødt blink (ukendt armbånd)" and a.status()["text"] == "Viser: grøn"
+        mgr.update(cfgs[1]["id"], {"idle": "off"})
+        time.sleep(0.3)
+        assert open(log).read().rstrip().split("\n")[-1] == f"{b.cfg['device']}\tblink1\t0,0,0" or \
+            f"{b.cfg['device']}\tblink1\t0,0,0" in open(log).read()  # slukket mellem scanninger
+    finally:
+        health.STARTED, health._uptime = real, up
+        for c in cfgs:
+            mgr.remove(c["id"])
+
 
 if __name__ == "__main__":
     for name, fn in list(globals().items()):

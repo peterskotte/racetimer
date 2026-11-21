@@ -195,6 +195,19 @@ def test_callout_names_never_leave_the_pi():
     assert info["callouts"]  # admin beholder listen
 
 
+
+def test_lap_times_are_sent():
+    db.ex("UPDATE races SET is_active=0")
+    rid = db.ex("INSERT INTO races(name, type, config, status, started_at, created_at, is_active) VALUES (?,?,?,?,?,0,1)",
+                ("Omgange", "timed", json.dumps(engine.merged_config("timed", {"checkin_min": 0, "min_lap_min": 1, "duration_h": 1})),
+                 "running", 1000.0))
+    pid = db.ex("INSERT INTO participants(race_id, bib, name) VALUES (?,?,?)", (rid, 1, "Bo"))
+    for ts in (1300.04, 1610.0, 1880.26):
+        db.ex("INSERT INTO reads(race_id, chip, reader, ts, participant_id) VALUES (?,?,?,?,?)", (rid, "X", "primary", ts, pid))
+    row = app.sync_mgr._results_payload(db.race(rid), False)["results"][0]
+    assert row["splits"] == [300.0, 310.0, 270.3] and row["best_lap"] == 270.26 and row["laps"] == 3
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

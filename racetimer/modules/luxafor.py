@@ -75,8 +75,8 @@ def describe(look):
     return COLOR_NAME.get(color, "farve") + LOOK_TEXT.get(kind, "").format(n=p)
 
 
-def _devices():
-    """Luxafor-lamper fundet i sysfs: [{"device", "name", "path", "usb"}]."""
+def _devices(vid=VID, pid=PID, prefix="luxafor", label="Luxafor Flag"):
+    """Lamper af én type (USB VID/PID) fundet i sysfs: [{"device", "name", "path", "usb"}]. Bruges også af blink1.py."""
     root = os.environ.get("RACETIMER_FAKE_HIDRAW", "/sys/class/hidraw")
     try:
         names = sorted(os.listdir(root))
@@ -89,13 +89,13 @@ def _devices():
                 ue = dict(line.strip().split("=", 1) for line in f if "=" in line)
         except OSError:
             continue
-        if ue.get("HID_ID", "").upper().split(":")[1:] != [VID, PID]:
+        if ue.get("HID_ID", "").upper().split(":")[1:] != [vid, pid]:
             continue
         # serienummeret følger lampen på tværs af USB-porte; uden serienummer bruges USB-stien
-        dev = ue.get("HID_UNIQ") or "luxafor"
+        dev = ue.get("HID_UNIQ") or prefix
         if any(d["device"] == dev for d in out):
-            dev = f"luxafor@{ue.get('HID_PHYS', n).split('/')[0]}"
-        out.append({"device": dev, "name": ue.get("HID_NAME") or "Luxafor Flag", "path": f"/dev/{n}", "usb": True})
+            dev = f"{prefix}@{ue.get('HID_PHYS', n).split('/')[0]}"
+        out.append({"device": dev, "name": ue.get("HID_NAME") or label, "path": f"/dev/{n}", "usb": True})
     return out
 
 
