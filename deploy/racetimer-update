@@ -44,16 +44,24 @@ def log(msg, state=None, **extra):
         st["state"] = state
     st.update(extra, updated=time.time())
     os.makedirs(os.path.dirname(STATUS), exist_ok=True)
-    tmp = STATUS + ".tmp"
-    with open(tmp, "w") as f:
+    # Mappen ejes af RaceTimers egen bruger. Root må derfor aldrig følge et symlink her (så kunne den bruger
+    # få root til at overskrive eller åbne andre filer): ny fil med O_EXCL|O_NOFOLLOW, rettigheder via fd'en.
+    tmp = f"{STATUS}.{os.getpid()}.tmp"
+    try:
+        os.unlink(tmp)
+    except FileNotFoundError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as f:
+        os.fchmod(f.fileno(), 0o644)
         json.dump(st, f, ensure_ascii=False)
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, STATUS)
+    os.replace(tmp, STATUS)  # rename følger ikke symlinks – et symlink på STATUS erstattes bare
 
 
 def read_status():
     try:
-        with open(STATUS) as f:
+        fd = os.open(STATUS, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd) as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}

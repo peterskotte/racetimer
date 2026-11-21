@@ -9,6 +9,7 @@
 date_default_timezone_set('Europe/Copenhagen');
 $mappe = __DIR__ . '/data';
 $MAKS_PR_TIME = 10;  // tilmeldinger pr. IP-adresse pr. time (mod spam)
+$MAKS_MAILS_PR_TIME = 100;  // bekræftelsesmails pr. time i alt (tilmeldingen gemmes stadig, bare uden mail)
 
 function e($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 $info = is_file("$mappe/tilmelding.json") ? json_decode(file_get_contents("$mappe/tilmelding.json"), true) : null;
@@ -89,6 +90,27 @@ function for_mange($mappe, $maks) {
     return $stop;
 }
 
+function ligner_link($s) {
+    return (bool)preg_match('~(https?:|://|www\.|[<>@]|\b[a-z0-9-]+\.(com|net|org|info|biz|io|co|me|ly|ru|cn|xyz|top|site|online|link|click|shop|app|dk|de|se|no|uk|eu)\b)~iu', (string)$s);
+}
+
+// Loft over bekræftelsesmails for hele siden (alle IP-adresser tilsammen): højst $maks pr. time
+function mail_loft_ok($mappe, $maks) {
+    $fp = @fopen("$mappe/tilmeld-mail.php", 'c+');
+    if (!$fp) return false;
+    flock($fp, LOCK_EX);
+    $raw = stream_get_contents($fp);
+    $nu = time();
+    $tider = array_values(array_filter(json_decode((string)substr($raw, strpos($raw, "\n") ?: 0), true) ?: [],
+        function ($t) use ($nu) { return $t > $nu - 3600; }));
+    $ok = count($tider) < $maks;
+    if ($ok) $tider[] = $nu;
+    ftruncate($fp, 0); rewind($fp);
+    fwrite($fp, "<?php http_response_code(404); exit; ?>\n" . json_encode($tider));
+    flock($fp, LOCK_UN); fclose($fp);
+    return $ok;
+}
+
 $lob_id = (int)($_GET['lob'] ?? $_POST['lob'] ?? 0);
 if (!$lob_id && count($alle) === 1) $lob_id = array_key_first($alle);
 $lob = $alle[$lob_id] ?? null;
@@ -104,6 +126,8 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     // robotter udfylder det skjulte felt eller sender formularen på under 3 sekunder
     if (($_POST['website'] ?? '') !== '' || $nu - (int)($_POST['t'] ?? 0) < 3) $fejl[] = 'Prøv igen om lidt.';
     if (mb_strlen($v['name']) < 2 || mb_strlen($v['name']) > 100) $fejl[] = 'Skriv dit fulde navn.';
+    // navnet kommer med i bekræftelsesmailen ("Hej <navn>") – ingen links, så siden ikke kan bruges til spam
+    if (ligner_link($v['name'])) $fejl[] = 'Navnet må ikke indeholde links eller adresser.';
     foreach (['sex', 'birth_year', 'club', 'email'] as $k) if (felt($lob, $k) === 'off') $v[$k] = '';
     if (felt($lob, 'sex') !== 'off' && ($v['sex'] !== '' || felt($lob, 'sex') === 'required')
         && !in_array($v['sex'], ['Mand', 'Kvinde', 'Andet'], true)) $fejl[] = 'Vælg køn.';
@@ -157,7 +181,7 @@ if ($lob && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             fflush($fp); flock($fp, LOCK_UN); fclose($fp);
             $tak = $t;
             $mail = !empty($lob['confirm_email']) && $t['email'] !== '' && is_file(__DIR__ . '/mailer.php')
-                ? send_bekraeftelse($mappe, $lob, $t, $brand) : null;
+                ? (mail_loft_ok($mappe, $MAKS_MAILS_PR_TIME) && send_bekraeftelse($mappe, $lob, $t, $brand)) : null;
         }
     }
 }

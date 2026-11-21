@@ -16,13 +16,14 @@ import json
 import os
 import re
 import threading
+from urllib.parse import urlparse
 import time
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import branding, db, engine, events, health, modules, outcome, portal, readers, screen, signup, sync, updater
+from . import branding, db, demo, engine, events, ftpupload, health, modules, outcome, portal, readers, screen, signup, sync, updater
 
 HERE = os.path.dirname(__file__)
 STATIC = os.path.join(HERE, "static")
@@ -90,6 +91,22 @@ def wifi_ssid():
         return None
 
 
+def wifi_open():
+    """Er Pi'en på et WiFi uden kode? Så kan andre på nettet aflure admin-koden, fordi admin på det lokale net er http."""
+    import subprocess
+    env = dict(os.environ, LC_ALL="C")
+    try:
+        out = subprocess.run([os.environ.get("RACETIMER_NMCLI", "nmcli"), "-t", "-f", "ACTIVE,SECURITY", "device", "wifi",
+                              "list", "--rescan", "no"], capture_output=True, text=True, timeout=3, env=env).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in out.splitlines():
+        active, _, sec = line.partition(":")
+        if active in ("yes", "ja"):
+            return sec.strip() in ("", "--")
+    return False
+
+
 _clock_cache = {"t": 0, "v": None}
 
 
@@ -144,6 +161,14 @@ async def _no_stale_pages(request: Request, call_next):
     """Browseren skal altid tjekke for nye sider/filer (fx efter en opdatering af Pi'en)."""
     response = await call_next(request)
     response.headers.setdefault("Cache-Control", "no-cache")
+    # sikkerhed: browseren må ikke gætte filtyper (fx et "billede", der er HTML), og adresser sendes ikke videre
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    path = request.url.path
+    if path.startswith(("/admin", "/klar", "/api/")) and not path.startswith("/api/live"):
+        # admin kan ikke lægges i en ramme på en anden side (clickjacking). Resultatskærmen (/) må gerne indlejres.
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
     return response
 
 
@@ -211,6 +236,7 @@ def handle_read(chip, reader, ts=None):
 
 
 reader_mgr = readers.ReaderManager(handle_read)
+demo_sim = demo.Simulator(handle_read)
 module_mgr = modules.ModuleManager()
 bus.subscribe(module_mgr.on_event)
 
@@ -228,12 +254,24 @@ def _startup():
     threading.Thread(target=sync_bootcode, daemon=True).start()
     events.Ticker(bus, standings, reader_mgr.status).start()
     events.CalloutClock(bus)  # callout: lyd og lys de sidste sekunder før løberens start
+    demo_sim.start()  # demoløb: simulerede løbere scanner af sig selv
+    threading.Thread(target=_purge_loop, daemon=True, name="purge").start()  # persondata slettes efter løbet
     paths = db.setting("readers", {}) or {}
     for role in readers.ROLES:  # miljøvariabler kan overstyre, fx i systemd-filen
         env = os.environ.get(f"RACETIMER_{role.upper()}")
         if env:
             paths[role] = env
     reader_mgr.configure(paths, db.setting("reader_names", {}) or {})
+
+
+def _purge_loop():
+    """Hver time: e-mail og fødselsår slettes på Pi'en, når slettefristen efter løbet er nået (signup.purge_private)."""
+    while True:
+        try:
+            signup.purge_private()
+        except Exception:  # noqa: BLE001 – må aldrig vælte serveren
+            pass
+        time.sleep(3600)
 
 
 # ------------------------------------------------------------------ auth
@@ -332,7 +370,8 @@ def logout(request: Request, response: Response):
 
 @app.get("/api/me")
 def me(u=Depends(admin)):
-    return {"id": u["id"], "username": u["username"], "default_password": db.default_password_in_use()}
+    return {"id": u["id"], "username": u["username"], "default_password": db.default_password_in_use(),
+            "open_wifi": wifi_open()}
 
 
 @app.get("/api/setup")
@@ -560,6 +599,9 @@ def _dest_fields(b, old=None):
     if url and not url.startswith(schemes):
         raise HTTPException(400, "FTP-adressen skal starte med ftps:// eller ftp://" if typ == "ftp"
                             else "Adressen skal starte med https://")
+    if url.lower().startswith(("http://", "ftp://")) and not ftpupload.local_host(urlparse(url).hostname):
+        raise HTTPException(400, "Brug ftps:// – ukrypteret FTP sender koden i klartekst" if typ == "ftp"
+                            else "Adressen skal starte med https:// (http:// kun på det lokale net)")
     interval = float(b.get("interval_sec", d.get("interval_sec", 60)) or 0)
     if 0 < interval < 5:
         raise HTTPException(400, "Interval skal være mindst 5 sekunder (eller 0 = kun manuelt)")
@@ -763,17 +805,57 @@ async def update_race(rid: int, request: Request, u=Depends(admin)):
     db.ex("UPDATE races SET name=?, config=?, scheduled_start=? WHERE id=?",
           (b.get("name", race["name"]), json.dumps(cfg), b.get("scheduled_start", race["scheduled_start"]), rid))
     if race.get("test") and b.get("test"):  # et testløb forbliver et testløb – kun indstillingerne kan ændres
-        db.ex("UPDATE races SET test=? WHERE id=?", (json.dumps(_test_opts(b["test"]) or {"speed": 1}), rid))
+        t = _test_opts(b["test"]) or {"speed": 1}
+        if race["test"].get("demo"):  # demoløb forbliver demoløb; simulatoren kan slås til og fra
+            t.update(demo=True, sim=bool(b["test"].get("sim", race["test"].get("sim"))))
+        db.ex("UPDATE races SET test=? WHERE id=?", (json.dumps(t), rid))
     return {"ok": True}
 
 
 def _test_opts(t):
-    """Testløbets indstillinger (None = rigtigt løb)."""
+    """Testløbets indstillinger (None = rigtigt løb). Demoløbenes demo/sim sættes kun af demo.py."""
     if not t:
         return None
     speed = int(t.get("speed") or 1)
     return {"speed": speed if speed in engine.TEST_SPEEDS else 1, "no_minimum": bool(t.get("no_minimum")),
             "no_checkin": bool(t.get("no_checkin")), "no_dedup": bool(t.get("no_dedup"))}
+
+
+# ------------------------------------------------------------------ demoløb (demo.py)
+
+@app.get("/api/demo")
+def demo_presets(u=Depends(admin)):
+    return {"presets": demo.presets(), "speeds": engine.TEST_SPEEDS,
+            "count": sum(1 for r in db.q("SELECT test FROM races WHERE test IS NOT NULL") if json.loads(r["test"]).get("demo"))}
+
+
+@app.post("/api/demo")
+async def demo_create(request: Request, u=Depends(admin)):
+    """Opret et demoløb af en løbstype med tilfældige deltagere – gøres aktivt og startes evt. med det samme."""
+    b = await request.json()
+    try:
+        rid = demo.create(b.get("type"), b.get("n"), sim=b.get("sim", True), canicross=bool(b.get("canicross")))
+    except (ValueError, TypeError) as e:
+        raise HTTPException(400, str(e) or "Ugyldigt demoløb") from None
+    if b.get("speed") in engine.TEST_SPEEDS:
+        race = db.race(rid)
+        db.ex("UPDATE races SET test=? WHERE id=?", (json.dumps({**race["test"], "speed": b["speed"]}), rid))
+    _activate(rid)
+    if b.get("start"):
+        db.ex("UPDATE races SET status='running', started_at=?, finished_at=NULL WHERE id=?", (time.time(), rid))
+        bus.publish({"type": "race.started", "race": db.race(rid)["name"]})
+    return {"id": rid}
+
+
+@app.delete("/api/demo")
+def demo_delete(u=Depends(admin)):
+    """Slet alle demoløb (med deltagere og læsninger)."""
+    ids = [r["id"] for r in db.q("SELECT id, test FROM races WHERE test IS NOT NULL") if json.loads(r["test"]).get("demo")]
+    for rid in ids:
+        db.ex("DELETE FROM reads WHERE race_id=?", (rid,))
+        db.ex("DELETE FROM races WHERE id=?", (rid,))
+    sync_mgr.poke_state()
+    return {"deleted": len(ids)}
 
 
 @app.delete("/api/races/{rid}")
@@ -1150,20 +1232,132 @@ async def portal_transfer(did: str, request: Request, u=Depends(admin)):
     return {"results": results}
 
 
-@app.post("/api/races/{rid}/portal")
-async def link_portal(rid: int, request: Request, u=Depends(admin)):
-    race = db.race(rid) or _404()
-    if race.get("test"):
-        raise HTTPException(400, "Testløb kan ikke kobles til en løbsportal")
-    b = await request.json()
-    d = _portal_or_404(str(b.get("dest") or ""))
-    ds = {x["id"] for x in engine.distances(race["type"], engine.merged_config(race["type"], json.loads(race["config"]) if isinstance(race["config"], str) else race["config"]))}
-    dist = {str(k): int(v) for k, v in (b.get("distances") or {}).items() if str(k) in ds and str(v).isdigit()}
+@app.get("/api/portal/{did}/importable")
+async def portal_importable(did: str, u=Depends(admin)):
+    """Løb på portalen, der må hentes til RaceTimer (flueben på portalen) og ikke allerede er koblet til et løb her."""
+    d = _portal_or_404(did)
     try:
-        r = await asyncio.to_thread(portal.link, d, race, int(b.get("event_id") or 0), dist)
+        r = await asyncio.to_thread(portal.events, d)
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from None
+    evs = r.get("events") or []
+    out = []
+    for e in evs:
+        if not e.get("racetimer"):
+            continue
+        race = _race_for_event(d, e["id"])
+        out.append({**e, "race_id": race["id"] if race else None, "race_name": race["name"] if race else None})
+    return {"events": out, "without_flag": sum(1 for e in evs if not e.get("racetimer"))}
+
+
+def _race_for_event(d, event_id):
+    """Løbet her, der er koblet til et løb på portalen (tilmelding eller resultater)."""
+    for r in db.q("SELECT * FROM races WHERE archived_at IS NULL ORDER BY id DESC"):
+        s = signup.settings(r)
+        info = (s.get("portal") if s["mode"] == "portal" else None) or {}
+        if info.get("dest") == d["id"] and int(info.get("event_id") or 0) == int(event_id):
+            return db.race(r["id"])
+    return None
+
+
+def _update_from_portal(race, d, ev):
+    """Overfør ændringer fra portalen til et løb, der allerede er hentet: navn, starttid (før start), nye og omdøbte
+    distancer med starttider, og alle tilmeldte hentes igen (nye, rettede og afmeldte). Ruter, km og løbets
+    indstillinger her røres ikke – de kan være tilpasset på Pi'en."""
+    typ, name, start, fresh, link = portal.race_from_event(ev)
+    cfg = engine.merged_config(race["type"], race["config"])
+    s = signup.settings(race)
+    old = {str(k): int(v) for k, v in ((s.get("portal") or {}).get("distances") or {}).items()}
+    by_portal = {v: k for k, v in old.items()}
+    changed = []
+    if race["type"] == typ and race["type"] in engine.DISTANCE_TYPES and fresh.get("distances"):
+        new_by_portal = {link[k]: d for k, d in ((x["id"], x) for x in fresh["distances"])}
+        dists = list(cfg.get("distances") or [])
+        routes = list(cfg.get("routes") or [])
+        for pid, nd in new_by_portal.items():
+            mine = next((x for x in dists if x["id"] == by_portal.get(pid)), None)
+            if mine:
+                if mine["name"] != nd["name"] or (race["status"] == "planned" and mine.get("start_min") != nd.get("start_min")):
+                    changed.append(nd["name"])
+                mine["name"] = nd["name"]
+                if race["status"] == "planned":
+                    mine["start_min"] = nd.get("start_min", 0)
+            else:  # ny distance på portalen
+                n = 1
+                while any(x["id"] == f"d{n}" for x in dists):
+                    n += 1
+                nd = {**nd, "id": f"d{n}"}
+                if typ == "p2p":
+                    rid_ = f"r{n}"
+                    while any(r_["id"] == rid_ for r_ in routes):
+                        rid_ += "x"
+                    src = next((r_ for r_ in fresh.get("routes") or [] if r_["id"] in (nd.get("routes") or [])), {"km": 0, "min_min": 5})
+                    routes.append({"id": rid_, "name": nd["name"], "km": src["km"], "min_min": src.get("min_min", 5)})
+                    nd["routes"] = [rid_]
+                dists.append(nd)
+                old[nd["id"]] = pid
+                changed.append(nd["name"] + " (ny)")
+        cfg["distances"] = dists
+        if typ == "p2p":
+            cfg["routes"] = routes
+        cfg = engine.clean_distances(race["type"], cfg)
+    sched = start if race["status"] == "planned" and start else race["scheduled_start"]
+    db.ex("UPDATE races SET name=?, config=?, scheduled_start=? WHERE id=?", (name, json.dumps(cfg), sched, race["id"]))
+    s = signup.settings(db.race(race["id"]))
+    if s.get("portal"):
+        s["portal"]["distances"] = old
+    s["portal_fetched"] = 0  # hent alle tilmeldte igen: nye, rettede og afmeldte
+    signup.save(race["id"], s)
+    portal.link(d, db.race(race["id"]), ev["id"], old)
+    added = sync_mgr.fetch_signups(d, True) or 0
+    return {"name_changed": name != race["name"], "distances": changed, "added": added}
+
+
+@app.post("/api/portal/{did}/import")
+async def portal_import(did: str, request: Request, u=Depends(admin)):
+    """Opret et løb her ud fra et løb på portalen, kobl det, og hent de tilmeldte."""
+    d = _portal_or_404(did)
+    eid = int((await request.json()).get("event_id") or 0)
+    try:
+        r = await asyncio.to_thread(portal.events, d)
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from None
+    ev = next((e for e in r.get("events") or [] if e.get("id") == eid), None)
+    if not ev:
+        raise HTTPException(404, "Løbet findes ikke på portalen (eller hører til en anden arrangør)")
+    if not ev.get("racetimer"):
+        raise HTTPException(400, "Løbet har ikke flueben i “Må hentes til RaceTimer” på portalen")
+    existing = _race_for_event(d, eid)
+    if existing:  # allerede hentet: overfør blot ændringerne fra portalen
+        try:
+            u_ = await asyncio.to_thread(_update_from_portal, existing, d, ev)
+        except RuntimeError as e:
+            raise HTTPException(502, str(e)) from None
+        sync_mgr.poke_state()
+        what = (["navn"] if u_["name_changed"] else []) + (["distancer: " + ", ".join(u_["distances"])] if u_["distances"] else [])
+        return {"ok": True, "id": existing["id"], "updated": True, "added": u_["added"],
+                "message": f"“{existing['name']}” er opdateret fra portalen" + (f" ({'; '.join(what)})" if what else "") + " · tilmeldte er hentet igen"}
+    typ, name, start, cfg, dist = portal.race_from_event(ev)
+    rid = db.ex("INSERT INTO races(name, type, config, scheduled_start, created_at, timing) VALUES (?,?,?,?,?,?)",
+                (name, typ, json.dumps(cfg), start, time.time(), "armband"))
+    if not db.active_race():
+        _activate(rid)
+    try:
+        added = await _link_race_portal(db.race(rid), d, eid, dist)
+    except HTTPException as e:
+        return {"ok": False, "id": rid, "message": f"Løbet er oprettet, men kunne ikke kobles: {e.detail}"}
+    sync_mgr.poke_state()
+    return {"ok": True, "id": rid, "type": typ, "added": added}
+
+
+async def _link_race_portal(race, d, event_id, dist):
+    """Kobl et løb her til et løb på portalen og hent de tilmeldte. Returnerer antal hentede."""
+    try:
+        r = await asyncio.to_thread(portal.link, d, race, int(event_id or 0), dist)
     except RuntimeError as e:
         raise HTTPException(502, str(e)) from None
     ev = r.get("event") or {}
+    rid = race["id"]
     s = signup.settings(race)
     old = s.get("portal") or {}
     if old.get("dest") and old.get("dest") != d["id"]:
@@ -1173,12 +1367,24 @@ async def link_portal(rid: int, request: Request, u=Depends(admin)):
     s.update(mode="portal", portal={"dest": d["id"], "event_id": ev.get("id"), "title": ev.get("title"), "url": ev.get("url"), "distances": dist})
     signup.save(rid, s)
     sync_mgr.poke_state()
-    added = 0
     try:
-        added = await asyncio.to_thread(sync_mgr.fetch_signups, d, True) or 0
+        return await asyncio.to_thread(sync_mgr.fetch_signups, d, True) or 0
     except RuntimeError:
-        pass  # vises i tilmeldingsboksen, og der prøves igen hvert minut
-    return {"ok": True, "added": added, "event": ev}
+        return 0  # vises i tilmeldingsboksen, og der prøves igen hvert minut
+
+
+@app.post("/api/races/{rid}/portal")
+async def link_portal(rid: int, request: Request, u=Depends(admin)):
+    race = db.race(rid) or _404()
+    if race.get("test"):
+        raise HTTPException(400, "Testløb kan ikke kobles til en løbsportal")
+    b = await request.json()
+    d = _portal_or_404(str(b.get("dest") or ""))
+    ds = {x["id"] for x in engine.distances(race["type"], engine.merged_config(race["type"], json.loads(race["config"]) if isinstance(race["config"], str) else race["config"]))}
+    dist = {str(k): int(v) for k, v in (b.get("distances") or {}).items() if str(k) in ds and str(v).isdigit()}
+    added = await _link_race_portal(race, d, int(b.get("event_id") or 0), dist)
+    s = signup.settings(db.race(rid))
+    return {"ok": True, "added": added, "event": {"id": s["portal"].get("event_id"), "title": s["portal"].get("title"), "url": s["portal"].get("url")}}
 
 
 @app.delete("/api/races/{rid}/portal")
@@ -1221,12 +1427,23 @@ def reset_race(rid: int, u=Depends(admin)):
     return {"ok": True}
 
 
+class _FormulaSafe:
+    """CSV-skriver: tekst, der starter med = + - @ (eller tab/CR), bliver en formel i Excel. Navne kommer fra
+    tilmeldinger på nettet, så de får et ' foran. Tal røres ikke."""
+
+    def __init__(self, w):
+        self.w = w
+
+    def writerow(self, row):
+        self.w.writerow(["'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") else v for v in row])
+
+
 @app.get("/api/races/{rid}/results.csv")
 def results_csv(rid: int, u=Depends(admin)):
     race = db.race(rid) or _404()
     rows, info = standings(race)
     buf = io.StringIO()
-    w = csv.writer(buf, delimiter=";")
+    w = _FormulaSafe(csv.writer(buf, delimiter=";"))
     cfg = engine.merged_config(race["type"], race["config"])
     cc, multi = bool(cfg.get("canicross")), bool(engine.distances(race["type"], cfg))
     ages = bool(signup.settings(race)["age_step"])
@@ -2264,6 +2481,8 @@ async def change_pw(uid: int, request: Request, u=Depends(admin)):
     if pw == "admin" or pw == db.first_code():
         raise HTTPException(400, "Vælg en ny kode")
     db.set_password(uid, pw)
+    # alle andre steder, brugeren er logget ind (fx med en lækket kode), logges ud – kun denne session bliver
+    db.ex("DELETE FROM sessions WHERE user_id=? AND token IS NOT ?", (uid, request.cookies.get("rt_session")))
     threading.Thread(target=sync_bootcode, daemon=True).start()  # fjern førstegangskoden fra SD-kortet
     return {"ok": True}
 

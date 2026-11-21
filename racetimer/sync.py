@@ -26,6 +26,7 @@ import secrets
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from . import db, ftpupload, signup
@@ -312,6 +313,8 @@ _opener = urllib.request.build_opener(_NoRedirect)
 
 
 def _post(url, payload, key=None, gz=True):
+    if url.lower().startswith("http://") and not ftpupload.local_host(urllib.parse.urlsplit(url).hostname):
+        raise RuntimeError("Adressen skal starte med https:// – nøglen og data må ikke sendes ukrypteret over internettet")
     body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json", "User-Agent": "RaceTimer"}
     if gz:

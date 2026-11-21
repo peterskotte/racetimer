@@ -208,6 +208,91 @@ def test_lap_times_are_sent():
     assert row["splits"] == [300.0, 310.0, 270.3] and row["best_lap"] == 270.26 and row["laps"] == 3
 
 
+
+def test_import_race_from_portal():
+    import time as _t
+    start = _t.mktime((2026, 12, 31, 10, 0, 0, 0, 0, -1))
+    ev = {"id": 77, "title": "Nytårsløbet", "starts_at": start, "kind": "trail", "racetimer": True,
+          "distances": [{"id": 701, "name": "15 km", "km": 15, "start_time": None},
+                        {"id": 702, "name": "5 km", "km": 5, "start_time": "10:30", "start_ts": start + 1800}]}
+    typ, name, st, cfg, link = portal.race_from_event(ev)
+    assert typ == "p2p" and name == "Nytårsløbet" and st == start and link == {"d1": 701, "d2": 702}
+    assert [(d["name"], d["start_min"], d["routes"]) for d in cfg["distances"]] == [("15 km", 0, ["r1"]), ("5 km", 30, ["r2"])]
+    assert [r["km"] for r in cfg["routes"]] == [15, 5]
+    typ, _, _, cfg, link = portal.race_from_event({"title": "6/12", "starts_at": start, "kind": "timeloeb",
+        "distances": [{"id": 1, "name": "6 timer", "km": None}, {"id": 2, "name": "12 timer", "km": None}]})
+    assert typ == "timed" and cfg["duration_h"] == 12 and [d["duration_h"] for d in cfg["distances"]] == [6, 12] and link == {"d1": 1, "d2": 2}
+    assert portal.race_from_event({"title": "By", "starts_at": start, "kind": "backyard", "distances": []})[0] == "backyard"
+    # ældre portal uden start_ts: klokkeslæt i Pi'ens tidszone
+    old = portal.race_from_event({**ev, "distances": [{"id": 1, "name": "A", "km": 5}, {"id": 2, "name": "B", "km": 5, "start_time": "10:45"}]})
+    assert [d["start_min"] for d in old[3]["distances"]] == [0, 45]
+    assert portal.race_from_event({"title": "5 km", "starts_at": start, "kind": "vej", "distances": [{"id": 9, "name": "5 km", "km": 5}]})[3]["distance_km"] == 5
+
+    # hent løbet: kun med flueben, og det kobles og henter tilmeldte
+    sync._post = fake_post
+    if not portal.portals():
+        asyncio.run(app.portal_pair(req({"url": "rebildtrail.example", "code": "K7QM4TXD"}), u={}))
+    dest = portal.portals()[0]
+    no_flag = {**ev, "id": 78, "racetimer": False}
+    orig = portal.events
+    portal.events = lambda d: {"events": [ev, no_flag], "links": {}}
+    try:
+        lst = asyncio.run(app.portal_importable(dest["id"], u={}))
+        assert [e["id"] for e in lst["events"]] == [77] and lst["without_flag"] == 1
+        try:
+            asyncio.run(app.portal_import(dest["id"], req({"event_id": 78}), u={}))
+            raise AssertionError("løb uden flueben skulle afvises")
+        except HTTPException as e:
+            assert e.status_code == 400
+        out = asyncio.run(app.portal_import(dest["id"], req({"event_id": 77}), u={}))
+        assert out["ok"], out
+        race = db.race(out["id"])
+        s = signup.settings(race)
+        assert race["name"] == "Nytårsløbet" and race["type"] == "p2p" and race["scheduled_start"] == start
+        assert s["mode"] == "portal" and s["portal"]["event_id"] and s["portal"]["distances"] == {"d1": 701, "d2": 702}
+        linked = [p for u, p, k in SENT if p.get("event") == "portal_link"][-1]
+        assert linked["event_id"] == 77 and linked["distances"] == {"d1": 701, "d2": 702}
+
+        # hent igen = overfør ændringerne: nyt navn, ny distance, starttid før start
+        ev2 = {**ev, "title": "Nytårsløbet 2027", "starts_at": start + 3600,
+               "distances": ev["distances"] + [{"id": 703, "name": "Børneløb", "km": 1, "start_time": "11:00", "start_ts": start + 3600}]}
+        portal.events = lambda d: {"events": [ev2], "links": {str(out["id"]): {"event_id": 77}}}
+        lst = asyncio.run(app.portal_importable(dest["id"], u={}))
+        assert lst["events"][0]["race_id"] == out["id"]
+        up = asyncio.run(app.portal_import(dest["id"], req({"event_id": 77}), u={}))
+        assert up["updated"] and up["id"] == out["id"], up
+        race = db.race(out["id"])
+        ds = {d["name"]: d for d in race["config"]["distances"]}
+        assert race["name"] == "Nytårsløbet 2027" and race["scheduled_start"] == start + 3600 and set(ds) == {"15 km", "5 km", "Børneløb"}
+        assert ds["Børneløb"]["start_min"] == 0 and signup.settings(race)["portal"]["distances"][ds["Børneløb"]["id"]] == 703
+        assert db.q1("SELECT COUNT(*) n FROM races")["n"] == db.q1("SELECT MAX(id) m FROM races")["m"]  # intet nyt løb
+    finally:
+        portal.events = orig
+
+
+def test_portal_signup_changes_v2():
+    """Løbsportalen (v2) sender også rettede og afmeldte tilmeldinger."""
+    db.ex("UPDATE races SET is_active=0")
+    rid = db.ex("INSERT INTO races(name, type, config, status, created_at, is_active) VALUES (?,?,?,?,0,1)",
+                ("Ændringer", "p2p", json.dumps(engine.merged_config("p2p", {})), "planned"))
+    race = db.race(rid)
+    signup.save(rid, {**signup.settings(race), "mode": "portal"})
+    n = signup.import_entries(db.race(rid), [{"id": 11, "seq": 11, "name": "Anne Berg", "sex": "Kvinde", "club": "A"},
+                                             {"id": 12, "seq": 12, "name": "Bo Lund", "sex": "Mand"},
+                                             {"id": 13, "seq": 13, "name": "Carl Holm"}], portal=True)
+    assert n == 3
+    pid13 = db.q1("SELECT id FROM participants WHERE race_id=? AND signup_id=-13", (rid,))["id"]
+    db.ex("INSERT INTO reads(race_id, chip, reader, ts, participant_id) VALUES (?,?,?,?,?)", (rid, "X", "primary", 1.0, pid13))
+    bib = db.q1("SELECT bib FROM participants WHERE signup_id=-11 AND race_id=?", (rid,))["bib"]
+    signup.import_entries(db.race(rid), [{"id": 11, "seq": 20, "name": "Anne Berg-Holm", "sex": "Kvinde", "club": "B"},
+                                         {"id": 12, "seq": 21, "cancelled": True}, {"id": 13, "seq": 22, "cancelled": True}], portal=True)
+    a = db.q1("SELECT * FROM participants WHERE race_id=? AND signup_id=-11", (rid,))
+    assert a["name"] == "Anne Berg-Holm" and a["club"] == "B" and a["bib"] == bib  # rettet – startnummer bevaret
+    assert not db.q1("SELECT 1 FROM participants WHERE race_id=? AND signup_id=-12", (rid,))  # afmeldt → fjernet
+    assert db.q1("SELECT 1 FROM participants WHERE race_id=? AND signup_id=-13", (rid,))  # har tider → bliver
+    assert signup.settings(db.race(rid))["portal_fetched"] == 22
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

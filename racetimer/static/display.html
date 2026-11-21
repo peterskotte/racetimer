@@ -507,14 +507,14 @@ function render() {
   const test = !!data.race?.test;  // testløb: orange ramme + mærkat
   document.body.classList.toggle("testrace", test);
   $("testTag").hidden = !test;
-  if (test) $("testTag").textContent = `🧪 TESTLØB${data.race.test.speed > 1 ? ` · ${data.race.test.speed}× TID` : ""}`;
+  if (test) $("testTag").textContent = `${data.race.test.demo ? "🎲 DEMO" : "🧪 TESTLØB"}${data.race.test.speed > 1 ? ` · ${data.race.test.speed}× TID` : ""}`;
   if (idle) {
     $("raceName").textContent = ""; $("hero").innerHTML = ""; $("dists").innerHTML = ""; $("banner").innerHTML = ""; $("filters").innerHTML = ""; $("leaders").innerHTML = "";
     $("board").innerHTML = `<div class="empty">Intet aktivt løb</div>`;
     return;
   }
   const {race, info, rows, dists} = view();
-  $("raceName").textContent = (race.test ? "🧪 TEST · " : "") + race.name + " · " + (dists ? info.name : info.type_label);
+  $("raceName").textContent = (race.test && !race.test.demo ? "🧪 TEST · " : "") + race.name + " · " + (dists ? info.name : info.type_label);
   $("dists").innerHTML = dists && dists.length > 1 ? dists.map(d => `<button class="${d.id === dist ? "on" : ""}" data-d="${esc(d.id)}">${esc(d.name)}<small>${d.count}</small></button>`).join("") : "";
   $("dists").querySelectorAll("button").forEach(b => b.onclick = () => { dist = b.dataset.d; distPinned = true; render(); });
   $("readers").innerHTML = (data.readers || []).map(r => `<span class="${r.connected ? "on" : ""}"><i class="dot"></i>${r.role === "primary" ? "Primær" : "Backup"}</span>`).join("");

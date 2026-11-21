@@ -14,6 +14,7 @@ Portalen får aldrig Pi'ens mailopsætning, og chip-ID'er sendes ikke.
 import re
 import secrets
 import socket
+import time
 import urllib.parse
 
 from . import sync
@@ -157,3 +158,60 @@ def unpair(d):
         err = str(e)
     sync.save_destinations([x for x in sync.destinations() if x["id"] != d["id"]])
     return err
+
+
+# ---------------------------------------------------------------- hent et løb fra portalen
+
+KIND_TYPE = {"timeloeb": "timed", "backyard": "backyard"}  # alt andet (trail, vej, stafet, børneløb …) er A til B
+
+
+def _hours(name):
+    """"6 timer", "12 t", "24h" → 6.0 / 12.0 / 24.0 (None, hvis navnet ikke er en varighed)."""
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:t|time|timer|h|hours?)\b", name or "", re.I)
+    return float(m.group(1).replace(",", ".")) if m else None
+
+
+def race_from_event(ev):
+    """Et løb på portalen → (type, navn, planlagt start, config, distancekobling {pi-distance: portal-distance}).
+
+    Distancernes starttider bliver "Start + min" i forhold til løbets start. Ved flere A til B-distancer får hver
+    distance sin egen rute med portalens km. Tidsløb aflæser varigheden af distancens navn (fx "6 timer").
+    """
+    from . import engine
+    typ = KIND_TYPE.get(ev.get("kind"), "p2p")
+    start = int(ev.get("starts_at") or 0) or None
+    base = time.localtime(start) if start else None
+    ds = [d for d in ev.get("distances") or [] if d.get("name")]
+
+    def offset(d):
+        if d.get("start_ts") and start:  # portalen sender distancens start som tidspunkt – uafhængigt af tidszoner
+            return float(max(0, round((int(d["start_ts"]) - start) / 60)))
+        st = d.get("start_time") or ""
+        if not base or not re.match(r"^\d{1,2}:\d{2}$", st):
+            return 0.0
+        h, m = map(int, st.split(":"))
+        return float(max(0, (h * 60 + m) - (base.tm_hour * 60 + base.tm_min)))
+
+    cfg, link = {}, {}
+    if typ == "p2p":
+        if len(ds) <= 1:
+            km = (ds[0].get("km") if ds else None) or engine.RACE_TYPES["p2p"]["config"]["distance_km"]
+            cfg = {"distance_km": float(km)}
+        else:
+            cfg = {"routes": [{"id": f"r{i}", "name": d["name"], "km": float(d.get("km") or 0), "min_min": 5}
+                              for i, d in enumerate(ds, 1)],
+                   "distances": [{"id": f"d{i}", "name": d["name"], "start_min": offset(d), "routes": [f"r{i}"]}
+                                 for i, d in enumerate(ds, 1)]}
+            link = {f"d{i}": int(d["id"]) for i, d in enumerate(ds, 1)}
+    elif typ == "timed":
+        hours = [(_hours(d["name"]) or 0) for d in ds]
+        if len(ds) > 1 and all(hours):
+            cfg = {"duration_h": max(hours),
+                   "distances": [{"id": f"d{i}", "name": d["name"], "start_min": offset(d), "duration_h": h}
+                                 for i, (d, h) in enumerate(zip(ds, hours), 1)]}
+            link = {f"d{i}": int(d["id"]) for i, d in enumerate(ds, 1)}
+        else:
+            cfg = {"duration_h": (hours[0] if hours and hours[0] else engine.RACE_TYPES["timed"]["config"]["duration_h"])}
+    cfg = engine.clean_distances(typ, engine.merged_config(typ, cfg))
+    return typ, (ev.get("title") or "Løb fra portalen")[:120], start, cfg, link
+

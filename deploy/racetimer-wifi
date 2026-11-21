@@ -77,11 +77,12 @@ def saved():
         if not name.startswith(PREFIX) or "wireless" not in typ:
             continue
         g = nm("-t", "-g", "802-11-wireless.ssid,802-11-wireless.hidden,802-11-wireless-security.key-mgmt,"
-               "connection.autoconnect-priority,802-1x.identity", "connection", "show", name).splitlines()
-        g += [""] * (5 - len(g))
+               "connection.autoconnect-priority,802-1x.identity,802-1x.domain-suffix-match", "connection", "show", name).splitlines()
+        g += [""] * (6 - len(g))
         sec = "open" if g[2] in ("", "--", "none") else "eap" if g[2] == "wpa-eap" else "psk"
         res.append({"slot": int(name[len(PREFIX):] or 0), "ssid": g[0], "hidden": g[1] == "yes",
                     "secured": sec != "open", "security": sec, "identity": g[4] if sec == "eap" else "",
+                    "domain": g[5] if sec == "eap" and g[5] != "--" else "",
                     "priority": int(g[3] or 0)})
     return sorted(res, key=lambda n: n["slot"])
 
@@ -114,6 +115,20 @@ def valid_psk(p):
     return isinstance(p, str) and (8 <= len(p) <= 63 or re.fullmatch(r"[0-9a-fA-F]{64}", p))
 
 
+CA_BUNDLE = os.environ.get("RACETIMER_WIFI_CA", "/etc/ssl/certs/ca-certificates.crt")
+
+
+def eap_domain(domain, identity):
+    """Domænet, som netværkets servercertifikat skal høre til (fx aau.dk). Uden det kan en falsk "eduroam"
+    opsnappe brugernavn og kode. Udfyldes fra brugernavnet (navn@aau.dk → aau.dk), hvis det ikke er skrevet."""
+    d = (domain or "").strip().lower().lstrip("*.").rstrip(".")
+    if not d and "@" in (identity or ""):
+        d = identity.rsplit("@", 1)[1].strip().lower()
+    if not re.fullmatch(r"(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", d):
+        return None
+    return d
+
+
 def apply(data):
     nets = data.get("networks")
     if not isinstance(nets, list) or len(nets) > MAX:
@@ -123,18 +138,19 @@ def apply(data):
     known = {}
     for slot, n in existing.items():
         if n["security"] == "open":
-            known[n["ssid"]] = ("open", "", "")
+            known[n["ssid"]] = ("open", "", "", "")
             continue
         field = "802-1x.password" if n["security"] == "eap" else "802-11-wireless-security.psk"
         secret = nm("-s", "-t", "-g", field, "connection", "show", f"{PREFIX}{slot}").strip()
         if not secret:  # gør aldrig et beskyttet netværk åbent ved en fejl
             raise RuntimeError(f"Kunne ikke læse den gemte kode for {n['ssid']} – skriv koden igen")
-        known[n["ssid"]] = (n["security"], secret, n["identity"])
+        known[n["ssid"]] = (n["security"], secret, n["identity"], n.get("domain", ""))
     iface = wifi_iface()
     for i, net in enumerate(nets, 1):
         ssid, pw, hidden = net.get("ssid"), net.get("password"), bool(net.get("hidden"))
         sec = net.get("security") or ("open" if pw == "" else "psk")
         identity = (net.get("identity") or "").strip()
+        domain = net.get("domain")
         if not valid_ssid(ssid):
             raise ValueError(f"Netværk {i}: ugyldigt navn (SSID)")
         if sec not in ("psk", "eap", "open"):
@@ -145,10 +161,15 @@ def apply(data):
                 raise ValueError(f"Netværk {i} ({ssid}): skriv koden")
             pw = k[1]
             identity = identity or k[2]
+            domain = domain or k[3]
         if sec == "psk" and not valid_psk(pw):
             raise ValueError(f"Netværk {i} ({ssid}): koden skal være 8–63 tegn")
         if sec == "eap" and (not identity or not pw):
             raise ValueError(f"Netværk {i} ({ssid}): skriv både brugernavn og kode")
+        if sec == "eap":
+            domain = eap_domain(domain, identity)
+            if not domain:
+                raise ValueError(f"Netværk {i} ({ssid}): skriv domænet på netværkets servercertifikat (fx aau.dk)")
         old = existing.get(i)
         name = f"{PREFIX}{i}"
         if not old:
@@ -167,7 +188,9 @@ def apply(data):
             settings += ["802-11-wireless-security.key-mgmt", "wpa-psk", "802-11-wireless-security.psk", pw]
         else:  # WPA2-Enterprise som eduroam: PEAP + MSCHAPv2 (det mest udbredte)
             settings += ["802-11-wireless-security.key-mgmt", "wpa-eap", "802-1x.eap", "peap",
-                         "802-1x.phase2-auth", "mschapv2", "802-1x.identity", identity, "802-1x.password", pw]
+                         "802-1x.phase2-auth", "mschapv2", "802-1x.identity", identity, "802-1x.password", pw,
+                         # tjek netværkets certifikat – ellers kan en falsk adgang med samme navn få koden
+                         "802-1x.ca-cert", CA_BUNDLE, "802-1x.domain-suffix-match", domain]
         nm("connection", "modify", name, *settings)
     for slot in existing:
         if slot > len(nets):

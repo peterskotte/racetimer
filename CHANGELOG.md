@@ -4,11 +4,25 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 
 ## [Ikke udgivet]
 
+**Sikkerhed**
+- **Eduroam og andre netværk med brugernavn (WPA2-Enterprise):** Pi'en tjekker nu netværkets servercertifikat mod et domæne (udfyldes fra brugernavnet, fx navn@aau.dk → aau.dk, eller skrives i det nye felt). Før kunne en falsk adgang med samme navn opsnappe brugernavn og kode. Netværk, der allerede er gemt, får tjekket, næste gang WiFi-listen gemmes – gem den igen efter opdateringen.
+- **Ingen ukrypteret afsendelse over internettet:** destinationer og løbsportaler skal bruge https:// (og FTP ftps://). http:// og ftp:// virker kun på det lokale net (fx en spejlserver i klubhuset), så nøgler, koder og tilmeldinger aldrig sendes i klartekst.
+- **Skift af kode logger andre ud:** når en admin-kode skiftes, lukkes alle andre login-sessioner for brugeren.
+- **Resultat-CSV:** navne og klubber, der starter med = + - @, får et ' foran, så Excel ikke tolker dem som formler.
+- **E-mail slettes på Pi'en efter løbet:** når slettefristen efter løbet er nået (standard 30 dage), slettes deltagernes e-mail – og fødselsår, hvis løbet ikke har aldersklasser. Navne og tider bliver.
+- **Opdateringshjælperen** (kører som root) følger ikke længere symlinks, når den skriver sin statusfil.
+- **Advarsel ved WiFi uden kode:** er Pi'en på et åbent WiFi, viser admin en advarsel, fordi koden ellers kan aflures (admin er http på det lokale net). Brug et WiFi med kode, kabel eller Tailscale.
+- **Sikkerhedsheadere:** browseren må ikke gætte filtyper, og admin kan ikke lægges i en ramme på en anden side. Resultatskærmen kan stadig indlejres.
+- **Tilmelding på hjemmesiden (tilmeld.php):** navne med links eller adresser afvises, og der sendes højst 100 bekræftelsesmails i timen i alt, så siden ikke kan bruges til at sende spam fra klubbens mail. Upload den nye `tilmeld.php` til webhotellet.
+
 **Rettet**
 - **Ens RFID-læsere i andre USB-porte:** to ens læsere kendes på USB-porten. Flyttes de, fx til en USB-hub, blinkede statuslampen rød ×1, selvom begge sad i. Nu finder RaceTimer dem selv i de nye porte (samme model, læser 1 i den første port), og klar-tjekket og admin viser, at de er flyttet. Sættes de tilbage, bruges de gemte porte igen.
 - Hver læser stod to gange i listen over læsere på Pi 5 (samme port har to navne).
 
 **Nyt**
+- **🎲 Demoløb af alle løbstyper:** under *Nyt løb* oprettes et færdigt testløb af en valgfri løbstype med tilfældige deltagere (også canicross med hunde). Simulerede løbere scanner af sig selv i hurtig tid, så man kan se tidtagning, stilling og skærm uden læsere, armbånd eller tilmelding. Backyard ender altid med én vinder. Chipstart og callout virker også. Demoløb sendes aldrig ud og kan slettes alle på én gang.
+- **Ændringer fra løbsportalen:** rettede og afmeldte tilmeldinger hentes også (afmeldte uden tider fjernes), og **⟳ Opdater** overfører navn, starttid og nye distancer til et løb, der allerede er hentet. Deltagere, som arrangøren tilføjer eller importerer på portalen, hentes som alle andre.
+- **⇩ Hent løb fra portalen:** løb med flueben i *Må hentes til RaceTimer* på løbsportalen kan hentes til RaceTimer med ét tryk. Navn, starttid og distancer (med starttider) oprettes, løbet kobles, og de tilmeldte hentes.
 - **Chipstart i A til B:** hver løbers tid starter ved første scanning efter start og stopper ved næste scanning efter minimumstiden. Virker også med flere distancer og ruter i træk (fx Nytårsløbet), og i browser-udgaven (første tryk).
 - **Browser-udgaven og løbsportalen:** RaceTimer i browseren (iPad, iPhone, Android) kan forbindes til en løbsportal med en kode, koble et løb, hente de tilmeldte og sende live-resultater og endelige resultater. Anonyme løbere forbliver anonyme på portalen.
 - **Omgangstider sendes med:** hjemmesider og løbsportalen får hver løbers omgangstider (og tiden for hver rute ved flere ruter i træk). På løbsportalen kan man folde dem ud ved hver løber, og Excel-filen har en kolonne pr. omgang.

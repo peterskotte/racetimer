@@ -69,7 +69,7 @@ Imaget indeholder Raspberry Pi OS, RaceTimer og ét demoløb. Der er ingen netv�
 | 2. **Pi'ens kode** | Selve Raspberry Pi'en leveres med en kendt kode (bruger `racetimer`, kode `racetimer`). Vælg en ny på mindst 10 tegn. Den bruges til skrivebordet, SSH og administrator-rettigheder (sudo). Gem den sikkert. |
 | 3. **Navn og logo** | Klubbens eller løbets navn og eventuelt et logo (PNG/JPG/WebP, gerne med gennemsigtig baggrund). Vises øverst på skærmen og på resultatsiderne. |
 | 4. **Splash-skærm** | Billedet, der vises, når der ikke kører et løb, og en valgfri tekst (fx "Næste løb: lørdag kl. 10"). Vises både på skærmen og på hjemmesiden. |
-| 5. **WiFi** (valgfrit) | Op til 5 netværk, som Pi'en selv forbinder til, fx klubhus og en mobil-hotspot. Eduroam og andre netværk med brugernavn virker også. |
+| 5. **WiFi** (valgfrit) | Op til 5 netværk, som Pi'en selv forbinder til, fx klubhus og en mobil-hotspot. Eduroam og andre netværk med brugernavn virker også. Pi'en tjekker netværkets certifikat mod domænet fra brugernavnet (navn@aau.dk → aau.dk), så en falsk "eduroam" ikke kan få koden. Brug helst ikke dit personlige login på en Pi, der deles. |
 | 6. **RFID-læsere** | Vælg primær og evt. backup. Hold en chip mod læseren, og se den dukke op. |
 | 7. **Færdig** | Tjekker, at Pi'ens ur passer med jeres mobil/computer, og viser en opsummering. |
 
@@ -107,6 +107,22 @@ En ny installation har ét demoløb, *Demoløb (kan slettes)*, med tre testløbe
 
 ![Admin: Aktivt løb](img/admin-aktivt-lob.webp)
 *Admin på en computer: løbet øverst, tæller og indstillinger til venstre, ⚙ Opsætning til højre. På en mobil ligger Opsætning i menuen.*
+
+### 🎲 Demoløb af alle løbstyper
+
+Vil I se en løbstype køre uden at sætte noget op? Gå til **Nyt løb → 🎲 Prøv en løbstype**, vælg typen, og tryk **🎲 Opret demoløb**.
+
+- Løbet oprettes med **tilfældige deltagere** (navn, køn, årgang, klub og chip, ved canicross også hunde) og en færdig opsætning, der viser typens særkender:
+  - *Backyard:* en ny runde hvert minut, til der er én vinder.
+  - *Backyard custom:* flest omgange på 6 "timer".
+  - *A til B:* 5, 10 og 15 km med forskudt start og to ruter i træk.
+  - *Tidsbaseret:* 3 og 6 "timer".
+  - *Rekordløb:* fælles kilometer mod årets rekord.
+  - *Enkeltstart:* en løber hvert 30. sekund.
+- Med **Simulerede løbere** scanner deltagerne af sig selv, med hver deres fart. Nogle stopper undervejs, og enkelte møder ikke op. Stilling, skærm, lyd og lys opfører sig som til et rigtigt løb.
+- Tiden går hurtigere, typisk 10× eller 60×, og kan ændres, før løbet oprettes. De fleste demoløb er færdige på 5–15 minutter.
+- I kan stadig scanne med jeres egne armbånd eller trykke under *Test uden hardware*. Slår I chipstart eller callout til under *Indstillinger*, scanner de simulerede løbere også ved start. Simulatoren kan slås fra og til under *Indstillinger → 🧪 Testløb*.
+- Demoløb sendes aldrig til hjemmesiden eller løbsportalen. Slet dem alle på én gang med **Slet alle demoløb** under kortet.
 
 > **Prøv løbstypen først:** sæt flueben i **🧪 Testløb** under *Nyt løb*, og vælg fx *60× hurtigere*. Så varer en backyard-time 1 minut, og du kan øve hele forløbet med rigtige armbånd på få minutter. Testløb sendes ikke til hjemmesiden.
 
@@ -264,6 +280,17 @@ RaceTimer kører fint helt uden internet. Har Pi'en net (fx via mobil-hotspot), 
 Vælg hvor ofte der sendes, fx hvert minut, og sæt flueben i *ved afslutning*. Detaljer i [README](../README.md#send-resultater-til-en-webserver).
 
 **Adgang til admin hjemmefra eller over mobilnet:** se [fjernadgang.md](fjernadgang.md). Tailscale er det nemmeste og sikreste for en lille gruppe officials.
+
+### Løbsportal (fx rebildtrail.dk)
+
+RaceTimer kan forbindes til en løbsportal med pluginet RaceTimer Portal. Så kan løbere tilmelde sig dér, og resultaterne kommer live på løbets side.
+
+1. **Forbind:** lav en forbindelseskode på portalen under *For arrangører → Mine RaceTimere*. I RaceTimer: **⚙ Opsætning → Synkronisering → Løbsportal**, skriv portalens adresse og koden, og tryk **Forbind**.
+2. **Hent et løb fra portalen:** sæt flueben i **Må hentes til RaceTimer** på løbet på portalen (*Ret løbet*). Tryk derefter **⇩ Hent løb fra portalen** på Løbsportal-kortet, og tryk **⇩ Hent** ved løbet. RaceTimer opretter løbet med navn, starttid og distancer (med deres egne starttider), kobler det til portalen og henter de tilmeldte. Løb uden flueben, fx testløb og kladder, vises ikke. Tjek bagefter løbstype, minimumstid og evt. chipstart under *Aktivt løb → Indstillinger*. Er løbet allerede hentet, står der **⟳ Opdater**: navn, starttid og nye distancer overføres fra portalen, og alle tilmeldte hentes igen. Indstillinger, ruter og tider på Pi'en røres ikke.
+3. **Eller kobl et løb, I selv har oprettet:** *Deltagere → 🌐 Tilmelding → Løbsportal*, vælg løbet på portalen og tryk **Kobl**.
+4. **Den anden vej:** **⇪ Overfør løb** opretter løb fra RaceTimer på portalen, også afholdte løb med resultater.
+
+Herefter hentes nye tilmeldte hvert minut og får startnummer i RaceTimer. Rettelser og afmeldinger på portalen kommer også med: en afmeldt deltager uden tider fjernes, og resultaterne sendes til portalen hvert 15. sekund under løbet.
 
 ## 9. Opdateringer og sikkerhedskopi
 

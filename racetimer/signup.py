@@ -93,6 +93,26 @@ def purge_at(race, s):
     return race["finished_at"] + s["delete_days"] * 86400 if race.get("finished_at") else None
 
 
+def purge_private(now=None):
+    """Slet e-mail (og fødselsår, når løbet ikke har aldersklasser) på Pi'en, når slettefristen efter løbet er nået –
+    samme frist som hjemmesiden og portalen (Tilmelding → slet efter X dage, standard 30). Navn, køn, klub og
+    tider bliver, så resultaterne kan vises. Returnerer antal deltagere, der er ryddet."""
+    now = now or time.time()
+    n = 0
+    for race in db.q("SELECT id, signup, finished_at FROM races WHERE finished_at IS NOT NULL"):
+        s = settings(race)
+        if now < purge_at(race, s):
+            continue
+        sql = "UPDATE participants SET email=NULL" + ("" if s["age_step"] else ", birth_year=NULL") + \
+              " WHERE race_id=? AND (email IS NOT NULL" + ("" if s["age_step"] else " OR birth_year IS NOT NULL") + ")"
+        before = db.q1("SELECT COUNT(*) AS c FROM participants WHERE race_id=? AND (email IS NOT NULL"
+                       + ("" if s["age_step"] else " OR birth_year IS NOT NULL") + ")", (race["id"],))["c"]
+        if before:
+            db.ex(sql, (race["id"],))
+            n += before
+    return n
+
+
 def is_open(race, s, now=None):
     """Kan man tilmelde sig nu? Formular: når den er åbnet. Link: så længe der er et link."""
     now = now or time.time()
@@ -165,7 +185,10 @@ def fetch(dest, post, now=None):
     want = _wanted(now, dest)
     if not want:
         return 0
-    resp = post(dest["url"], {"event": "hent_tilmeldinger", "loeb": want, "sent_at": now}, dest.get("key"), gz=False)
+    body = {"event": "hent_tilmeldinger", "loeb": want, "sent_at": now}
+    if dest.get("portal"):
+        body["v"] = 2  # løbsportalen sender også rettede og afmeldte tilmeldinger
+    resp = post(dest["url"], body, dest.get("key"), gz=False)
     added = 0
     for rid, entries in (resp.get("tilmeldinger") or {}).items():
         race = db.race(int(rid))
@@ -183,11 +206,24 @@ def import_entries(race, entries, now=None, portal=False):
     ds = {d["id"] for d in engine.distances(race["type"], engine.merged_config(race["type"], race["config"]))}
     key = "portal_fetched" if portal else "fetched"
     added, last = 0, s.get(key, 0)
-    for e in sorted(entries, key=lambda e: int(e.get("id") or 0)):
-        last = max(last, int(e.get("id") or 0))
+    for e in sorted(entries, key=lambda e: int(e.get("seq") or e.get("id") or 0)):
+        last = max(last, int(e.get("seq") or e.get("id") or 0))  # portalen (v2): "seq" = ændringstæller
         eid = -int(e.get("id") or 0) if portal else int(e.get("id") or 0)
+        have = db.q1("SELECT id FROM participants WHERE race_id=? AND signup_id=?", (race["id"], eid))
+        if e.get("cancelled"):
+            # afmeldt på portalen: fjern deltageren – men aldrig én, der allerede har tider
+            if have and not db.q1("SELECT 1 FROM reads WHERE participant_id=? AND deleted=0", (have["id"],)):
+                db.ex("DELETE FROM participants WHERE id=?", (have["id"],))
+            continue
         name = str(e.get("name") or "").strip()[:100]
-        if not name or db.q1("SELECT 1 FROM participants WHERE race_id=? AND signup_id=?", (race["id"], eid)):
+        if not name:
+            continue
+        if have:
+            if portal and "seq" in e:  # rettet på portalen: navn, køn, klub osv. – startnummer og chip røres ikke
+                by = e.get("birth_year")
+                db.ex("UPDATE participants SET name=?, sex=?, club=?, birth_year=?, email=?, distance=COALESCE(?, distance) WHERE id=?",
+                      (name, norm_sex(e.get("sex")), str(e.get("club") or "").strip()[:100], int(by) if str(by or "").isdigit() else None,
+                       str(e.get("email") or "").strip()[:200] or None, e.get("distance") if e.get("distance") in ds else None, have["id"]))
             continue
         # startnummeret fra hjemmesiden er det, løberen har fået at vide – det bevares, hvis det er ledigt
         bib = int(e["bib"]) if str(e.get("bib") or "").isdigit() else None

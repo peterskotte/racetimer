@@ -201,6 +201,141 @@ def test_admin_chip_switches_pi_screen_and_never_counts():
     assert app.admin_chips_delete("AB12CD", u={}) == []
     assert "admin" not in app.handle_read("AB12CD", "primary", t + 20)
 
+def test_results_csv_neutralises_formulas():
+    db.ex("UPDATE races SET is_active=0")
+    rid = db.ex("INSERT INTO races(name, type, config, created_at) VALUES ('CSV', 'p2p', '{}', 0)")
+    db.ex("INSERT INTO participants(race_id, bib, name, club) VALUES (?, 1, '=HYPERLINK(\"http://x\")', '+45 klub')", (rid,))
+    out = app.results_csv(rid, u={}).body.decode()
+    assert "'=HYPERLINK" in out and "'+45 klub" in out and "\n=" not in out.replace("\r", "")
+
+
+def test_password_change_logs_out_other_sessions():
+    uid = db.create_user("sess", "en-lang-kode-1")
+    other = db.login("sess", "en-lang-kode-1")
+    mine = db.login("sess", "en-lang-kode-1")
+
+    async def j():
+        return {"password": "en-ny-lang-kode-2"}
+    asyncio.run(app.change_pw(uid, N(json=j, cookies={"rt_session": mine}), u={"id": uid}))
+    assert db.session_user(mine) and not db.session_user(other)
+
+
+def test_no_plain_http_or_ftp_over_internet():
+    from racetimer import ftpupload, sync
+    for h in ("localhost", "racetimer.local", "192.168.1.20", "10.0.0.5", "100.101.1.2", "mirror", "::1"):
+        assert ftpupload.local_host(h), h
+    for h in ("example.dk", "8.8.8.8", "resultater.rebildtrail.dk", ""):
+        assert not ftpupload.local_host(h), h
+    for url in ("http://example.dk/modtag.php", "ftp://ftp.example.dk/r"):
+        try:
+            app._dest_fields({"type": "ftp" if url.startswith("ftp") else "webhook", "url": url})
+            raise AssertionError(url)
+        except HTTPException as e:
+            assert e.status_code == 400
+    assert app._dest_fields({"type": "webhook", "url": "http://192.168.1.5/modtag.php"})["url"]
+    try:
+        sync._post("http://example.dk/modtag.php", {"event": "x"}, "nøgle-1234567890")
+        raise AssertionError("http til internettet skulle afvises")
+    except RuntimeError as e:
+        assert "https://" in str(e)
+    try:
+        ftpupload.upload({"url": "ftp://ftp.example.dk/r", "username": "u", "key": "k"}, {})
+        raise AssertionError("ftp til internettet skulle afvises")
+    except RuntimeError as e:
+        assert "ftps://" in str(e)
+
+
+def test_private_data_purged_after_deadline():
+    from racetimer import signup
+    import time as _t
+    now = _t.time()
+    old = db.ex("INSERT INTO races(name, type, config, created_at, finished_at, signup) VALUES ('Gl', 'p2p', '{}', 0, ?, ?)",
+                (now - 40 * 86400, json.dumps({"delete_days": 30})))
+    ages = db.ex("INSERT INTO races(name, type, config, created_at, finished_at, signup) VALUES ('Alder', 'p2p', '{}', 0, ?, ?)",
+                 (now - 40 * 86400, json.dumps({"delete_days": 30, "age_step": 5})))
+    new = db.ex("INSERT INTO races(name, type, config, created_at, finished_at) VALUES ('Ny', 'p2p', '{}', 0, ?)", (now - 86400,))
+    for r in (old, ages, new):
+        db.ex("INSERT INTO participants(race_id, name, email, birth_year) VALUES (?, 'A', 'a@example.test', 1980)", (r,))
+    signup.purge_private(now)
+    get = lambda r: db.q1("SELECT name, email, birth_year FROM participants WHERE race_id=?", (r,))  # noqa: E731
+    assert get(old) == {"name": "A", "email": None, "birth_year": None}
+    assert get(ages) == {"name": "A", "email": None, "birth_year": 1980}  # aldersklasser bruger fødselsåret
+    assert get(new) == {"name": "A", "email": "a@example.test", "birth_year": 1980}
+
+
+def test_update_helper_never_follows_symlinks():
+    import importlib.machinery
+    import importlib.util
+    d = tempfile.mkdtemp()
+    victim = os.path.join(d, "victim")
+    with open(victim, "w") as f:
+        f.write("hemmelig")
+    os.chmod(victim, 0o600)
+    status = os.path.join(d, "update-status.json")
+    os.symlink(victim, status)
+    os.environ["RACETIMER_UPDATE_STATUS"] = status
+    loader = importlib.machinery.SourceFileLoader("rt_update", os.path.join(ROOT, "deploy", "racetimer-update"))
+    spec = importlib.util.spec_from_loader("rt_update", loader)
+    m = importlib.util.module_from_spec(spec)
+    loader.exec_module(m)
+    os.symlink(victim, f"{status}.{os.getpid()}.tmp")
+    m.log("test", state="running")
+    del os.environ["RACETIMER_UPDATE_STATUS"]
+    assert open(victim).read() == "hemmelig" and stat.S_IMODE(os.stat(victim).st_mode) == 0o600
+    assert not os.path.islink(status) and m.read_status()["state"] == "running"
+
+
+def test_wifi_enterprise_needs_certificate_domain():
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("rt_wifi", os.path.join(ROOT, "deploy", "racetimer-wifi"))
+    spec = importlib.util.spec_from_loader("rt_wifi", loader)
+    m = importlib.util.module_from_spec(spec)
+    loader.exec_module(m)
+    assert m.eap_domain("", "navn@aau.dk") == "aau.dk"
+    assert m.eap_domain("*.AAU.dk.", "") == "aau.dk"
+    assert m.eap_domain("", "navn") is None and m.eap_domain("x;rm -rf", "a@b") is None
+    # nmcli får certifikat og domæne med, når et eduroam-netværk gemmes
+    log = os.path.join(tempfile.mkdtemp(), "nmcli.log")
+    fake = log + ".sh"
+    with open(fake, "w") as f:
+        f.write(f'#!/bin/sh\necho "$@" >> {log}\n')
+    os.chmod(fake, 0o755)
+    m.NMCLI = fake
+    m.apply({"networks": [{"ssid": "eduroam", "security": "eap", "identity": "navn@aau.dk", "password": "hemmelig-kode"}]})
+    calls = open(log).read()
+    assert "802-1x.ca-cert " + m.CA_BUNDLE in calls and "802-1x.domain-suffix-match aau.dk" in calls, calls
+    try:
+        m.apply({"networks": [{"ssid": "eduroam", "security": "eap", "identity": "navn", "password": "hemmelig-kode"}]})
+        raise AssertionError("uden domæne skulle afvises")
+    except ValueError as e:
+        assert "domænet" in str(e)
+
+
+def test_security_headers_and_open_wifi_warning():
+    from fastapi import Response
+
+    def get(path):
+        async def call_next(_):
+            return Response("x")
+        return asyncio.run(app._no_stale_pages(N(url=N(path=path)), call_next))
+    r = get("/admin")
+    assert r.headers["x-content-type-options"] == "nosniff" and r.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    r = get("/")
+    assert r.headers["x-content-type-options"] == "nosniff" and "x-frame-options" not in r.headers  # skærmen må indlejres
+    fake = os.path.join(TMP, "nmcli-open")
+    for sec, expect in (("", True), ("WPA2", False)):
+        with open(fake, "w") as f:
+            f.write(f'#!/bin/sh\necho "no:WPA2"\necho "yes:{sec}"\n')
+        os.chmod(fake, 0o755)
+        os.environ["RACETIMER_NMCLI"] = fake
+        try:
+            assert app.wifi_open() is expect, sec
+        finally:
+            del os.environ["RACETIMER_NMCLI"]
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

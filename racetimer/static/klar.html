@@ -177,7 +177,7 @@ function wifiForm(p, w, ssid, secured, known) {
     oskClose();
     say(p, true, `Forbinder til ${ssid} …`);
     // netværket lægges øverst (forbindes først); de andre gemte bevares med deres koder
-    const others = w.saved.filter(n => n.ssid !== ssid).map(n => ({ssid: n.ssid, security: n.security, hidden: n.hidden, identity: n.identity, password: null}));
+    const others = w.saved.filter(n => n.ssid !== ssid).map(n => ({ssid: n.ssid, security: n.security, hidden: n.hidden, identity: n.identity, domain: n.domain, password: null}));
     const me = {ssid, security: secured ? "psk" : "open", password: secured ? (code || null) : ""};
     try {
       await api("/api/wifi", {method: "PUT", body: {networks: [me, ...others].slice(0, 5)}});

@@ -133,6 +133,12 @@
   .pill.error { background: var(--red); color: #fff; }
   .testbox { border: 1px dashed #2f6fd6; border-radius: 12px; padding: 12px 14px; }
   .pill.test { background: #2f6fd6; color: #fff; }
+  .demo-types { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+  .demo-types label { flex-direction: row; gap: 10px; align-items: flex-start; border: 1px solid var(--line, #d8dce2); border-radius: 10px;
+                      padding: 10px 12px; cursor: pointer; font-weight: 400; }
+  .demo-types label:has(input:checked) { border-color: #2f6fd6; box-shadow: 0 0 0 2px #2f6fd633; }
+  .demo-types input { margin-top: 3px; }
+  .demo-types b { display: block; }
   .dtsteps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .dtsteps span { border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
   .dtsteps span.cur { border-color: var(--accent); color: var(--text); }
@@ -225,6 +231,7 @@
 </nav>
 <div id="layout">
 <main>
+  <div id="httpWarn" class="warnbox" hidden>⚠ Pi'en er på et <b>WiFi uden kode</b>, og admin kører ukrypteret (http). Andre på netværket kan aflure koden. Brug et WiFi med kode (fx din mobils hotspot), kabel eller Tailscale under <b>⚙ Opsætning → Fjernadgang</b>.</div>
   <div id="pwWarn" class="warnbox" hidden>Førstegangskoden (eller den gamle standardkode admin/admin) er stadig aktiv. Skift den under <b>⚙ Opsætning → Brugere</b>.</div>
 
   <!-- ===================== AKTIVT LØB -->
@@ -285,7 +292,25 @@
 
   <!-- ===================== NYT LØB -->
   <section class="tab" id="tab-new">
-    <h2>Tilføj nyt løb</h2>
+    <h2>🎲 Prøv en løbstype</h2>
+    <div class="card pad demo">
+      <p class="muted small" style="margin-top:0">Et <b>demoløb</b> er et færdigt testløb med tilfældige deltagere. Simulerede løbere scanner af sig selv,
+        så du kan se tidtagning, stilling og skærm uden læsere, armbånd eller tilmelding. Tiden går hurtigere, og demoløb sendes aldrig til hjemmesiden eller portalen.</p>
+      <form id="demoForm">
+        <div class="demo-types" id="demoTypes"></div>
+        <div class="row" style="gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:12px">
+          <label style="width:110px">Deltagere<input name="n" type="number" min="1" max="200" id="demoN"></label>
+          <label>Tid<select name="speed" id="demoSpeed"></select></label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="sim" checked> Simulerede løbere</label>
+          <label style="flex-direction:row;align-items:center;gap:8px" id="demoDogs"><input type="checkbox" name="canicross"> Canicross (med hunde)</label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="start" checked> Start med det samme</label>
+          <div style="flex:1"></div>
+          <button class="primary">🎲 Opret demoløb</button>
+        </div>
+        <p class="muted small" id="demoMore" style="margin:10px 0 0"></p>
+      </form>
+    </div>
+    <h2 style="margin-top:22px">Tilføj nyt løb</h2>
     <div class="card pad">
       <form id="newForm">
         <div class="startfrom">
@@ -686,6 +711,8 @@ async function boot() {
   if (!setup.done) { $("app").hidden = true; return startWizard(); }
   $("wizard").hidden = true; $("app").hidden = false;
   $("pwWarn").hidden = !me.default_password;
+  $("httpWarn").hidden = !(me.open_wifi && location.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
+    && !location.hostname.endsWith(".ts.net") && !/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(location.hostname));  // Tailscale er krypteret
   TYPES = await api("/api/types");
   fillNewTypes();
   await loadRaces();
@@ -701,6 +728,7 @@ const isDesktop = () => matchMedia("(min-width: 1100px)").matches;
 function loadTab(tab) {
   if (tab === "people") { loadPeople(); loadSignup(); }
   if (tab === "archive") loadArchive();
+  if (tab === "new") loadDemo();
   if (tab === "look") loadLook();
   if (tab === "sync") { loadPortal(); loadDests(); loadMail(); }
   if (tab === "wifi") loadWifi();
@@ -1112,6 +1140,7 @@ function testFields(t) {
     <label>Tid<select name="t.speed">${[[1, "Normal tid"], [10, "10× hurtigere"], [60, "60× hurtigere (1 time = 1 min)"], [120, "120× hurtigere (1 time = 30 sek)"]]
       .map(([v, l]) => `<option value="${v}" ${+t.speed === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+      ${t.demo ? `<label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.sim" ${t.sim ? "checked" : ""}> 🎲 Simulerede løbere – deltagerne scanner af sig selv</label>` : ""}
       <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_minimum" ${t.no_minimum ? "checked" : ""}> Ingen minimumstid – hver scanning tæller med det samme (backyard: ingen flagzone)</label>
       <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_checkin" ${t.no_checkin ? "checked" : ""}> Ingen indtjekning før start</label>
       <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="t.no_dedup" ${t.no_dedup ? "checked" : ""}> Intet dublet-filter – samme armbånd kan scannes igen med det samme</label>
@@ -1120,8 +1149,45 @@ function testFields(t) {
 }
 function readTest(f) {
   return {speed: +f.querySelector("[name='t.speed']").value, no_minimum: f.querySelector("[name='t.no_minimum']").checked,
-          no_checkin: f.querySelector("[name='t.no_checkin']").checked, no_dedup: f.querySelector("[name='t.no_dedup']").checked};
+          no_checkin: f.querySelector("[name='t.no_checkin']").checked, no_dedup: f.querySelector("[name='t.no_dedup']").checked,
+          ...(f.querySelector("[name='t.sim']") ? {sim: f.querySelector("[name='t.sim']").checked} : {})};
 }
+// ------------------------------------------------ demoløb: færdigt testløb med tilfældige deltagere og simulerede løbere
+let DEMO = null;
+async function loadDemo() {
+  DEMO = await api("/api/demo");
+  const box = $("demoTypes");
+  if (!box.innerHTML) {
+    box.innerHTML = DEMO.presets.map((p, i) => `<label><input type="radio" name="type" value="${p.type}" ${i ? "" : "checked"}>
+      <span><b>${esc(p.label)}</b><span class="muted small">${esc(p.name)} – ${esc(p.about)}</span></span></label>`).join("");
+    box.onchange = demoPick;
+    demoPick();
+  }
+  $("demoMore").innerHTML = DEMO.count ? `Der er ${DEMO.count} demoløb. <button type="button" class="linkbtn" id="demoDel">Slet alle demoløb</button>` : "";
+  if (DEMO.count) $("demoDel").onclick = async () => {
+    if (!confirm(`Slet alle ${DEMO.count} demoløb med deltagere og tider?`)) return;
+    const r = await api("/api/demo", {method: "DELETE"});
+    toast(`${r.deleted} demoløb slettet`); curId = null; await loadRaces(); loadDemo();
+  };
+}
+function demoPick() {
+  const t = $("demoForm").querySelector("[name=type]:checked")?.value, p = DEMO.presets.find(x => x.type === t);
+  $("demoN").value = p.n;
+  $("demoSpeed").innerHTML = [[1, "Normal tid"], [10, "10× hurtigere"], [60, "60× (1 time = 1 min)"], [120, "120× (1 time = 30 sek)"]]
+    .map(([v, l]) => `<option value="${v}" ${v === p.speed ? "selected" : ""}>${l}</option>`).join("");
+  $("demoDogs").hidden = !p.canicross;
+  if (!p.canicross) $("demoForm").canicross.checked = false;
+}
+$("demoForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f);
+  const r = await api("/api/demo", {body: {type: fd.get("type"), n: +fd.get("n"), speed: +fd.get("speed"), sim: !!fd.get("sim"),
+    canicross: !!fd.get("canicross"), start: !!fd.get("start")}});
+  toast(fd.get("start") ? "Demoløbet er startet" : "Demoløbet er oprettet – tryk ▶ Start nu");
+  curId = r.id; await loadRaces(); loadDemo();
+  showTab("active");
+};
+
 $("newIsTest").onchange = e => { $("newTestOpts").hidden = !e.target.checked; if (e.target.checked && !$("newTestOpts").innerHTML) $("newTestOpts").innerHTML = testFields(); };
 
 $("newForm").onsubmit = async e => {
@@ -1147,7 +1213,7 @@ async function loadRaces() {
   races = (await api("/api/races")).filter(r => !r.archived_at);
   checkClock();
   if (!races.find(r => r.id === curId)) curId = (races.find(r => r.is_active) || races[0])?.id ?? null;
-  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${r.test ? "🧪 " : ""}${esc(r.name)} – ${esc(r.type === "timed" && !r.config?.distances?.length ? `Tidsbaseret · ${hoursLabel(r.config.duration_h)}` : TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
+  $("raceSel").innerHTML = races.length ? races.map(r => `<option value="${r.id}" ${r.id === curId ? "selected" : ""}>${r.is_active ? "● " : ""}${r.test && !r.test.demo ? "🧪 " : ""}${esc(r.name)} – ${esc(r.type === "timed" && !r.config?.distances?.length ? `Tidsbaseret · ${hoursLabel(r.config.duration_h)}` : TYPES[r.type]?.label)} (${r.n} delt.)</option>`).join("")
     : `<option>Ingen løb – opret et under “Nyt løb”</option>`;
   await loadRace(true);
 }
@@ -1184,7 +1250,7 @@ async function loadRace(full) {
   if (i.distances) extra += `<br>Distancer: ${i.distances.map(d => `<b>${esc(d.name)}</b> ${d.count} delt.${d.started_at || (r.scheduled_start && d.next_start) ? ` · start ${clock(d.started_at || d.next_start)}` : ""}`).join(" &nbsp;│&nbsp; ")}`;
   $("raceHead").innerHTML = `<div class="row" style="justify-content:space-between;align-items:center">
     <div><div style="font-size:20px;font-weight:700">${esc(r.name)} ${r.is_active ? '<span class="pill">PÅ SKÆRMEN</span>' : ""}
-      ${r.test ? `<span class="pill test" title="Sendes ikke til hjemmesiden">🧪 TESTLØB${r.test.speed > 1 ? ` · ${r.test.speed}× tid` : ""}${r.test.no_minimum ? " · ingen minimumstid" : ""}${r.test.no_checkin ? " · ingen indtjekning" : ""}${r.test.no_dedup ? " · intet dublet-filter" : ""}</span>` : ""}</div>
+      ${r.test ? `<span class="pill test" title="Sendes ikke til hjemmesiden">${r.test.demo ? `🎲 DEMO${r.test.sim ? " · simulerede løbere" : ""}` : "🧪 TESTLØB"}${r.test.speed > 1 ? ` · ${r.test.speed}× tid` : ""}${r.test.no_minimum ? " · ingen minimumstid" : ""}${r.test.no_checkin ? " · ingen indtjekning" : ""}${r.test.no_dedup ? " · intet dublet-filter" : ""}</span>` : ""}</div>
       <div class="muted small" style="margin-top:4px"><span class="pill ${r.status}">${status}</span> ${esc(i.type_label || TYPES[r.type].label)}
       · Start: ${clock(r.started_at || r.scheduled_start)}${r.finished_at ? " · Slut: " + clock(r.finished_at) : ""}${extra}</div></div>
     <div class="btns">
@@ -1865,7 +1931,7 @@ async function loadSignup() {
       ${s.mode === "link" ? signupLinkHtml(s) : ""}
       ${form ? `<div class="grid" style="margin-top:10px">
         ${chk("open", s.open, "<b>Åben for tilmelding</b>")}
-        <label>Slet tilmeldinger på hjemmesiden (dage efter løbet)<input type="number" name="delete_days" min="1" max="365" value="${s.delete_days}"></label>
+        <label title="Hjemmesiden sletter tilmeldingerne. Pi'en sletter e-mail (og fødselsår, hvis der ikke er aldersklasser). Navne og tider bliver.">Slet tilmeldinger og e-mails (dage efter løbet)<input type="number" name="delete_days" min="1" max="365" value="${s.delete_days}"></label>
         ${chk("public_list", s.public_list, "Vis tilmeldte på hjemmesiden (navn, klub, distance)")}
         ${chk("auto_bib", s.auto_bib, "Startnummer gives ved tilmeldingen (vises på kvitteringen)")}
         <label>Første startnummer<input type="number" name="bib_from" min="1" value="${s.bib_from}"></label>
@@ -2105,8 +2171,8 @@ async function loadPortal() {
     return `<div class="row" style="justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
       <div style="min-width:0"><b>${esc(d.name)}</b> <span class="pill">Forbundet</span>
         <div class="muted small">${esc(d.host)} · arrangør: <b>${esc(d.organizer)}</b></div><div class="small" style="margin-top:4px">${state}</div></div>
-      <div class="btns"><button data-transfer="${d.id}">⇪ Overfør løb</button><button data-ptpl="${d.id}" title="Send skabelonerne, så løb kan oprettes ud fra dem på portalen">⇪ Skabeloner</button><a class="btn" href="${esc(d.events_url)}" target="_blank" rel="noopener">Åbn portalen</a><button class="danger" data-unpair="${d.id}">Afbryd</button></div></div>
-      <div id="transfer-${d.id}"></div>`;
+      <div class="btns"><button data-import="${d.id}" title="Opret løb her ud fra løb på portalen med flueben i “Må hentes til RaceTimer”">⇩ Hent løb fra portalen</button><button data-transfer="${d.id}">⇪ Overfør løb</button><button data-ptpl="${d.id}" title="Send skabelonerne, så løb kan oprettes ud fra dem på portalen">⇪ Skabeloner</button><a class="btn" href="${esc(d.events_url)}" target="_blank" rel="noopener">Åbn portalen</a><button class="danger" data-unpair="${d.id}">Afbryd</button></div></div>
+      <div id="import-${d.id}"></div><div id="transfer-${d.id}"></div>`;
   }).join("");
   $("portalBox").innerHTML = `
     <p class="muted small" style="margin-top:0">Forbind RaceTimer til en løbsportal, fx rebildtrail.dk. Løbet oprettes og godkendes på portalen.
@@ -2128,11 +2194,38 @@ async function loadPortal() {
   };
   $("portalBox").querySelectorAll("[data-unpair]").forEach(b => b.onclick = () => portalUnpair(p.portals.find(x => x.id === b.dataset.unpair)));
   $("portalBox").querySelectorAll("[data-transfer]").forEach(b => b.onclick = () => portalTransferList(p.portals.find(x => x.id === b.dataset.transfer)));
+  $("portalBox").querySelectorAll("[data-import]").forEach(b => b.onclick = () => portalImportList(p.portals.find(x => x.id === b.dataset.import)));
   $("portalBox").querySelectorAll("[data-ptpl]").forEach(b => b.onclick = async () => {
     b.disabled = true;
     try { const r = await api(`/api/portal/${b.dataset.ptpl}/templates`, {body: {}}); toast(`${r.count} skabeloner er sendt. Vælg dem under “Opret løb” på portalen.`); }
     catch (_) {}
     b.disabled = false;
+  });
+}
+
+// Hent løb fra portalen: kun løb med flueben i "Må hentes til RaceTimer" på portalen
+async function portalImportList(d) {
+  const box = $(`import-${d.id}`);
+  if (box.innerHTML) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="card pad" style="margin:8px 0"><p class="muted small" style="margin:0">Henter løb fra ${esc(d.name)} …</p></div>`;
+  let r;
+  try { r = await api(`/api/portal/${d.id}/importable`); } catch (_) { box.innerHTML = ""; return; }
+  const day = ts => ts ? new Date(ts * 1000).toLocaleString("da-DK", {day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"}) : "";
+  const kind = {timeloeb: "tidsløb", backyard: "backyard"};
+  box.innerHTML = `<div class="card pad" style="margin:8px 0">
+    <p class="muted small" style="margin-top:0"><b>⇩ Hent</b> opretter løbet her med navn, starttid og distancer fra portalen, kobler det og henter de tilmeldte. Tjek derefter løbstype, minimumstid og evt. chipstart under <b>Aktivt løb → Indstillinger</b>.
+      <b>⟳ Opdater</b> overfører ændringer til et løb, der allerede er hentet: navn, starttid, nye distancer og alle tilmeldte (nye, rettede og afmeldte). Indstillinger, ruter og tider her røres ikke.</p>
+    ${r.events.length ? r.events.map(e => `<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)">
+      <span><b>${esc(e.title)}</b> <span class="muted small">· ${day(e.starts_at)} · ${e.distances.map(x => esc(x.name)).join(", ") || "ingen distancer"}${kind[e.kind] ? " · " + kind[e.kind] : ""}${e.status !== "published" ? " · " + esc(e.status_label) : ""}${e.signup ? ` · ${e.confirmed} tilmeldt` : ""}</span></span>
+      ${e.race_id ? `<span class="row" style="gap:8px;align-items:center"><span class="pill">Hentet som “${esc(e.race_name)}”</span><button data-ev="${e.id}">⟳ Opdater</button></span>` : `<button class="primary" data-ev="${e.id}">⇩ Hent</button>`}</div>`).join("")
+      : `<p class="muted">Ingen løb at hente.</p>`}
+    <p class="muted small" style="margin-bottom:0">${r.without_flag ? `${r.without_flag} løb på portalen mangler flueben i <b>Må hentes til RaceTimer</b> (under Ret løbet på portalen) og vises ikke.` : ""}</p></div>`;
+  box.querySelectorAll("[data-ev]").forEach(b => b.onclick = async () => {
+    const label = b.textContent; b.disabled = true; b.textContent = label.includes("Opdater") ? "Opdaterer …" : "Henter …";
+    let x;
+    try { x = await api(`/api/portal/${d.id}/import`, {body: {event_id: Number(b.dataset.ev)}}); } catch (_) { b.disabled = false; b.textContent = label; return; }
+    toast(x.updated ? x.message : x.ok ? `Løbet er oprettet og koblet · ${x.added} tilmeldte hentet` : x.message, !x.ok);
+    box.innerHTML = ""; loadRaces(); loadDests();
   });
 }
 
@@ -2244,7 +2337,7 @@ editDest(null);
 let wifiRows = [], wifiKnown = new Map();  // ssid -> sikkerhedstype for de gemte netværk
 const SEC = [["psk", "WPA2 (kode)"], ["eap", "Brugernavn + kode"], ["open", "Åbent"]];
 const secFromScan = s => !s ? "open" : /802\.1X|EAP|Enterprise/i.test(s) ? "eap" : "psk";
-const emptyRow = () => ({ssid: "", security: "psk", identity: "", password: "", hidden: false});
+const emptyRow = () => ({ssid: "", security: "psk", identity: "", domain: "", password: "", hidden: false});
 async function loadWifi() {
   let d;
   try { d = await api("/api/wifi"); }
@@ -2254,7 +2347,7 @@ async function loadWifi() {
     : `<i class="dot" style="background:var(--red)"></i>Ikke forbundet til WiFi`) +
     (d.others.length ? `<div class="muted small" style="margin-top:6px">Andre gemte netværk på Pi'en (fx fra Raspberry Pi Imager): ${d.others.map(esc).join(", ")}</div>` : "");
   wifiKnown = new Map(d.saved.map(n => [n.ssid, n.security || (n.secured ? "psk" : "open")]));
-  wifiRows = d.saved.map(n => ({ssid: n.ssid, security: n.security || (n.secured ? "psk" : "open"), identity: n.identity || "", password: "", hidden: n.hidden, slot: n.slot}));
+  wifiRows = d.saved.map(n => ({ssid: n.ssid, security: n.security || (n.secured ? "psk" : "open"), identity: n.identity || "", domain: n.domain || "", password: "", hidden: n.hidden, slot: n.slot}));
   while (wifiRows.length < 5) wifiRows.push(emptyRow());
   $("wifiVisible").innerHTML = d.visible.map(v => `<option value="${esc(v.ssid)}">${v.signal} %</option>`).join("");
   $("wifiScan").innerHTML = d.visible.length ? `<table><thead><tr><th>Netværk</th><th>Signal</th><th>Sikkerhed</th><th></th></tr></thead><tbody>` +
@@ -2281,6 +2374,8 @@ function renderWifiRows() {
     <td><select data-f="security">${SEC.map(([v, l]) => `<option value="${v}" ${r.security === v ? "selected" : ""}>${l}</option>`).join("")}</select></td>
     <td><div style="display:flex;flex-direction:column;gap:6px">
       <input data-f="identity" value="${esc(r.identity)}" placeholder="Brugernavn (fx navn@aau.dk)" autocomplete="off" ${r.security === "eap" ? "" : "hidden"}>
+      <input data-f="domain" value="${esc(r.domain)}" placeholder="Certifikatets domæne (fx aau.dk) – tomt = fra brugernavnet" autocomplete="off" ${r.security === "eap" ? "" : "hidden"}
+        title="Pi'en forbinder kun, hvis netværkets servercertifikat hører til dette domæne. Så kan en falsk adgang med samme navn ikke få koden.">
       <input data-f="password" type="password" value="${esc(r.password)}" autocomplete="new-password" ${r.security === "open" ? "hidden" : ""}
         placeholder="${saved && r.security !== "open" ? "•••••• (gemt)" : "Kode"}">
       ${r.security === "open" ? '<span class="muted small">Ingen kode</span>' : ""}</div></td>
@@ -2305,7 +2400,7 @@ function syncWifiRows() {
   $("wifiRows").querySelectorAll("tr").forEach((tr, i) => {
     const g = f => tr.querySelector(`[data-f='${f}']`);
     Object.assign(wifiRows[i], {ssid: g("ssid").value.trim(), security: g("security").value, identity: g("identity").value.trim(),
-                                password: g("password").value, hidden: g("hidden").checked});
+                                domain: g("domain").value.trim(), password: g("password").value, hidden: g("hidden").checked});
   });
 }
 $("wifiSave").onclick = async () => {
@@ -2316,9 +2411,10 @@ $("wifiSave").onclick = async () => {
     if (r.security !== "open" && !r.password && !saved) return toast(`Skriv koden til “${r.ssid}”`, true);
     if (r.security === "psk" && r.password && (r.password.length < 8 || r.password.length > 64)) return toast(`Koden til “${r.ssid}” skal være 8–63 tegn`, true);
     if (r.security === "eap" && !r.identity) return toast(`Skriv brugernavnet til “${r.ssid}”`, true);
+    if (r.security === "eap" && !r.domain && !r.identity.includes("@")) return toast(`Skriv certifikatets domæne til “${r.ssid}” (fx aau.dk)`, true);
   }
   if (new Set(nets.map(r => r.ssid)).size !== nets.length) return toast("Det samme netværk står der to gange", true);
-  const body = {networks: nets.map(r => ({ssid: r.ssid, security: r.security, identity: r.identity, hidden: r.hidden,
+  const body = {networks: nets.map(r => ({ssid: r.ssid, security: r.security, identity: r.identity, domain: r.domain, hidden: r.hidden,
                                           password: r.security === "open" ? "" : (r.password || null)}))};
   $("wifiSave").disabled = true;
   try { await api("/api/wifi", {method: "PUT", body}); toast("WiFi-netværk gemt – Pi'en bruger dem automatisk"); } catch (_) {}
@@ -2482,7 +2578,7 @@ $("wNext").onclick = async () => {
     } else if (wi === 4) {
       const ssid = $("wSsid")?.value.trim();
       if (ssid) {
-        const saved = JSON.parse($("wWifi").dataset.saved || "[]").map(n => ({ssid: n.ssid, security: n.security, identity: n.identity, hidden: n.hidden, password: null}));
+        const saved = JSON.parse($("wWifi").dataset.saved || "[]").map(n => ({ssid: n.ssid, security: n.security, identity: n.identity, domain: n.domain, hidden: n.hidden, password: null}));
         const pw = $("wWpw").value;
         await api("/api/wifi", {method: "PUT", body: {networks: [...saved.filter(n => n.ssid !== ssid), {ssid, security: pw ? "psk" : "open", password: pw}].slice(0, 5)}});
         toast(`${ssid} gemt – Pi'en forbinder automatisk`);

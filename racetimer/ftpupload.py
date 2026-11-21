@@ -278,6 +278,20 @@ class _FTP_TLS(ftplib.FTP_TLS):
         return conn, size
 
 
+def local_host(host):
+    """Er adressen på det lokale net (eller Pi'en selv)? Kun dér må data sendes ukrypteret (http:// og ftp://):
+    nøgler, koder og tilmeldinger må aldrig gå ukrypteret over internettet."""
+    import ipaddress
+    h = (host or "").strip("[]").lower()
+    if h in ("localhost",) or h.endswith((".local", ".lan", ".home.arpa", ".localhost")) or (h and "." not in h):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip in ipaddress.ip_network("100.64.0.0/10")  # Tailscale
+
+
 def upload(dest, payload, splash_file=False):
     """Upload index.html + resultater.json (+ slut-kopi) til FTP/FTPS-destinationen.
 
@@ -287,6 +301,8 @@ def upload(dest, payload, splash_file=False):
     u = urlparse(dest["url"])
     if u.scheme not in ("ftp", "ftps") or not u.hostname:
         raise RuntimeError("FTP-adressen skal se sådan ud: ftps://ftp.example.dk/mappe")
+    if u.scheme == "ftp" and not local_host(u.hostname):
+        raise RuntimeError("Ukrypteret FTP (ftp://) sender koden og resultaterne i klartekst – brug ftps://")
     if u.scheme == "ftps":
         ftp = _FTP_TLS(timeout=20, context=ssl.create_default_context())
     else:
