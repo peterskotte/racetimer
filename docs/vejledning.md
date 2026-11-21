@@ -123,6 +123,7 @@ Vil I se en løbstype køre uden at sætte noget op? Gå til **Nyt løb → 🎲
 - Tiden går hurtigere, typisk 10× eller 60×, og kan ændres, før løbet oprettes. De fleste demoløb er færdige på 5–15 minutter.
 - I kan stadig scanne med jeres egne armbånd eller trykke under *Test uden hardware*. Slår I chipstart eller callout til under *Indstillinger*, scanner de simulerede løbere også ved start. Simulatoren kan slås fra og til under *Indstillinger → 🧪 Testløb*.
 - Demoløb sendes aldrig til hjemmesiden eller løbsportalen. Slet dem alle på én gang med **Slet alle demoløb** under kortet.
+- Demoløbene findes også i **RaceTimer i browseren** (manuel tidtagning) under *Opsæt løb*, med op til 12 løbere.
 
 > **Prøv løbstypen først:** sæt flueben i **🧪 Testløb** under *Nyt løb*, og vælg fx *60× hurtigere*. Så varer en backyard-time 1 minut, og du kan øve hele forløbet med rigtige armbånd på få minutter. Testløb sendes ikke til hjemmesiden.
 

@@ -27,6 +27,10 @@ jobs:
         run: python tests/test_screen.py
       - name: Løbsmotoren regner ens i Python og JavaScript (browser-udgaven)
         run: python tests/engine_parity.py
+      - name: Demoløb på Pi'en (alle løbstyper)
+        run: python tests/test_demo.py
+      - name: Demoløb i browser-udgaven
+        run: node tests/demo_web.mjs
       - name: Appen kan starte
         run: RACETIMER_DATA=$(mktemp -d) python -c "import racetimer.app"
       - name: Scripts

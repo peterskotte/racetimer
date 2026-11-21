@@ -6,11 +6,13 @@ Race director **trykker på løberens felt**, hver gang løberen passerer. Reste
 
 ## Kom i gang
 
-1. Åbn browser-udgaven. Når den er lagt på GitHub Pages, ligger den på `https://peterskotte.github.io/racetimer/`. Den kan også lægges på klubbens eget webhotel, se nederst.
+1. Åbn browser-udgaven på **[rebildtrail.dk/tidtagning](https://rebildtrail.dk/tidtagning/)**. Den følger med løbsportalens plugin (version 0.16 eller nyere), så enhver portal med pluginnet har den på `/tidtagning/`. Den kan også lægges på klubbens eget webhotel, se nederst.
 2. **Opsæt løb:** vælg navn og løbstype. Indtjekning er slået fra som standard, undtagen i det officielle backyard. Sæt evt. flueben i *🧪 Testløb* for at øve.
 3. **Deltagere:** vælg **antal løbere (1–12)**, og tryk **Lav felterne**. Felterne hedder Løber 1, Løber 2 … Ret navne og startnumre direkte i listen, eller lad dem stå. Du kan også tilføje løbere én ad gangen med køn, klub og hundenavne ved canicross.
 4. **Løb → ▶ Start nu**, og tryk på løberens felt ved hver passage.
 5. **🖥️ Resultatskærm** åbner resultatskærmen i et nyt vindue. Træk det over på en ekstern skærm eller et TV (HDMI), og sæt det i fuld skærm.
+
+> **🎲 Prøv en løbstype:** under *Opsæt løb* opretter **🎲 Opret demoløb** et færdigt testløb med op til 12 tilfældige løbere (også canicross med hunde) i hurtig tid, fx en backyard-runde pr. minut. Tryk selv på felterne, eller sæt flueben i *Simulerede løbere*, så passagerne kommer af sig selv. Simuleringen kan stoppes og startes igen med knappen i løbets top. Demoløb sendes aldrig til hjemmesiden eller portalen, og **Slet alle demoløb** fjerner dem igen.
 
 ## Under løbet
 

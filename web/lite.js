@@ -2,6 +2,7 @@
 // Alt gemmes i browseren (localStorage). Løbsregler, resultatskærm, splash og hjemmeside er som på Pi'en.
 import {compute, mergedConfig, RACE_TYPES, STATUS_LABELS, TEST_SPEEDS} from "./engine.js";
 import {evaluate} from "./outcome.js";
+import {createDemo, MAX_DEMO, plan, presetList} from "./demo.js";
 
 const KEY = "racetimer-lite-v1", MAX_RUNNERS = 12, DOUBLE_TAP_SEC = 3;
 const $ = id => document.getElementById(id);
@@ -393,7 +394,7 @@ function renderRace() {
   if (info.type.startsWith("backyard") && info.phase === "running" && !info.continuous) extra = ` · Yard ${info.yard} · næste start ${hms(info.next_start - t)}`;
   if ((race.type === "timed" || info.end_mode === "duration") && info.phase === "running") extra = ` · ${hms(info.end_at - t)} tilbage`;
   if (info.winner) extra = ` · 🏆 ${esc(info.winner)}`;
-  $("raceHead").innerHTML = `<div class="rh"><div><div class="rname">${esc(race.name)} ${race.test ? '<span class="pill test">🧪 TESTLØB</span>' : ""}</div>
+  $("raceHead").innerHTML = `<div class="rh"><div><div class="rname">${esc(race.name)} ${race.test ? `<span class="pill test">${race.test.demo ? `🎲 DEMO${race.test.sim ? " · simulerede løbere" : ""}` : "🧪 TESTLØB"}</span>` : ""}</div>
       <div class="muted small">${status} · ${esc(RACE_TYPES[race.type].label)}${race.started_at ? " · start " + clock(race.started_at) : ""}${extra}</div></div>
     <div class="btns">
       ${race.status === "planned" ? `<button class="go" data-act="start">▶ Start nu</button>` : ""}
@@ -402,9 +403,12 @@ function renderRace() {
       ${race.status !== "planned" ? `<button data-act="reset">Nulstil</button>` : ""}
       <button data-act="undo" ${readsOf(race.id).length || race.status !== "planned" ? "" : "disabled"}>↶ Fortryd sidste</button>
       <button data-act="csv">⬇ CSV</button>
+      ${race.test?.demo ? `<button data-act="sim" title="Simulerede løbere registrerer passagerne af sig selv">${race.test.sim ? "⏸ Stop simulering" : "🎲 Simulerede løbere"}</button>` : ""}
     </div></div>`;
   $("raceHead").querySelectorAll("[data-act]").forEach(btn => btn.onclick = () =>
-    btn.dataset.act === "undo" ? undo() : btn.dataset.act === "csv" ? csv(race) : raceAction(btn.dataset.act));
+    btn.dataset.act === "undo" ? undo() : btn.dataset.act === "csv" ? csv(race)
+      : btn.dataset.act === "sim" ? (race.test.sim = !race.test.sim, save(), render(), toast(race.test.sim ? "Simulerede løbere er slået til" : "Simulering stoppet – tryk selv"))
+      : raceAction(btn.dataset.act));
 
   const byId = new Map(rows.map(r => [r.id, r]));
   const parts = partsOf(race.id).sort((a, b) => (a.bib ?? 999) - (b.bib ?? 999));
@@ -497,7 +501,7 @@ function readCfg(form) {
 function renderSetup() {
   const list = db.races.filter(r => !r.archived_at).sort((a, b) => b.created_at - a.created_at);
   $("raceList").innerHTML = list.length ? list.map(r => `<div class="row-item"><div><b>${esc(r.name)}</b> ${r.is_active ? '<span class="pill">AKTIVT</span>' : ""}
-      ${r.test ? '<span class="pill test">🧪</span>' : ""}<div class="muted small">${esc(RACE_TYPES[r.type].label)} · ${partsOf(r.id).length} deltagere</div></div>
+      ${r.test ? `<span class="pill test">${r.test.demo ? "🎲" : "🧪"}</span>` : ""}<div class="muted small">${esc(RACE_TYPES[r.type].label)} · ${partsOf(r.id).length} deltagere</div></div>
       <div class="btns">${r.is_active ? "" : `<button data-act="activate" data-id="${r.id}">Gør aktivt</button>`}<button class="danger" data-act="del" data-id="${r.id}">Slet</button></div></div>`).join("")
     : `<p class="muted">Ingen løb endnu.</p>`;
   $("raceList").querySelectorAll("button").forEach(b => b.onclick = () => {
@@ -509,6 +513,7 @@ function renderSetup() {
     }
     save(); render();
   });
+  renderDemo();
   const f = $("newRace");
   if (!f.dataset.ready) {
     f.type.innerHTML = Object.entries(RACE_TYPES).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join("");
@@ -532,6 +537,76 @@ function renderSetup() {
     };
     f.dataset.ready = 1;
   }
+}
+
+// ------------------------------------------------------------------ demoløb (demo.js)
+
+const DEMOS = presetList();
+function renderDemo() {
+  const f = $("demoForm"), n = db.races.filter(r => r.test?.demo).length;
+  $("demoMore").innerHTML = n ? `${n} demoløb · <button type="button" class="linkbtn" id="demoDel">Slet alle demoløb</button>` : "";
+  if (n) $("demoDel").onclick = () => {
+    if (!confirm(`Slet alle ${n} demoløb med løbere og tider?`)) return;
+    const ids = new Set(db.races.filter(r => r.test?.demo).map(r => r.id));
+    db.races = db.races.filter(r => !ids.has(r.id)); db.parts = db.parts.filter(p => !ids.has(p.race_id)); db.reads = db.reads.filter(x => !ids.has(x.race_id));
+    save(); render(); toast("Demoløbene er slettet");
+  };
+  if (f.dataset.ready) return;
+  $("demoTypes").innerHTML = DEMOS.map((p, i) => `<label><input type="radio" name="type" value="${p.type}" ${i ? "" : "checked"}>
+    <span><b>${esc(p.label)}</b><span class="muted small">${esc(p.name)} – ${esc(p.about)}</span></span></label>`).join("");
+  const pick = () => {
+    const p = DEMOS.find(x => x.type === f.querySelector("[name=type]:checked").value);
+    f.n.value = Math.min(p.n, MAX_DEMO);
+    f.speed.innerHTML = [[1, "Normal tid"], [10, "10× hurtigere"], [60, "60× (1 time = 1 min)"], [120, "120× (1 time = 30 sek)"]]
+      .map(([v, l]) => `<option value="${v}" ${v === p.speed ? "selected" : ""}>${l}</option>`).join("");
+    $("demoDogs").hidden = !p.canicross;
+    if (!p.canicross) f.canicross.checked = false;
+  };
+  $("demoTypes").onchange = pick;
+  pick();
+  f.onsubmit = e => {
+    e.preventDefault();
+    const now = nowS();
+    const {race, parts} = createDemo(f.querySelector("[name=type]:checked").value,
+      {n: +f.n.value, speed: +f.speed.value, sim: f.sim.checked, canicross: f.canicross.checked, newId, now});
+    db.races.forEach(x => { x.is_active = false; });
+    race.is_active = true;
+    if (f.start.checked) Object.assign(race, {status: "running", started_at: now}), pushEvent({type: "race.started", race: race.name});
+    db.races.push(race); db.parts.push(...parts);
+    save();
+    toast(f.start.checked ? "Demoløbet er startet" : "Demoløbet er oprettet – tryk ▶ Start nu");
+    showTab("race");
+  };
+  f.dataset.ready = 1;
+}
+
+// Simulerede løbere: planen (demo.js) afspilles i takt med uret. Læsninger, der allerede er registreret
+// (også før en genindlæsning af siden), sendes ikke igen.
+const sim = {key: null, queue: [], pos: 0};
+function simTick() {
+  const race = activeRace();
+  if (!race?.test?.demo || !race.test.sim || race.status !== "running" || !race.started_at) { sim.key = null; return; }
+  const parts = partsOf(race.id);
+  const key = JSON.stringify([race.id, race.started_at, race.config, race.test.speed, parts.map(p => [p.id, p.status, p.start_offset])]);
+  if (key !== sim.key) {
+    sim.key = key;
+    sim.queue = plan(race, parts, race.id);
+    const done = db.reads.filter(r => r.race_id === race.id && r.sim).reduce((m, r) => Math.max(m, r.ts), race.started_at - 1);
+    sim.pos = sim.queue.findIndex(([ts]) => ts > done);
+    if (sim.pos < 0) sim.pos = sim.queue.length;
+  }
+  const now = nowS();
+  let n = 0;
+  while (sim.pos < sim.queue.length && sim.queue[sim.pos][0] <= now) {
+    const [ts, pid] = sim.queue[sim.pos++];
+    const read = {id: newId(), race_id: race.id, participant_id: pid, ts, approved: 0, deleted: 0, duplicate: 0, sim: 1};
+    db.reads.push(read);
+    const ev = evaluate(race, partsOf(race.id), readsOf(race.id), read, false);
+    pushEvent(ev);
+    lastTap = {pid, ev, at: Date.now()};
+    n++;
+  }
+  if (n) { save(); if (tab === "race" && !document.querySelector("dialog[open]")) renderRace(); }
 }
 
 // ------------------------------------------------------------------ deltagere (op til 12)
@@ -768,6 +843,7 @@ setInterval(() => {
   broadcast();
 }, 1000);
 setInterval(() => { syncTick().catch(() => {}); }, 5000);
+setInterval(simTick, 500);
 window.addEventListener("beforeunload", e => { if (activeRace()?.status === "running") { e.preventDefault(); e.returnValue = ""; } });
 // til test i browseren
-window.__lite = {get db() { return db; }, tap, undo, standings, livePayload, sendToWebsite, STATUS_LABELS};
+window.__lite = {get db() { return db; }, simTick, tap, undo, standings, livePayload, sendToWebsite, STATUS_LABELS};

@@ -20,6 +20,8 @@ Hver udgivelse har et afsnit her. Teksten under versionsnummeret vises i admin u
 - Hver læser stod to gange i listen over læsere på Pi 5 (samme port har to navne).
 
 **Nyt**
+- **Browser-udgaven på løbsportalen:** RaceTimer i browseren (manuel tidtagning uden Pi) følger nu med portal-pluginnet og ligger på `/tidtagning/`, fx rebildtrail.dk/tidtagning/. Byg den ind med `sh tools/build-web.sh ../RacetimerPortal/assets/lite`.
+- **🎲 Demoløb i browser-udgaven:** under *Opsæt løb* kan der oprettes et demoløb af alle løbstyper med op til 12 tilfældige løbere. Tryk selv, eller slå *Simulerede løbere* til, så passagerne kommer af sig selv (kan stoppes og startes igen under løbet). Genindlæses siden, fortsætter simuleringen uden dobbelte passager.
 - **🎲 Demoløb af alle løbstyper:** under *Nyt løb* oprettes et færdigt testløb af en valgfri løbstype med tilfældige deltagere (også canicross med hunde). Simulerede løbere scanner af sig selv i hurtig tid, så man kan se tidtagning, stilling og skærm uden læsere, armbånd eller tilmelding. Backyard ender altid med én vinder. Chipstart og callout virker også. Demoløb sendes aldrig ud og kan slettes alle på én gang.
 - **Ændringer fra løbsportalen:** rettede og afmeldte tilmeldinger hentes også (afmeldte uden tider fjernes), og **⟳ Opdater** overfører navn, starttid og nye distancer til et løb, der allerede er hentet. Deltagere, som arrangøren tilføjer eller importerer på portalen, hentes som alle andre.
 - **⇩ Hent løb fra portalen:** løb med flueben i *Må hentes til RaceTimer* på løbsportalen kan hentes til RaceTimer med ét tryk. Navn, starttid og distancer (med starttider) oprettes, løbet kobles, og de tilmeldte hentes.

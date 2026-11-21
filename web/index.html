@@ -25,6 +25,12 @@
   td { padding: 8px 10px; border-top: 1px solid var(--line); }
   .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--card-head); color: var(--muted); }
   .pill.test { background: #2f6fd6; color: #fff; }
+  .demo-types { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .demo-types label { flex-direction: row; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; font-weight: 400; }
+  .demo-types label:has(input:checked) { border-color: #2f6fd6; box-shadow: 0 0 0 2px #2f6fd633; }
+  .demo-types input { margin-top: 3px; }
+  .demo-types b { display: block; }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
   .row-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
   .row-item:first-child { border-top: 0; }
   .rh { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -87,6 +93,24 @@
   <section class="tab" id="tab-setup" hidden>
     <h2 style="margin-top:4px">Løb</h2>
     <div class="card" id="raceList"></div>
+    <h2>🎲 Prøv en løbstype</h2>
+    <form class="card pad" id="demoForm">
+      <p class="muted small" style="margin-top:0">Et <b>demoløb</b> er et færdigt testløb med tilfældige løbere. Tiden går hurtigere, så du kan prøve
+        løbstypen på få minutter: tryk selv på løbernes felter, eller lad <b>simulerede løbere</b> registrere passagerne af sig selv.
+        Demoløb sendes aldrig til hjemmesiden eller løbsportalen.</p>
+      <div class="demo-types" id="demoTypes"></div>
+      <div class="grid" style="margin-top:12px;align-items:end">
+        <label>Løbere (1–12)<input name="n" type="number" min="1" max="12"></label>
+        <label>Tid<select name="speed"></select></label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px">
+        <label class="chk"><input type="checkbox" name="sim"> Simulerede løbere (passagerne kommer af sig selv)</label>
+        <label class="chk" id="demoDogs"><input type="checkbox" name="canicross"> Canicross (med hunde)</label>
+        <label class="chk"><input type="checkbox" name="start" checked> Start med det samme</label>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="primary">🎲 Opret demoløb</button>
+        <span class="muted small" id="demoMore"></span></div>
+    </form>
     <h2>Nyt løb</h2>
     <form class="card pad" id="newRace">
       <div class="grid">
